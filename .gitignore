@@ -1,0 +1,12 @@
+node_modules/
+.pnpm-store/
+.next/
+*.tsbuildinfo
+dist/
+coverage/
+.turbo/
+drizzle/
+.env
+.env.*
+!.env.example
+*.log
