@@ -1,4 +1,6 @@
-# Plugin Manifest 设计
+# Plugin Manifest 设计（后续阶段）
+
+> 本文件描述声明式插件的未来扩展边界，不属于第一阶段产品承诺。第一阶段的 Visual Template 只能使用平台内置模板和平台允许的令牌；Project 成员不能上传或安装 Plugin Manifest。
 
 ## 1. 目标
 
@@ -6,9 +8,9 @@ Plugin Manifest 是 LangReport 的声明式扩展格式。它让管理员为 Wor
 
 Manifest 描述能力，不携带可执行服务器端代码。它不是 npm 包，也不是任意 JavaScript 的沙箱替代品。
 
-## 2. 能力范围
+## 2. 后续能力范围
 
-MVP 支持以下能力：
+插件阶段计划支持以下能力：
 
 - `template`：图表类型、字段要求、默认 Flint Spec 片段和使用说明
 - `theme`：可继承的 Flint ThemeSpec
@@ -17,7 +19,7 @@ MVP 支持以下能力：
 - `example`：用于模型理解和用户预览的输入/输出样例
 - `renderer`：平台已内置且允许使用的渲染后端名称
 
-MVP 不支持以下字段或能力：
+插件阶段也不支持以下字段或能力：
 
 - `entrypoint`
 - `runtime`
@@ -107,7 +109,7 @@ MVP 不支持以下字段或能力：
 }
 ```
 
-## 4. 安装流程
+## 4. 后续安装流程
 
 ```text
 上传/选择 Manifest

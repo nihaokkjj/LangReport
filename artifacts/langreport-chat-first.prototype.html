@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LangReport — Chat First Prototype</title>
+    <meta name="description" content="Throwaway Chat-first UI prototype for the LangReport consulting project workspace." />
+    <style>
+      :root {
+        --ink: #000000;
+        --canvas: #ffffff;
+        --surface: #f7f7f5;
+        --hairline: #e6e6e6;
+        --hairline-dark: rgba(0, 0, 0, 0.22);
+        --lime: #dceeb1;
+        --lilac: #c5b0f4;
+        --cream: #f4ecd6;
+        --pink: #efd4d4;
+        --mint: #c8e6cd;
+        --coral: #f3c9b6;
+        --navy: #1f1d3d;
+        --magenta: #ff3d8b;
+        --success: #1ea64a;
+        --warning: #b36c00;
+        --sans: Inter, "Avenir Next", "Segoe UI", Helvetica, Arial, sans-serif;
+        --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        --sm: 6px;
+        --md: 8px;
+        --lg: 24px;
+        --pill: 9999px;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; }
+      body {
+        margin: 0;
+        background: var(--surface);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-weight: 330;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button, input, textarea { font: inherit; }
+      button { color: inherit; cursor: pointer; }
+      button:focus-visible, input:focus-visible, textarea:focus-visible {
+        outline: 3px solid rgba(0, 0, 0, 0.23);
+        outline-offset: 2px;
+      }
+
+      .eyebrow, .mono, .status, .meta, .field-type, .revision-id, .small-label, .variant-name, .menu-kicker {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 400;
+        letter-spacing: 0.46px;
+        line-height: 1.25;
+        text-transform: uppercase;
+      }
+
+      .app { min-height: 100vh; }
+
+      .topbar {
+        position: sticky;
+        z-index: 5;
+        top: 0;
+        display: grid;
+        grid-template-columns: minmax(300px, 0.75fr) minmax(390px, 1fr) auto;
+        min-height: 72px;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid var(--ink);
+        background: var(--canvas);
+        padding: 10px 22px;
+      }
+
+      .topbar-brand { display: flex; align-items: center; gap: 9px; }
+      .brand-mark { display: grid; width: 28px; height: 28px; place-items: center; background: var(--ink); color: var(--canvas); font-family: var(--mono); font-size: 10px; }
+      .brand-name { font-size: 15px; font-weight: 540; letter-spacing: -0.15px; }
+
+      .selector {
+        position: relative;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        min-height: 48px;
+        border: 1px solid var(--hairline-dark);
+        border-radius: var(--md);
+        background: var(--surface);
+        padding: 7px 11px;
+      }
+
+      .selector.project { background: var(--lime); }
+      .selector.conversation { background: var(--pink); }
+      .selector-button { display: flex; width: 100%; align-items: center; gap: 10px; border: 0; background: transparent; padding: 0; text-align: left; }
+      .selector-button::after { margin-left: auto; content: "⌄"; font-family: var(--mono); font-size: 15px; }
+      .selector-icon { display: grid; width: 29px; height: 29px; flex: 0 0 29px; place-items: center; border: 1px solid var(--ink); border-radius: 50%; background: var(--canvas); font-family: var(--mono); font-size: 9px; }
+      .selector-copy { min-width: 0; }
+      .selector-copy .eyebrow { display: block; font-size: 8px; }
+      .selector-copy strong { display: block; overflow: hidden; margin-top: 3px; font-size: 13px; font-weight: 540; text-overflow: ellipsis; white-space: nowrap; }
+      .selector-copy small { display: block; overflow: hidden; margin-top: 2px; color: rgba(0, 0, 0, 0.56); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+
+      .menu {
+        position: absolute;
+        z-index: 8;
+        top: calc(100% + 7px);
+        left: -1px;
+        display: none;
+        width: calc(100% + 2px);
+        border: 1px solid var(--ink);
+        border-radius: var(--md);
+        background: var(--canvas);
+        padding: 7px;
+      }
+
+      .menu.open { display: grid; gap: 4px; }
+      .menu-kicker { padding: 6px 8px 4px; color: rgba(0, 0, 0, 0.5); font-size: 8px; }
+      .menu-item { display: grid; gap: 2px; border: 0; border-radius: var(--sm); background: transparent; padding: 9px; text-align: left; }
+      .menu-item:hover, .menu-item.current { background: var(--lime); }
+      .menu-item strong { font-size: 12px; font-weight: 480; }
+      .menu-item small { color: rgba(0, 0, 0, 0.55); font-size: 10px; }
+
+      .top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+      .top-pill, .icon-button { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; border: 1px solid var(--hairline-dark); border-radius: var(--pill); background: var(--canvas); padding: 7px 10px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.28px; text-transform: uppercase; white-space: nowrap; }
+      .top-pill.ready { border-color: var(--success); color: var(--success); }
+      .icon-button { width: 34px; padding: 0; font-family: var(--sans); font-size: 12px; }
+      .green-dot { width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--success); }
+
+      .body-grid { display: grid; grid-template-columns: 220px minmax(520px, 1fr) 246px; min-height: calc(100vh - 72px); }
+
+      .history-rail {
+        border-right: 1px solid var(--hairline-dark);
+        background: var(--canvas);
+        padding: 18px 13px;
+      }
+
+      .rail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin: 2px 5px 15px; }
+      .rail-head h2 { margin: 5px 0 0; font-size: 16px; font-weight: 540; }
+      .plus-button { display: grid; width: 29px; height: 29px; place-items: center; border: 1px solid var(--ink); border-radius: 50%; background: var(--lime); font-size: 16px; }
+      .history-list { display: grid; gap: 4px; }
+      .history-item { display: grid; gap: 5px; border: 1px solid transparent; border-radius: var(--md); padding: 10px; }
+      .history-item.current { border-color: var(--ink); background: var(--pink); }
+      .history-item:hover { background: var(--surface); }
+      .history-item strong { overflow: hidden; font-size: 12px; font-weight: 480; text-overflow: ellipsis; white-space: nowrap; }
+      .history-item small { color: rgba(0, 0, 0, 0.55); font-size: 10px; line-height: 1.3; }
+      .history-meta { display: flex; justify-content: space-between; color: rgba(0, 0, 0, 0.48); font-family: var(--mono); font-size: 8px; letter-spacing: 0.22px; text-transform: uppercase; }
+      .rail-divider { height: 1px; margin: 22px 5px 16px; background: var(--hairline); }
+      .rail-context { display: grid; gap: 7px; }
+      .rail-context-row { display: flex; align-items: center; justify-content: space-between; gap: 7px; padding: 7px 5px; font-size: 11px; }
+      .rail-context-row span:first-child { color: rgba(0, 0, 0, 0.56); }
+      .rail-context-row span:last-child { font-family: var(--mono); font-size: 9px; }
+      .rail-footer { margin-top: 25px; border-top: 1px solid var(--hairline); padding: 15px 5px 0; color: rgba(0, 0, 0, 0.53); font-size: 10px; line-height: 1.45; }
+
+      .chat-main { min-width: 0; background: var(--surface); padding: 20px 25px 32px; }
+      .chat-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; max-width: 860px; margin: 0 auto 16px; }
+      .chat-head h1 { margin: 6px 0 0; font-size: 24px; font-weight: 540; letter-spacing: -0.28px; }
+      .chat-head p { margin: 6px 0 0; color: rgba(0, 0, 0, 0.57); font-size: 12px; line-height: 1.4; }
+      .chat-head-right { display: flex; align-items: center; gap: 7px; padding-top: 3px; }
+      .context-chip { display: inline-flex; align-items: center; min-height: 28px; border: 1px solid var(--hairline-dark); border-radius: var(--pill); background: var(--canvas); padding: 5px 8px; font-family: var(--mono); font-size: 8px; letter-spacing: 0.25px; white-space: nowrap; }
+
+      .conversation { max-width: 860px; margin: 0 auto; }
+      .message-list { display: grid; gap: 17px; }
+      .message { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; }
+      .message-avatar { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 50%; background: var(--lilac); font-family: var(--mono); font-size: 9px; }
+      .message.ai .message-avatar { background: var(--navy); color: var(--canvas); }
+      .message-content { min-width: 0; }
+      .message-meta { display: flex; align-items: center; gap: 8px; min-height: 20px; color: rgba(0, 0, 0, 0.52); font-family: var(--mono); font-size: 9px; letter-spacing: 0.28px; text-transform: uppercase; }
+      .message-meta time { color: rgba(0, 0, 0, 0.35); }
+      .bubble { max-width: 680px; border: 1px solid var(--hairline-dark); border-radius: var(--md); background: var(--canvas); padding: 12px 14px; font-size: 13px; line-height: 1.48; }
+      .message.user .bubble { border-color: var(--navy); background: var(--navy); color: var(--canvas); }
+      .clarify-card { max-width: 680px; margin-top: 9px; border-left: 3px solid var(--warning); border-radius: 0 var(--md) var(--md) 0; background: var(--cream); padding: 11px 13px; font-size: 12px; line-height: 1.46; }
+      .clarify-card strong { display: block; margin-bottom: 5px; font-weight: 540; }
+
+      .result-card { max-width: 720px; margin-top: 10px; border: 1px solid var(--ink); border-radius: var(--lg); background: var(--canvas); padding: 14px; }
+      .result-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--hairline); padding-bottom: 11px; }
+      .result-top h3 { margin: 4px 0 0; font-size: 17px; font-weight: 540; letter-spacing: -0.16px; }
+      .result-top p { margin: 5px 0 0; color: rgba(0, 0, 0, 0.55); font-size: 11px; }
+      .result-status { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--pill); background: var(--mint); padding: 6px 8px; font-family: var(--mono); font-size: 8px; letter-spacing: 0.3px; white-space: nowrap; }
+      .result-chart { margin-top: 12px; border: 1px solid var(--hairline); border-radius: var(--md); background: var(--surface); padding: 10px; }
+      .result-chart svg { display: block; width: 100%; height: auto; }
+      .result-foot { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; color: rgba(0, 0, 0, 0.52); font-family: var(--mono); font-size: 8px; letter-spacing: 0.27px; text-transform: uppercase; }
+      .result-finding { margin-top: 11px; border-radius: var(--md); background: var(--lime); padding: 10px 11px; font-size: 11px; line-height: 1.42; }
+      .result-finding strong { display: block; margin-bottom: 4px; font-weight: 540; }
+      .result-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
+      .result-action { min-height: 31px; border: 1px solid var(--ink); border-radius: var(--pill); background: var(--canvas); padding: 6px 10px; font-size: 10px; font-weight: 480; }
+      .result-action.primary { background: var(--ink); color: var(--canvas); }
+
+      .composer-wrap { position: sticky; bottom: 14px; margin-top: 24px; }
+      .composer { border: 1px solid var(--ink); border-radius: var(--lg); background: var(--canvas); padding: 11px; }
+      .composer textarea { display: block; width: 100%; min-height: 58px; resize: vertical; border: 0; outline: 0; background: transparent; font-size: 13px; line-height: 1.45; }
+      .composer textarea::placeholder { color: rgba(0, 0, 0, 0.42); }
+      .composer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--hairline); padding-top: 9px; }
+      .composer-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: rgba(0, 0, 0, 0.5); font-family: var(--mono); font-size: 8px; letter-spacing: 0.25px; text-transform: uppercase; }
+      .composer-attach { border: 0; border-radius: var(--pill); background: var(--surface); padding: 5px 8px; font-family: var(--mono); font-size: 8px; }
+      .composer-send { min-height: 32px; border: 0; border-radius: var(--pill); background: var(--ink); color: var(--canvas); padding: 7px 12px; font-size: 11px; font-weight: 480; }
+
+      .context-rail { border-left: 1px solid var(--hairline-dark); background: var(--canvas); padding: 18px 14px; }
+      .context-title { margin: 3px 5px 15px; }
+      .context-title h2 { margin: 5px 0 0; font-size: 16px; font-weight: 540; }
+      .context-title p { margin: 5px 0 0; color: rgba(0, 0, 0, 0.55); font-size: 10px; line-height: 1.35; }
+      .context-section { border-top: 1px solid var(--hairline); }
+      .context-toggle { display: flex; width: 100%; min-height: 45px; align-items: center; justify-content: space-between; gap: 8px; border: 0; background: transparent; padding: 10px 5px; text-align: left; }
+      .context-toggle strong { font-size: 12px; font-weight: 480; }
+      .context-toggle span { color: rgba(0, 0, 0, 0.45); font-family: var(--mono); font-size: 13px; }
+      .context-section.open .context-toggle { background: var(--surface); }
+      .context-content { display: none; padding: 0 5px 12px; }
+      .context-section.open .context-content { display: block; }
+      .context-row { display: flex; justify-content: space-between; gap: 9px; padding: 7px 0; font-size: 10px; }
+      .context-row span:first-child { color: rgba(0, 0, 0, 0.52); }
+      .context-row span:last-child { font-family: var(--mono); font-size: 8px; text-align: right; }
+      .context-note { border-radius: var(--sm); background: var(--cream); padding: 8px; font-size: 10px; line-height: 1.42; }
+      .memory-item { display: flex; gap: 7px; align-items: flex-start; margin-top: 8px; font-size: 10px; line-height: 1.35; }
+      .memory-item i { width: 7px; height: 7px; flex: 0 0 7px; margin-top: 3px; border-radius: 50%; background: var(--success); }
+
+      .editor-backdrop { position: fixed; z-index: 20; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.58); padding: 24px; }
+      .editor-backdrop.open { display: flex; }
+      .editor-dialog { width: min(950px, 100%); max-height: calc(100vh - 48px); overflow: auto; border: 1px solid var(--ink); border-radius: var(--lg); background: var(--canvas); }
+      .editor-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--ink); background: var(--cream); padding: 18px 20px; }
+      .editor-dialog-head h2 { margin: 6px 0 0; font-size: 22px; font-weight: 540; letter-spacing: -0.25px; }
+      .editor-dialog-head p { margin: 5px 0 0; color: rgba(0, 0, 0, 0.57); font-size: 11px; }
+      .close-button { display: grid; width: 33px; height: 33px; place-items: center; border: 1px solid var(--ink); border-radius: 50%; background: var(--canvas); font-size: 17px; }
+      .editor-body { display: grid; grid-template-columns: minmax(0, 1.35fr) 270px; gap: 16px; padding: 18px 20px; }
+      .editor-preview { border: 1px solid var(--ink); border-radius: var(--md); background: var(--surface); padding: 13px; }
+      .editor-preview-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--hairline); padding-bottom: 10px; }
+      .editor-preview-head strong { font-size: 14px; font-weight: 540; }
+      .editor-preview-head small { display: block; margin-top: 4px; color: rgba(0, 0, 0, 0.55); font-size: 10px; }
+      .editor-preview svg { display: block; width: 100%; margin-top: 15px; }
+      .editor-preview-foot { display: flex; justify-content: space-between; border-top: 1px solid var(--hairline); padding-top: 8px; color: rgba(0, 0, 0, 0.52); font-family: var(--mono); font-size: 8px; letter-spacing: 0.25px; text-transform: uppercase; }
+      .editor-controls { display: grid; align-content: start; gap: 14px; }
+      .control-group { border-bottom: 1px solid var(--hairline); padding-bottom: 13px; }
+      .control-group:last-child { border-bottom: 0; }
+      .control-group h3 { margin: 0 0 9px; font-size: 12px; font-weight: 540; }
+      .control-row { display: grid; gap: 4px; margin-top: 8px; }
+      .control-row label { color: rgba(0, 0, 0, 0.52); font-family: var(--mono); font-size: 8px; letter-spacing: 0.28px; text-transform: uppercase; }
+      .control-value { display: flex; min-height: 32px; align-items: center; justify-content: space-between; border: 1px solid var(--hairline-dark); border-radius: var(--sm); background: var(--surface); padding: 7px 8px; font-size: 10px; }
+      .control-value span { color: rgba(0, 0, 0, 0.46); font-family: var(--mono); font-size: 8px; }
+      .chart-type-buttons { display: flex; gap: 5px; }
+      .chart-type-button { flex: 1; min-height: 30px; border: 1px solid var(--hairline-dark); border-radius: var(--sm); background: var(--canvas); padding: 6px 4px; font-family: var(--mono); font-size: 8px; }
+      .chart-type-button.active { border-color: var(--ink); background: var(--lime); }
+      .editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--ink); padding: 13px 20px; }
+      .editor-footer p { margin: 0; color: rgba(0, 0, 0, 0.55); font-size: 10px; line-height: 1.35; }
+      .editor-save { min-height: 35px; border: 0; border-radius: var(--pill); background: var(--ink); color: var(--canvas); padding: 8px 13px; font-size: 11px; font-weight: 480; }
+
+      .switcher { position: fixed; z-index: 30; right: 50%; bottom: 17px; display: flex; align-items: center; gap: 3px; transform: translateX(50%); border: 1px solid var(--ink); border-radius: var(--pill); background: var(--navy); color: var(--canvas); padding: 4px; }
+      .switcher button { display: grid; min-width: 29px; min-height: 29px; place-items: center; border: 0; border-radius: 50%; background: transparent; color: inherit; font-size: 14px; }
+      .switcher button:hover { background: rgba(255, 255, 255, 0.14); }
+      .switcher-label { min-width: 164px; padding: 0 8px; text-align: center; }
+      .switcher-label strong { display: block; font-size: 11px; font-weight: 480; }
+      .switcher-label small { display: block; margin-top: 2px; color: rgba(255, 255, 255, 0.58); font-family: var(--mono); font-size: 8px; letter-spacing: 0.3px; text-transform: uppercase; }
+      .toast { position: fixed; z-index: 40; right: 20px; bottom: 76px; display: none; border: 1px solid var(--ink); border-radius: var(--md); background: var(--lime); padding: 10px 12px; font-family: var(--mono); font-size: 9px; }
+      .toast.show { display: block; }
+
+      @media (max-width: 1180px) {
+        .topbar { grid-template-columns: 180px minmax(310px, 1fr) auto; padding-right: 14px; padding-left: 14px; }
+        .brand-name { display: none; }
+        .body-grid { grid-template-columns: 190px minmax(440px, 1fr); }
+        .context-rail { grid-column: 1 / -1; display: grid; grid-template-columns: auto repeat(4, 1fr); gap: 12px; border-top: 1px solid var(--hairline-dark); border-left: 0; padding: 12px 16px; }
+        .context-title { margin: 3px 0; }
+        .context-title p { display: none; }
+        .context-section { border: 1px solid var(--hairline); border-radius: var(--md); padding: 0 7px; }
+        .context-toggle { min-height: 40px; }
+        .context-content { padding-bottom: 8px; }
+        .context-note { display: none; }
+      }
+
+      @media (max-width: 780px) {
+        .topbar { position: static; display: block; padding: 10px 12px; }
+        .topbar-brand { margin-bottom: 9px; }
+        .brand-name { display: inline; }
+        .top-actions { display: flex; margin-top: 9px; }
+        .top-actions .top-pill { flex: 1; }
+        .body-grid { display: block; }
+        .history-rail { border-right: 0; border-bottom: 1px solid var(--hairline-dark); padding: 11px 12px; }
+        .rail-head { margin-bottom: 9px; }
+        .history-list { display: flex; overflow-x: auto; padding-bottom: 3px; }
+        .history-item { min-width: 170px; }
+        .rail-divider, .rail-context, .rail-footer { display: none; }
+        .chat-main { padding: 16px 12px 28px; }
+        .chat-head { display: block; }
+        .chat-head-right { margin-top: 11px; }
+        .message { grid-template-columns: 24px minmax(0, 1fr); gap: 8px; }
+        .message-avatar { width: 24px; height: 24px; }
+        .result-top { display: block; }
+        .result-status { margin-top: 9px; }
+        .result-foot { display: block; }
+        .result-foot span { display: block; margin-top: 4px; }
+        .composer-wrap { position: static; }
+        .context-rail { display: block; padding: 0 12px 76px; }
+        .context-title { padding-top: 15px; }
+        .context-section { border-right: 0; border-left: 0; border-radius: 0; padding: 0; }
+        .context-toggle { padding-right: 5px; padding-left: 5px; }
+        .editor-backdrop { align-items: flex-start; padding: 10px; }
+        .editor-dialog { max-height: calc(100vh - 20px); }
+        .editor-body { display: block; padding: 13px; }
+        .editor-controls { margin-top: 13px; }
+        .editor-footer { display: block; padding: 12px 13px 78px; }
+        .editor-save { width: 100%; margin-top: 10px; }
+        .switcher { bottom: 10px; }
+        .switcher-label { min-width: 138px; }
+        .toast { right: 12px; bottom: 67px; }
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      THROWAWAY UI PROTOTYPE — question: can a project feel simple when conversation is the primary entry?
+      Three application-shaped variants on one route: ?variant=A (Chat first), B (Focus), C (Guided history).
+      The prototype intentionally keeps non-core features behind context sections. No backend or persistence.
+    -->
+    <div class="app">
+      <header class="topbar">
+        <div class="topbar-brand"><span class="brand-mark">LR</span><span class="brand-name">LangReport</span></div>
+
+        <div class="selector project" data-selector="project">
+          <button class="selector-button" type="button" aria-expanded="false"><span class="selector-icon">HC</span><span class="selector-copy"><span class="eyebrow">Project</span><strong>海岚消费洞察</strong><small>Client project · 4 evidence blocks</small></span></button>
+          <div class="menu" data-menu="project"><span class="menu-kicker">Switch project</span><button class="menu-item current" type="button"><strong>海岚消费洞察</strong><small>Active · updated 2 min ago</small></button><button class="menu-item" type="button"><strong>北岸零售复盘</strong><small>Review · 8 evidence blocks</small></button><button class="menu-item" type="button"><strong>宏观市场研究</strong><small>Draft · 2 evidence blocks</small></button></div>
+        </div>
+
+        <div class="selector conversation" data-selector="conversation">
+          <button class="selector-button" type="button" aria-expanded="false"><span class="selector-icon">C14</span><span class="selector-copy"><span class="eyebrow">Conversation history</span><strong>区域增长与异常</strong><small>5 turns · last active 2 min ago</small></span></button>
+          <div class="menu" data-menu="conversation"><span class="menu-kicker">Switch conversation</span><button class="menu-item current" type="button"><strong>区域增长与异常</strong><small>5 turns · Draft evidence</small></button><button class="menu-item" type="button"><strong>渠道结构变化</strong><small>8 turns · Approved</small></button><button class="menu-item" type="button"><strong>客单价变化</strong><small>3 turns · Needs input</small></button></div>
+        </div>
+
+        <div class="top-actions"><span class="top-pill ready"><span class="green-dot"></span>data ready</span><span class="top-pill">snapshot v3</span><span class="icon-button">?</span><span class="icon-button">YL</span></div>
+      </header>
+
+      <div class="body-grid">
+        <aside class="history-rail" aria-label="Conversation history rail">
+          <div class="rail-head"><div><div class="eyebrow">Project conversations</div><h2>对话历史</h2></div><button class="plus-button" type="button" data-fake-action="Prototype only: new conversation">＋</button></div>
+          <div class="history-list"><div class="history-item current"><strong>区域增长与异常</strong><small>已生成图表，等待审核</small><div class="history-meta"><span>C-014 · 5 turns</span><span>2m</span></div></div><div class="history-item"><strong>渠道结构变化</strong><small>Evidence E-002 已批准</small><div class="history-meta"><span>C-013 · 8 turns</span><span>1d</span></div></div><div class="history-item"><strong>客单价变化</strong><small>等待确认指标口径</small><div class="history-meta"><span>C-012 · 3 turns</span><span>2d</span></div></div><div class="history-item"><strong>客户周报首页</strong><small>讨论报告输出规范</small><div class="history-meta"><span>C-011 · 6 turns</span><span>4d</span></div></div></div>
+          <div class="rail-divider"></div><div class="eyebrow" style="margin:0 5px 7px">Project context</div><div class="rail-context"><div class="rail-context-row"><span>Data assets</span><span>03</span></div><div class="rail-context-row"><span>Evidence blocks</span><span>04</span></div><div class="rail-context-row"><span>Confirmed memory</span><span>04</span></div><div class="rail-context-row"><span>Template</span><span>V3</span></div></div><div class="rail-footer">Project history is scoped to this client workspace. Every generated artifact keeps its own snapshot and revision.</div>
+        </aside>
+
+        <main class="chat-main">
+          <div class="view active" data-variant-view="A">
+            <section class="chat-head"><div><div class="eyebrow">CONVERSATION C-014 / CHAT FIRST</div><h1>区域增长与异常</h1><p>连续多轮对话，直到问题被澄清；图表只在生成后作为结果卡片出现。</p></div><div class="chat-head-right"><span class="context-chip">MULTI-TURN</span><span class="context-chip">BRIEF READY</span><span class="context-chip">CYCLE 05</span><span class="context-chip">DRAFT</span></div></section>
+            <section class="conversation" aria-label="Multi-turn AI conversation">
+              <div class="message-list">
+                <div class="message user"><span class="message-avatar">YL</span><div class="message-content"><div class="message-meta"><span>Y. Lin · 顾问</span><time>10:24</time></div><div class="bubble">先看 2026 年各区域的月度销售趋势，重点找出增长放缓的区域。图表之后要能放进客户周报。</div></div></div>
+                <div class="message ai"><span class="message-avatar">AI</span><div class="message-content"><div class="message-meta"><span>LangReport</span><time>10:24</time></div><div class="bubble">我找到了 month、region、paid_amount 和 refund_amount。为了避免口径错误，需要确认“销售额”使用支付金额，还是扣除退款后的净销售额？</div><div class="clarify-card"><strong>需要确认一个口径</strong>当前项目记忆中，收入 = 支付金额 − 退款金额；同比按自然月对齐。这个口径是否适用于本次分析？</div></div></div>
+                <div class="message user"><span class="message-avatar">YL</span><div class="message-content"><div class="message-meta"><span>Y. Lin · 顾问</span><time>10:25</time></div><div class="bubble">确认，使用净销售额。标注同比低于 5% 的区域，并给出一段可审核的发现。</div></div></div>
+                <div class="message ai"><span class="message-avatar">AI</span><div class="message-content"><div class="message-meta"><span>LangReport · generated</span><time>10:25</time></div><div class="bubble">已根据 Snapshot v3 生成一个 Draft Chart Artifact。图表逻辑、数据来源和模板版本已经保存，可以先检查结果；需要调整时再打开编辑器。</div>
+                  <article class="result-card" aria-label="Generated chart result">
+                    <div class="result-top"><div><div class="eyebrow">GENERATED CHART / E-003</div><h3>区域净销售额趋势</h3><p>Line · month × region · net sales · YoY flag &lt; 5%</p></div><span class="result-status"><span class="green-dot"></span>draft ready</span></div>
+                    <div class="result-chart"><svg viewBox="0 0 680 258" role="img" aria-label="Generated monthly net sales chart"><rect width="680" height="258" fill="#f7f7f5" /><line x1="47" y1="15" x2="47" y2="205" stroke="#000" /><line x1="47" y1="205" x2="660" y2="205" stroke="#000" /><line x1="47" y1="53" x2="660" y2="53" stroke="#e6e6e6" /><line x1="47" y1="101" x2="660" y2="101" stroke="#e6e6e6" /><line x1="47" y1="149" x2="660" y2="149" stroke="#e6e6e6" /><line x1="47" y1="165" x2="660" y2="165" stroke="#ff3d8b" stroke-dasharray="5 5" /><text x="588" y="159" fill="#ff3d8b" font-family="monospace" font-size="9">YOY +5%</text><text x="7" y="20" font-family="monospace" font-size="9">¥18M</text><text x="7" y="105" font-family="monospace" font-size="9">¥12M</text><text x="7" y="190" font-family="monospace" font-size="9">¥6M</text><text x="43" y="225" font-family="monospace" font-size="9">JAN</text><text x="145" y="225" font-family="monospace" font-size="9">MAR</text><text x="247" y="225" font-family="monospace" font-size="9">MAY</text><text x="349" y="225" font-family="monospace" font-size="9">JUL</text><text x="451" y="225" font-family="monospace" font-size="9">SEP</text><text x="553" y="225" font-family="monospace" font-size="9">NOV</text><path d="M47 129 L98 119 L149 111 L200 101 L251 90 L302 74 L353 66 L404 54 L455 49 L506 38 L557 27 L608 33 L659 24" fill="none" stroke="#1f1d3d" stroke-width="4" /><path d="M47 157 L98 154 L149 160 L200 150 L251 156 L302 144 L353 151 L404 139 L455 148 L506 136 L557 143 L608 131 L659 138" fill="none" stroke="#1ea64a" stroke-width="3" /><path d="M47 187 L98 182 L149 185 L200 178 L251 182 L302 175 L353 180 L404 172 L455 178 L506 168 L557 174 L608 163 L659 169" fill="none" stroke="#000" stroke-width="2" /><circle cx="659" cy="138" r="5" fill="#ff3d8b" stroke="#000" stroke-width="2" /></svg><div class="result-foot"><span>source · sales_aug_v3 / snapshot v3</span><span>template · consulting neutral v3</span></div></div>
+                    <div class="result-finding"><strong>Finding draft</strong>西南区域 7–8 月同比增长分别为 3.4% 和 2.1%，低于项目设定的 5% 警戒线。该结论只支持销售增长判断，不解释利润原因。</div>
+                    <div class="result-actions"><button class="result-action primary" type="button" data-open-editor>编辑图表</button><button class="result-action" type="button" data-fake-action="Evidence inspector would open here">查看依据</button><button class="result-action" type="button" data-fake-action="Revision R04 is ready for review">提交审核</button></div>
+                  </article>
+                </div></div>
+                <div class="message user"><span class="message-avatar">YL</span><div class="message-content"><div class="message-meta"><span>Y. Lin · 顾问</span><time>10:27</time></div><div class="bubble">把标题改得更适合管理层阅读，并把西南区域的异常点标出来。</div></div></div>
+              </div>
+              <div class="composer-wrap"><div class="composer"><textarea aria-label="Continue conversation" placeholder="继续问一个问题，或描述你要修改的地方……"></textarea><div class="composer-bottom"><div class="composer-meta"><span>project: 海岚消费洞察</span><button class="composer-attach" type="button" data-fake-action="Prototype only: attach a Project asset">＋ attach</button><span>snapshot v3</span></div><button class="composer-send" type="button" data-fake-action="Prototype only: a new Generation Cycle would start">发送 ↗</button></div></div></div>
+            </section>
+          </div>
+
+          <div class="view" data-variant-view="B">
+            <section class="chat-head"><div><div class="eyebrow">VARIANT B / FOCUS CHAT</div><h1>只看当前对话</h1><p>历史和项目上下文收入可展开区域，主区域只保留连续聊天与生成结果。</p></div><div class="chat-head-right"><span class="context-chip">C-014</span><span class="context-chip">5 TURNS</span></div></section>
+            <section class="conversation"><div class="message-list"><div class="message ai"><span class="message-avatar">AI</span><div class="message-content"><div class="message-meta"><span>LangReport · context loaded</span><time>now</time></div><div class="bubble">当前对话已载入：海岚消费洞察 / 区域增长与异常。你可以继续追问，或从上面的 Conversation history 切换另一条对话。</div></div></div><div class="message user"><span class="message-avatar">YL</span><div class="message-content"><div class="message-meta"><span>Y. Lin · 顾问</span><time>10:27</time></div><div class="bubble">把标题改得更适合管理层阅读，并把西南区域的异常点标出来。</div></div></div><div class="message ai"><span class="message-avatar">AI</span><div class="message-content"><div class="message-meta"><span>LangReport · ready to edit</span><time>10:27</time></div><div class="bubble">可以。当前图表已具备对应字段和异常标记。点击结果卡片中的“编辑图表”，修改只会作用于新的 Draft Revision。</div><div class="result-card"><div class="result-top"><div><div class="eyebrow">RESULT CARD / R04</div><h3>区域净销售额趋势</h3><p>Generated from Snapshot v3 · one chart artifact</p></div><span class="result-status"><span class="green-dot"></span>ready</span></div><div class="result-finding"><strong>Available action</strong>只在结果生成后打开编辑器；对话本身保持干净。</div><div class="result-actions"><button class="result-action primary" type="button" data-open-editor>编辑图表</button><button class="result-action" type="button" data-fake-action="Evidence inspector would open here">查看证据</button></div></div></div></div></div></section><div class="composer-wrap"><div class="composer"><textarea aria-label="Focus chat prompt" placeholder="继续与 AI 对话……"></textarea><div class="composer-bottom"><div class="composer-meta"><span>brief locked</span><span>one snapshot</span></div><button class="composer-send" type="button" data-fake-action="Prototype only: prompt sent">发送 ↗</button></div></div></div></section>
+          </div>
+
+          <div class="view" data-variant-view="C">
+            <section class="chat-head"><div><div class="eyebrow">VARIANT C / HISTORY FIRST</div><h1>从对话历史继续工作</h1><p>当前项目中的每条 Conversation 都是独立上下文，结果和修订状态在聊天中呈现。</p></div><div class="chat-head-right"><span class="context-chip">3 ACTIVE THREADS</span></div></section>
+            <section class="conversation"><div class="message-list"><div class="message user"><span class="message-avatar">YL</span><div class="message-content"><div class="message-meta"><span>区域增长与异常</span><time>10:25</time></div><div class="bubble">确认使用净销售额，标注同比低于 5% 的区域，并给出一段可审核的发现。</div></div></div><div class="message ai"><span class="message-avatar">AI</span><div class="message-content"><div class="message-meta"><span>LangReport</span><time>10:25</time></div><div class="bubble">已生成结果。你可以继续在这条对话中追问，或从顶部切换到另一条历史对话。</div><div class="result-card"><div class="result-top"><div><div class="eyebrow">E-003 · DRAFT</div><h3>区域净销售额趋势</h3><p>1 chart artifact · 1 finding · 1 open review</p></div><span class="result-status"><span class="green-dot"></span>draft ready</span></div><div class="result-chart"><svg viewBox="0 0 680 205" role="img" aria-label="Compact chart result"><rect width="680" height="205" fill="#f7f7f5" /><line x1="44" y1="15" x2="44" y2="165" stroke="#000" /><line x1="44" y1="165" x2="659" y2="165" stroke="#000" /><path d="M44 119 L95 111 L146 104 L197 91 L248 87 L299 67 L350 62 L401 50 L452 54 L503 37 L554 27 L605 34 L659 22" fill="none" stroke="#1f1d3d" stroke-width="4" /><path d="M44 144 L95 142 L146 147 L197 138 L248 143 L299 133 L350 140 L401 128 L452 137 L503 126 L554 132 L605 121 L659 128" fill="none" stroke="#1ea64a" stroke-width="3" /><circle cx="659" cy="128" r="5" fill="#ff3d8b" stroke="#000" stroke-width="2" /></svg><div class="result-foot"><span>SNAPSHOT V3</span><span>REVISION R04</span></div></div><div class="result-actions"><button class="result-action primary" type="button" data-open-editor>编辑图表</button><button class="result-action" type="button" data-fake-action="Prototype only: review opened">查看审核</button></div></div></div></div></div></section><div class="composer-wrap"><div class="composer"><textarea aria-label="History first prompt" placeholder="在当前 Conversation 中继续……"></textarea><div class="composer-bottom"><div class="composer-meta"><span>C-014</span><span>4 confirmed memories in context</span></div><button class="composer-send" type="button" data-fake-action="Prototype only: prompt sent">发送 ↗</button></div></div></div></section>
+          </div>
+        </main>
+
+        <aside class="context-rail" aria-label="Expandable project context">
+          <div class="context-title"><div class="eyebrow">Project context</div><h2>按需查看</h2><p>把非核心信息收起来，必要时再展开。</p></div>
+          <section class="context-section open"><button class="context-toggle" type="button" data-context-toggle><strong>当前数据</strong><span>−</span></button><div class="context-content"><div class="context-row"><span>Asset</span><span>sales_aug_v3.csv</span></div><div class="context-row"><span>Snapshot</span><span>V3 · 48,260 rows</span></div><div class="context-row"><span>Fields</span><span>12 · 3 time fields</span></div></div></section>
+          <section class="context-section"><button class="context-toggle" type="button" data-context-toggle><strong>Brief &amp; metric</strong><span>＋</span></button><div class="context-content"><div class="context-note">按月比较各区域净销售额和同比变化，标记低于 5% 的区域。</div><div class="context-row"><span>Metric</span><span>net sales · confirmed</span></div><div class="context-row"><span>Time</span><span>calendar month</span></div></div></section>
+          <section class="context-section"><button class="context-toggle" type="button" data-context-toggle><strong>Project memory</strong><span>＋</span></button><div class="context-content"><div class="memory-item"><i></i><span>收入 = 支付金额 − 退款金额</span></div><div class="memory-item"><i></i><span>同比按自然月对齐</span></div><div class="memory-item"><i></i><span>客户周报使用克制的视觉模板</span></div></div></section>
+          <section class="context-section"><button class="context-toggle" type="button" data-context-toggle><strong>Template &amp; revision</strong><span>＋</span></button><div class="context-content"><div class="context-row"><span>Template</span><span>Neutral · V3</span></div><div class="context-row"><span>Revision</span><span>R04 · Draft</span></div><div class="context-row"><span>Review</span><span>1 comment open</span></div></div></section>
+        </aside>
+      </div>
+    </div>
+
+    <div class="editor-backdrop" data-editor-modal aria-hidden="true">
+      <section class="editor-dialog" role="dialog" aria-modal="true" aria-labelledby="editor-title">
+        <header class="editor-dialog-head"><div><div class="eyebrow">CHART ARTIFACT / E-003 / NEW DRAFT</div><h2 id="editor-title">编辑图表</h2><p>编辑只作用于新的 Revision，不会改变 Snapshot v3 或历史 R03。</p></div><button class="close-button" type="button" data-close-editor aria-label="Close editor">×</button></header>
+        <div class="editor-body"><div class="editor-preview"><div class="editor-preview-head"><div><strong>区域净销售额趋势</strong><small>月度 · 区域分组 · 同比警戒线 5%</small></div><span class="context-chip">R05 DRAFT</span></div><svg viewBox="0 0 700 295" role="img" aria-label="Chart editor preview"><rect width="700" height="295" fill="#f7f7f5" /><line x1="55" y1="20" x2="55" y2="235" stroke="#000" /><line x1="55" y1="235" x2="675" y2="235" stroke="#000" /><line x1="55" y1="74" x2="675" y2="74" stroke="#e6e6e6" /><line x1="55" y1="128" x2="675" y2="128" stroke="#e6e6e6" /><line x1="55" y1="182" x2="675" y2="182" stroke="#e6e6e6" /><text x="9" y="25" font-family="monospace" font-size="9">¥18M</text><text x="9" y="132" font-family="monospace" font-size="9">¥12M</text><text x="9" y="239" font-family="monospace" font-size="9">¥6M</text><text x="49" y="256" font-family="monospace" font-size="9">JAN</text><text x="152" y="256" font-family="monospace" font-size="9">MAR</text><text x="255" y="256" font-family="monospace" font-size="9">MAY</text><text x="358" y="256" font-family="monospace" font-size="9">JUL</text><text x="461" y="256" font-family="monospace" font-size="9">SEP</text><text x="564" y="256" font-family="monospace" font-size="9">NOV</text><path d="M55 164 L106 153 L157 145 L208 134 L259 122 L310 105 L361 95 L412 82 L463 76 L514 65 L565 51 L616 58 L667 43" fill="none" stroke="#1f1d3d" stroke-width="4" /><path d="M55 193 L106 190 L157 196 L208 185 L259 191 L310 178 L361 187 L412 173 L463 183 L514 171 L565 178 L616 165 L667 173" fill="none" stroke="#1ea64a" stroke-width="3" /><path d="M55 220 L106 215 L157 218 L208 211 L259 216 L310 207 L361 214 L412 203 L463 211 L514 201 L565 207 L616 196 L667 203" fill="none" stroke="#000" stroke-width="2" /><circle cx="667" cy="173" r="5" fill="#ff3d8b" stroke="#000" stroke-width="2" /></svg><div class="editor-preview-foot"><span>source · snapshot v3</span><span>lineage · 4 fields</span></div></div><div class="editor-controls"><div class="control-group"><h3>Chart structure</h3><div class="control-row"><label>Chart type</label><div class="chart-type-buttons"><button class="chart-type-button active" type="button" data-chart-type="LINE">LINE</button><button class="chart-type-button" type="button" data-chart-type="BAR">BAR</button><button class="chart-type-button" type="button" data-chart-type="AREA">AREA</button></div></div><div class="control-row"><label>X axis</label><div class="control-value">month <span>TIME</span></div></div><div class="control-row"><label>Y axis</label><div class="control-value">net_sales <span>SUM</span></div></div><div class="control-row"><label>Series</label><div class="control-value">region <span>COLOR</span></div></div></div><div class="control-group"><h3>Text &amp; annotation</h3><div class="control-row"><label>Title</label><div class="control-value">区域净销售额趋势 <span>EDIT</span></div></div><div class="control-row"><label>Flag</label><div class="control-value">YoY &lt; 5% <span>ON</span></div></div></div><div class="control-group"><h3>Trace</h3><div class="context-note">修改字段、聚合或筛选会重新执行 TransformPlan；修改标题和颜色只创建新的视觉 Revision。</div></div></div></div>
+        <footer class="editor-footer"><p>保存后创建 R05 Draft。项目数据、Metric Definition 和 R03 Approved 保持不变。</p><button class="editor-save" type="button" data-close-editor data-fake-action="Prototype only: R05 draft saved">保存为新 Revision ↗</button></footer>
+      </section>
+    </div>
+
+    <div class="switcher" aria-label="Prototype variant switcher"><button type="button" data-prev aria-label="Previous variant">←</button><div class="switcher-label"><strong><span data-variant-key>A</span> — <span data-variant-name>Chat first</span></strong><small>UI comparison / throwaway</small></div><button type="button" data-next aria-label="Next variant">→</button></div>
+    <div class="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      const variants = [
+        { key: "A", name: "Chat first" },
+        { key: "B", name: "Focus chat" },
+        { key: "C", name: "History first" }
+      ];
+      const params = new URLSearchParams(window.location.search);
+      let current = (params.get("variant") || "A").toUpperCase();
+      if (!variants.some((variant) => variant.key === current)) current = "A";
+
+      function showToast(message) {
+        const toast = document.querySelector(".toast");
+        toast.textContent = message;
+        toast.classList.add("show");
+        window.clearTimeout(showToast.timer);
+        showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2200);
+      }
+
+      function setVariant(nextKey) {
+        current = nextKey;
+        const url = new URL(window.location.href);
+        url.searchParams.set("variant", current);
+        window.history.replaceState({}, "", url);
+        document.querySelectorAll("[data-variant-view]").forEach((view) => view.classList.toggle("active", view.dataset.variantView === current));
+        const selected = variants.find((variant) => variant.key === current);
+        document.querySelector("[data-variant-key]").textContent = selected.key;
+        document.querySelector("[data-variant-name]").textContent = selected.name;
+      }
+
+      function moveVariant(direction) {
+        const index = variants.findIndex((variant) => variant.key === current);
+        setVariant(variants[(index + direction + variants.length) % variants.length].key);
+      }
+
+      function closeMenus(except) {
+        document.querySelectorAll(".selector").forEach((selector) => {
+          if (selector !== except) {
+            selector.classList.remove("open");
+            selector.querySelector(".selector-button").setAttribute("aria-expanded", "false");
+            selector.querySelector(".menu").classList.remove("open");
+          }
+        });
+      }
+
+      document.querySelectorAll("[data-selector]").forEach((selector) => {
+        selector.querySelector(".selector-button").addEventListener("click", (event) => {
+          event.stopPropagation();
+          closeMenus(selector);
+          const menu = selector.querySelector(".menu");
+          const isOpen = menu.classList.toggle("open");
+          selector.querySelector(".selector-button").setAttribute("aria-expanded", String(isOpen));
+        });
+        selector.querySelectorAll(".menu-item").forEach((item) => item.addEventListener("click", () => {
+          selector.querySelector(".menu-item.current")?.classList.remove("current");
+          item.classList.add("current");
+          selector.querySelector(".menu").classList.remove("open");
+          selector.querySelector(".selector-button").setAttribute("aria-expanded", "false");
+          showToast(`已切换：${item.querySelector("strong").textContent}`);
+        }));
+      });
+      document.addEventListener("click", () => closeMenus());
+
+      document.querySelector("[data-prev]").addEventListener("click", () => moveVariant(-1));
+      document.querySelector("[data-next]").addEventListener("click", () => moveVariant(1));
+      document.addEventListener("keydown", (event) => {
+        const tag = event.target.tagName;
+        if (["INPUT", "TEXTAREA", "SELECT"].includes(tag) || event.target.isContentEditable) return;
+        if (event.key === "ArrowLeft") moveVariant(-1);
+        if (event.key === "ArrowRight") moveVariant(1);
+        if (event.key === "Escape") closeEditor();
+      });
+
+      const modal = document.querySelector("[data-editor-modal]");
+      function openEditor() {
+        modal.classList.add("open");
+        modal.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+      }
+      function closeEditor() {
+        modal.classList.remove("open");
+        modal.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+      }
+      document.querySelectorAll("[data-open-editor]").forEach((button) => button.addEventListener("click", openEditor));
+      document.querySelectorAll("[data-close-editor]").forEach((button) => button.addEventListener("click", closeEditor));
+      modal.addEventListener("click", (event) => { if (event.target === modal) closeEditor(); });
+
+      document.querySelectorAll("[data-context-toggle]").forEach((toggle) => toggle.addEventListener("click", () => {
+        const section = toggle.closest(".context-section");
+        const isOpen = section.classList.toggle("open");
+        toggle.querySelector("span").textContent = isOpen ? "−" : "＋";
+      }));
+
+      document.querySelectorAll("[data-chart-type]").forEach((button) => button.addEventListener("click", () => {
+        document.querySelectorAll("[data-chart-type]").forEach((item) => item.classList.toggle("active", item === button));
+        showToast(`已选择 ${button.dataset.chartType}；真实应用会创建新的 Draft Revision`);
+      }));
+
+      document.querySelectorAll("[data-fake-action]").forEach((action) => action.addEventListener("click", () => showToast(action.dataset.fakeAction)));
+      setVariant(current);
+    </script>
+  </body>
+</html>

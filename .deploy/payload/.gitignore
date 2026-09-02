@@ -1,0 +1,26 @@
+node_modules/
+.pnpm-store/
+.next/
+*.tsbuildinfo
+dist/
+coverage/
+.turbo/
+drizzle/
+# Keep the Phase 3 database migrations versionable while preserving older local-only snapshots.
+!packages/db/
+!packages/db/drizzle/
+packages/db/drizzle/*
+!packages/db/drizzle/0002_organic_praxagora.sql
+!packages/db/drizzle/0003_polite_maddog.sql
+!packages/db/drizzle/0004_thin_warstar.sql
+!packages/db/drizzle/meta/
+packages/db/drizzle/meta/*
+!packages/db/drizzle/meta/_journal.json
+!packages/db/drizzle/meta/0002_snapshot.json
+!packages/db/drizzle/meta/0003_snapshot.json
+!packages/db/drizzle/meta/0004_snapshot.json
+.env
+.env.*
+!.env.example
+!.env.production.example
+*.log

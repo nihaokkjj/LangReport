@@ -1,0 +1,21 @@
+{
+  "name": "@langreport/generation",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@langreport/contracts": "workspace:*",
+    "@langreport/data-engine": "workspace:*",
+    "@langreport/plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.0",
+    "typescript": "7.0.2"
+  }
+}

@@ -12,5 +12,16 @@
     "@types/node": "26.4.0",
     "tsx": "4.23.13",
     "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "@langreport/contracts": "workspace:*",
+    "@langreport/chart": "workspace:*",
+    "@langreport/data-engine": "workspace:*",
+    "@langreport/db": "workspace:*",
+    "@langreport/generation": "workspace:*",
+    "@langreport/memory": "workspace:*",
+    "@langreport/plugins": "workspace:*",
+    "@langreport/storage": "workspace:*",
+    "drizzle-orm": "0.45.2"
   }
 }

@@ -1,0 +1,1110 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LangReport — Core Studio Prototype</title>
+    <meta name="description" content="Throwaway UI prototype for the LangReport consulting project analysis studio." />
+    <style>
+      :root {
+        --ink: #000000;
+        --canvas: #ffffff;
+        --surface: #f7f7f5;
+        --hairline: #e6e6e6;
+        --hairline-dark: rgba(0, 0, 0, 0.22);
+        --lime: #dceeb1;
+        --lilac: #c5b0f4;
+        --cream: #f4ecd6;
+        --pink: #efd4d4;
+        --mint: #c8e6cd;
+        --coral: #f3c9b6;
+        --navy: #1f1d3d;
+        --magenta: #ff3d8b;
+        --success: #1ea64a;
+        --warning: #b36c00;
+        --sans: Inter, "Avenir Next", "Segoe UI", Helvetica, Arial, sans-serif;
+        --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        --sm: 6px;
+        --md: 8px;
+        --lg: 24px;
+        --pill: 9999px;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-weight: 330;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button, input, textarea { font: inherit; }
+      button { color: inherit; }
+      button:focus-visible, input:focus-visible, textarea:focus-visible {
+        outline: 3px solid rgba(0, 0, 0, 0.23);
+        outline-offset: 2px;
+      }
+
+      .eyebrow, .mono, .status, .field-type, .revision-id, .small-label, .toast, .variant-name {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 400;
+        letter-spacing: 0.48px;
+        line-height: 1.25;
+        text-transform: uppercase;
+      }
+
+      .app {
+        display: grid;
+        min-height: 100vh;
+        grid-template-columns: 224px minmax(0, 1fr);
+      }
+
+      .sidebar {
+        display: flex;
+        min-height: 100vh;
+        flex-direction: column;
+        border-right: 1px solid var(--hairline);
+        background: var(--canvas);
+        padding: 20px 14px 16px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 0 9px;
+        font-size: 16px;
+        font-weight: 540;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 26px;
+        height: 26px;
+        place-items: center;
+        background: var(--ink);
+        color: var(--canvas);
+        font-family: var(--mono);
+        font-size: 10px;
+      }
+
+      .project-switcher {
+        display: grid;
+        gap: 4px;
+        margin: 30px 0 18px;
+        border: 1px solid var(--hairline-dark);
+        border-radius: var(--md);
+        padding: 12px;
+      }
+
+      .project-switcher strong {
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 480;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .project-switcher span:last-child {
+        color: rgba(0, 0, 0, 0.55);
+        font-size: 11px;
+      }
+
+      .new-project {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 36px;
+        margin-bottom: 22px;
+        border: 1px solid var(--ink);
+        border-radius: var(--pill);
+        background: var(--ink);
+        color: var(--canvas);
+        font-size: 12px;
+        font-weight: 480;
+      }
+
+      .nav-title {
+        margin: 0 9px 8px;
+        color: rgba(0, 0, 0, 0.55);
+      }
+
+      .nav-list {
+        display: grid;
+        gap: 2px;
+      }
+
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 37px;
+        border-radius: var(--md);
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+
+      .nav-item.active {
+        background: var(--lime);
+        font-weight: 480;
+      }
+
+      .nav-icon {
+        display: grid;
+        width: 17px;
+        height: 17px;
+        place-items: center;
+        font-family: var(--mono);
+        font-size: 9px;
+      }
+
+      .side-divider {
+        height: 1px;
+        margin: 22px 9px 17px;
+        background: var(--hairline);
+      }
+
+      .asset-mini {
+        display: grid;
+        gap: 9px;
+        padding: 0 9px;
+      }
+
+      .asset-mini-row {
+        display: grid;
+        grid-template-columns: 29px minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+      }
+
+      .asset-file {
+        display: grid;
+        width: 29px;
+        height: 25px;
+        place-items: center;
+        border: 1px solid var(--ink);
+        border-radius: var(--sm);
+        background: var(--surface);
+        font-family: var(--mono);
+        font-size: 8px;
+      }
+
+      .asset-mini-row strong {
+        display: block;
+        overflow: hidden;
+        font-size: 11px;
+        font-weight: 480;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .asset-mini-row small {
+        display: block;
+        margin-top: 2px;
+        color: rgba(0, 0, 0, 0.53);
+        font-family: var(--mono);
+        font-size: 9px;
+      }
+
+      .sidebar-footer {
+        display: grid;
+        gap: 10px;
+        margin-top: auto;
+        border-top: 1px solid var(--hairline);
+        padding: 15px 9px 0;
+      }
+
+      .memory-meter {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-radius: var(--sm);
+        background: var(--surface);
+        padding: 9px;
+        font-size: 11px;
+      }
+
+      .memory-meter b { font-weight: 480; }
+
+      .user {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+      }
+
+      .avatar {
+        display: grid;
+        width: 25px;
+        height: 25px;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--coral);
+        font-family: var(--mono);
+        font-size: 9px;
+      }
+
+      .main {
+        min-width: 0;
+        background: var(--surface);
+      }
+
+      .topbar {
+        display: flex;
+        min-height: 56px;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--hairline);
+        background: var(--canvas);
+        padding: 0 28px;
+      }
+
+      .crumbs {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 13px;
+      }
+
+      .crumbs strong { font-weight: 480; }
+      .slash { color: rgba(0, 0, 0, 0.36); font-family: var(--mono); }
+
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .top-pill, .icon-circle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 31px;
+        border: 1px solid var(--hairline-dark);
+        border-radius: var(--pill);
+        background: var(--canvas);
+        padding: 6px 10px;
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: 0.35px;
+        text-transform: uppercase;
+      }
+
+      .top-pill.ready { border-color: var(--success); color: var(--success); }
+      .icon-circle { width: 31px; padding: 0; font-family: var(--sans); font-size: 12px; }
+
+      .page {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 24px 28px 88px;
+      }
+
+      .view { display: none; }
+      .view.active { display: block; }
+
+      .view-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 20px;
+        min-height: 66px;
+        margin-bottom: 18px;
+      }
+
+      .view-head h1 {
+        margin: 7px 0 0;
+        font-size: 30px;
+        font-weight: 540;
+        letter-spacing: -0.45px;
+        line-height: 1.1;
+      }
+
+      .view-head p {
+        max-width: 490px;
+        margin: 7px 0 0;
+        color: rgba(0, 0, 0, 0.62);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .view-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 35px;
+        border: 1px solid var(--ink);
+        border-radius: var(--pill);
+        background: var(--canvas);
+        padding: 7px 13px;
+        font-size: 12px;
+        font-weight: 480;
+      }
+
+      .button.primary { background: var(--ink); color: var(--canvas); }
+      .button.lilac { background: var(--lilac); }
+
+      .context-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        min-height: 45px;
+        border: 1px solid var(--hairline-dark);
+        border-radius: var(--md);
+        background: var(--canvas);
+        padding: 7px 10px;
+      }
+
+      .context-left, .context-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .context-left strong {
+        overflow: hidden;
+        font-size: 12px;
+        font-weight: 480;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .context-separator { color: rgba(0, 0, 0, 0.35); }
+      .context-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--pill);
+        background: var(--surface);
+        padding: 6px 8px;
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: 0.25px;
+        white-space: nowrap;
+      }
+
+      .context-chip.active { background: var(--lime); }
+      .green-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+
+      .studio-grid {
+        display: grid;
+        grid-template-columns: minmax(235px, 0.67fr) minmax(430px, 1.6fr) minmax(250px, 0.78fr);
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .panel {
+        min-width: 0;
+        border: 1px solid var(--hairline-dark);
+        border-radius: var(--lg);
+        background: var(--canvas);
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        min-height: 62px;
+        border-bottom: 1px solid var(--hairline);
+        padding: 16px 17px 12px;
+      }
+
+      .panel-head h2 {
+        margin: 5px 0 0;
+        font-size: 17px;
+        font-weight: 540;
+        letter-spacing: -0.18px;
+      }
+
+      .panel-head h2 span {
+        display: block;
+        margin-top: 3px;
+        color: rgba(0, 0, 0, 0.55);
+        font-size: 11px;
+        font-weight: 330;
+        letter-spacing: 0;
+      }
+
+      .conversation-panel { background: var(--pink); }
+      .conversation-body { padding: 15px; }
+
+      .message-list { display: grid; gap: 14px; }
+
+      .message { display: grid; gap: 6px; }
+      .message-meta {
+        display: flex;
+        justify-content: space-between;
+        color: rgba(0, 0, 0, 0.55);
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: 0.35px;
+        text-transform: uppercase;
+      }
+
+      .message-bubble {
+        border-radius: var(--md);
+        background: var(--canvas);
+        padding: 11px 12px;
+        font-size: 12px;
+        line-height: 1.48;
+      }
+
+      .message.user .message-bubble { background: var(--navy); color: var(--canvas); }
+
+      .clarify {
+        border-left: 3px solid var(--warning);
+        background: rgba(255, 255, 255, 0.65);
+        padding: 8px 10px;
+        font-size: 11px;
+        line-height: 1.4;
+      }
+
+      .prompt-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 16px;
+      }
+
+      .prompt-chip {
+        border: 1px solid var(--hairline-dark);
+        border-radius: var(--pill);
+        background: rgba(255, 255, 255, 0.5);
+        padding: 6px 8px;
+        font-size: 10px;
+      }
+
+      .composer {
+        margin-top: 16px;
+        border: 1px solid var(--ink);
+        border-radius: var(--md);
+        background: var(--canvas);
+        padding: 10px;
+      }
+
+      .composer textarea {
+        display: block;
+        width: 100%;
+        min-height: 55px;
+        resize: none;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--ink);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .composer textarea::placeholder { color: rgba(0, 0, 0, 0.45); }
+      .composer-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-top: 1px solid var(--hairline);
+        padding-top: 8px;
+      }
+
+      .composer-note { color: rgba(0, 0, 0, 0.5); font-size: 8px; }
+      .send-button {
+        min-height: 29px;
+        border: 0;
+        border-radius: var(--pill);
+        background: var(--ink);
+        color: var(--canvas);
+        padding: 6px 10px;
+        font-size: 10px;
+        font-weight: 480;
+      }
+
+      .editor-panel { background: var(--cream); padding-bottom: 15px; }
+      .editor-head { background: var(--cream); }
+
+      .editor-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 14px 17px 0;
+      }
+
+      .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 6px; }
+      .toolbar-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        border: 1px solid var(--hairline-dark);
+        border-radius: var(--pill);
+        background: var(--canvas);
+        padding: 5px 8px;
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: 0.25px;
+        text-transform: uppercase;
+      }
+
+      .toolbar-pill.selected { border-color: var(--ink); background: var(--lime); }
+
+      .chart-wrap {
+        margin: 13px 17px 0;
+        border: 1px solid var(--ink);
+        border-radius: var(--md);
+        background: var(--canvas);
+        padding: 13px;
+      }
+
+      .chart-meta {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid var(--hairline);
+        padding-bottom: 10px;
+      }
+
+      .chart-meta strong { font-size: 15px; font-weight: 480; }
+      .chart-meta p { margin: 4px 0 0; font-size: 10px; color: rgba(0, 0, 0, 0.55); }
+      .revision-id { white-space: nowrap; }
+
+      .chart-wrap svg { display: block; width: 100%; height: auto; margin-top: 12px; }
+      .chart-foot {
+        display: flex;
+        justify-content: space-between;
+        border-top: 1px solid var(--hairline);
+        padding-top: 8px;
+        color: rgba(0, 0, 0, 0.58);
+        font-family: var(--mono);
+        font-size: 8px;
+        letter-spacing: 0.32px;
+        text-transform: uppercase;
+      }
+
+      .encoding-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        margin: 10px 17px 0;
+      }
+
+      .encoding {
+        display: grid;
+        gap: 4px;
+        border: 1px solid var(--hairline-dark);
+        border-radius: var(--sm);
+        background: rgba(255, 255, 255, 0.68);
+        padding: 8px;
+      }
+
+      .encoding .mono { color: rgba(0, 0, 0, 0.53); font-size: 8px; }
+      .encoding strong { overflow: hidden; font-size: 11px; font-weight: 480; text-overflow: ellipsis; white-space: nowrap; }
+
+      .finding-editor {
+        display: grid;
+        gap: 6px;
+        margin: 12px 17px 0;
+        border: 1px solid var(--hairline-dark);
+        border-radius: var(--md);
+        background: var(--lime);
+        padding: 11px;
+      }
+
+      .finding-editor strong { font-size: 12px; font-weight: 540; }
+      .finding-editor p { margin: 0; font-size: 11px; line-height: 1.42; }
+
+      .inspector-panel { padding-bottom: 10px; }
+      .inspector-tabs {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+        border-bottom: 1px solid var(--hairline);
+        padding: 9px 10px;
+      }
+
+      .inspector-tab {
+        min-height: 29px;
+        border: 0;
+        border-radius: var(--sm);
+        background: transparent;
+        font-family: var(--mono);
+        font-size: 8px;
+        letter-spacing: 0.25px;
+        text-transform: uppercase;
+      }
+
+      .inspector-tab.active { background: var(--lilac); }
+      .inspector-pane { display: none; padding: 3px 15px 0; }
+      .inspector-pane.active { display: block; }
+
+      .inspector-section { border-bottom: 1px solid var(--hairline); padding: 15px 0; }
+      .inspector-section:last-child { border-bottom: 0; }
+      .inspector-section h3 { margin: 0 0 10px; font-size: 12px; font-weight: 540; }
+
+      .form-stack { display: grid; gap: 8px; }
+      .form-row { display: grid; gap: 4px; }
+      .form-row label { color: rgba(0, 0, 0, 0.55); font-family: var(--mono); font-size: 8px; letter-spacing: 0.35px; text-transform: uppercase; }
+      .fake-input {
+        display: flex;
+        min-height: 32px;
+        align-items: center;
+        justify-content: space-between;
+        border: 1px solid var(--hairline-dark);
+        border-radius: var(--sm);
+        background: var(--surface);
+        padding: 7px 8px;
+        font-size: 11px;
+      }
+
+      .fake-input span { color: rgba(0, 0, 0, 0.46); font-family: var(--mono); font-size: 9px; }
+      .validation-list { display: grid; gap: 7px; }
+      .validation-row { display: flex; align-items: center; gap: 7px; font-size: 11px; }
+      .validation-row i { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .validation-row.warning i { background: var(--warning); }
+
+      .source-card {
+        display: grid;
+        grid-template-columns: 29px 1fr;
+        gap: 8px;
+        align-items: center;
+        border-radius: var(--sm);
+        background: var(--surface);
+        padding: 9px;
+      }
+
+      .source-card strong { display: block; font-size: 11px; font-weight: 480; }
+      .source-card small { display: block; margin-top: 3px; color: rgba(0, 0, 0, 0.52); font-size: 9px; }
+
+      .below-row {
+        display: grid;
+        grid-template-columns: 1.12fr 0.88fr;
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .sub-panel { border: 1px solid var(--hairline-dark); border-radius: var(--lg); background: var(--canvas); padding: 15px 17px; }
+      .sub-panel.template { background: var(--lilac); }
+      .sub-panel-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 13px; }
+      .sub-panel h2 { margin: 4px 0 0; font-size: 16px; font-weight: 540; }
+
+      .revision-list { display: grid; gap: 7px; }
+      .revision-row { display: grid; grid-template-columns: 55px 1fr auto; gap: 9px; align-items: center; min-height: 37px; border-bottom: 1px solid var(--hairline); font-size: 11px; }
+      .revision-row:last-child { border-bottom: 0; }
+      .revision-row b { font-family: var(--mono); font-size: 9px; font-weight: 400; }
+      .revision-row small { color: rgba(0, 0, 0, 0.52); font-size: 10px; }
+      .revision-row .status { color: var(--success); font-size: 8px; }
+      .revision-row .status.draft { color: var(--warning); }
+
+      .template-flex { display: flex; align-items: center; gap: 13px; }
+      .swatches { display: flex; gap: 5px; }
+      .swatches i { width: 23px; height: 23px; border: 1px solid var(--ink); border-radius: 50%; }
+      .swatches i:nth-child(1) { background: var(--ink); }
+      .swatches i:nth-child(2) { background: var(--lilac); }
+      .swatches i:nth-child(3) { background: var(--success); }
+      .template-flex strong { display: block; font-size: 12px; font-weight: 540; }
+      .template-flex small { display: block; margin-top: 4px; font-size: 10px; line-height: 1.35; }
+
+      .canvas-layout {
+        display: grid;
+        grid-template-columns: 212px minmax(500px, 1fr) 270px;
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .object-tree, .properties, .canvas-area, .flow-rail, .flow-main, .queue-panel {
+        border: 1px solid var(--hairline-dark);
+        border-radius: var(--lg);
+        background: var(--canvas);
+      }
+
+      .object-tree, .properties { padding: 15px; }
+      .tree-title { margin-bottom: 14px; }
+      .tree-title h2, .properties h2, .queue-panel h2 { margin: 5px 0 0; font-size: 16px; font-weight: 540; }
+      .tree { display: grid; gap: 5px; }
+      .tree-node { display: flex; align-items: center; gap: 7px; min-height: 34px; border-radius: var(--sm); padding: 7px 8px; font-size: 11px; }
+      .tree-node.selected { background: var(--lime); font-weight: 480; }
+      .tree-node.indent { margin-left: 14px; }
+      .node-icon { display: grid; width: 16px; height: 16px; place-items: center; border: 1px solid var(--ink); border-radius: 3px; font-family: var(--mono); font-size: 8px; }
+      .tree-note { margin: 17px 0 0; border-top: 1px solid var(--hairline); padding-top: 12px; color: rgba(0, 0, 0, 0.55); font-size: 10px; line-height: 1.45; }
+
+      .canvas-area { background: var(--cream); padding: 16px; }
+      .canvas-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .canvas-toolbar strong { font-size: 13px; font-weight: 480; }
+      .canvas-toolbar span { color: rgba(0, 0, 0, 0.55); font-family: var(--mono); font-size: 9px; }
+      .canvas-board { position: relative; min-height: 570px; margin-top: 14px; border: 1px dashed var(--hairline-dark); border-radius: var(--md); background: rgba(255, 255, 255, 0.55); padding: 35px; }
+      .canvas-selection { position: absolute; top: 21px; left: 24px; border: 1px solid var(--magenta); border-radius: 2px; padding: 4px 6px; color: var(--magenta); font-family: var(--mono); font-size: 8px; letter-spacing: 0.25px; text-transform: uppercase; }
+      .canvas-card { max-width: 680px; margin: 34px auto 0; border: 1px solid var(--ink); border-radius: var(--md); background: var(--canvas); padding: 20px; }
+      .canvas-card h3 { max-width: 510px; margin: 0; font-size: 22px; font-weight: 480; letter-spacing: -0.3px; line-height: 1.2; }
+      .canvas-card p { margin: 8px 0 0; color: rgba(0, 0, 0, 0.55); font-size: 11px; }
+      .canvas-card svg { display: block; width: 100%; margin-top: 20px; }
+      .canvas-card .finding-editor { margin: 14px 0 0; }
+      .canvas-comment { position: absolute; right: 23px; bottom: 56px; width: 170px; border: 1px solid var(--ink); border-radius: var(--md); background: var(--pink); padding: 11px; font-size: 10px; line-height: 1.42; }
+      .canvas-comment strong { display: block; margin-bottom: 5px; font-family: var(--mono); font-size: 8px; letter-spacing: 0.35px; text-transform: uppercase; }
+
+      .property-section { border-bottom: 1px solid var(--hairline); padding: 15px 0; }
+      .property-section:last-child { border-bottom: 0; }
+      .property-section h3 { margin: 0 0 10px; font-size: 12px; font-weight: 540; }
+      .property-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 10px; }
+      .property-row span:first-child { color: rgba(0, 0, 0, 0.55); }
+      .property-value { min-width: 104px; border: 1px solid var(--hairline-dark); border-radius: var(--sm); background: var(--surface); padding: 7px; text-align: right; font-family: var(--mono); font-size: 8px; }
+      .toggle-line { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; font-size: 11px; }
+      .fake-toggle { width: 30px; height: 17px; border-radius: var(--pill); background: var(--ink); padding: 3px; }
+      .fake-toggle i { display: block; width: 11px; height: 11px; margin-left: auto; border-radius: 50%; background: var(--lime); }
+
+      .flow-layout { display: grid; grid-template-columns: 218px minmax(460px, 1fr) 278px; gap: 12px; margin-top: 12px; }
+      .flow-rail { background: var(--navy); color: var(--canvas); padding: 17px; }
+      .flow-rail h2 { margin: 6px 0 17px; font-size: 18px; font-weight: 480; }
+      .flow-rail .eyebrow { color: rgba(255, 255, 255, 0.58); }
+      .flow-step { position: relative; display: grid; grid-template-columns: 26px 1fr; gap: 9px; align-items: start; min-height: 74px; }
+      .flow-step:not(:last-child)::after { position: absolute; top: 28px; left: 12px; width: 1px; height: 48px; background: rgba(255, 255, 255, 0.33); content: ""; }
+      .flow-number { position: relative; z-index: 1; display: grid; width: 25px; height: 25px; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, 0.16); font-family: var(--mono); font-size: 9px; }
+      .flow-step.active .flow-number { background: var(--lime); color: var(--ink); }
+      .flow-step.done .flow-number { background: var(--mint); color: var(--ink); }
+      .flow-step strong { display: block; margin-top: 4px; font-size: 12px; font-weight: 480; }
+      .flow-step small { display: block; margin-top: 4px; color: rgba(255, 255, 255, 0.58); font-size: 9px; line-height: 1.4; }
+      .flow-footer { margin-top: 40px; border-top: 1px solid rgba(255, 255, 255, 0.2); padding-top: 13px; color: rgba(255, 255, 255, 0.6); font-size: 10px; line-height: 1.45; }
+
+      .flow-main { background: var(--surface); padding: 17px; }
+      .flow-main-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; }
+      .flow-main-head h2 { margin: 6px 0 0; font-size: 22px; font-weight: 540; letter-spacing: -0.3px; }
+      .flow-main-head p { max-width: 450px; margin: 8px 0 0; font-size: 12px; line-height: 1.45; }
+      .task-card { margin-top: 16px; border: 1px solid var(--ink); border-radius: var(--md); background: var(--canvas); padding: 15px; }
+      .task-card h3 { margin: 0; font-size: 15px; font-weight: 540; }
+      .task-card p { margin: 7px 0 0; color: rgba(0, 0, 0, 0.58); font-size: 11px; line-height: 1.45; }
+      .task-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 13px; }
+      .task-option { min-height: 74px; border: 1px solid var(--hairline-dark); border-radius: var(--sm); background: var(--surface); padding: 10px; }
+      .task-option.selected { border-color: var(--ink); background: var(--lime); }
+      .task-option strong { display: block; font-size: 11px; font-weight: 480; }
+      .task-option small { display: block; margin-top: 6px; font-size: 9px; line-height: 1.4; }
+      .task-chart { margin-top: 13px; border: 1px solid var(--hairline-dark); border-radius: var(--sm); background: var(--cream); padding: 10px; }
+      .task-chart svg { display: block; width: 100%; }
+      .flow-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 14px; }
+
+      .queue-panel { padding: 15px; }
+      .queue-list { display: grid; gap: 8px; margin-top: 15px; }
+      .queue-item { border: 1px solid var(--hairline-dark); border-radius: var(--md); padding: 10px; }
+      .queue-item.active { background: var(--lilac); }
+      .queue-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+      .queue-item strong { font-size: 11px; font-weight: 480; }
+      .queue-item p { margin: 5px 0 0; color: rgba(0, 0, 0, 0.58); font-size: 10px; line-height: 1.4; }
+      .queue-item small { display: block; margin-top: 10px; color: rgba(0, 0, 0, 0.5); font-family: var(--mono); font-size: 8px; letter-spacing: 0.3px; text-transform: uppercase; }
+
+      .switcher {
+        position: fixed;
+        z-index: 10;
+        right: 50%;
+        bottom: 17px;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        transform: translateX(50%);
+        border: 1px solid var(--ink);
+        border-radius: var(--pill);
+        background: var(--navy);
+        color: var(--canvas);
+        padding: 4px;
+      }
+
+      .switcher button {
+        display: grid;
+        min-width: 29px;
+        min-height: 29px;
+        place-items: center;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: inherit;
+        font-size: 14px;
+      }
+
+      .switcher button:hover { background: rgba(255, 255, 255, 0.14); }
+      .switcher-label { min-width: 170px; padding: 0 8px; text-align: center; }
+      .switcher-label strong { display: block; font-size: 11px; font-weight: 480; }
+      .switcher-label small { display: block; margin-top: 2px; color: rgba(255, 255, 255, 0.58); font-family: var(--mono); font-size: 8px; letter-spacing: 0.3px; text-transform: uppercase; }
+
+      .toast {
+        position: fixed;
+        z-index: 12;
+        right: 24px;
+        bottom: 78px;
+        display: none;
+        border: 1px solid var(--ink);
+        border-radius: var(--md);
+        background: var(--lime);
+        padding: 10px 12px;
+        font-size: 9px;
+        text-transform: none;
+      }
+
+      .toast.show { display: block; }
+
+      @media (max-width: 1180px) {
+        .app { grid-template-columns: 192px minmax(0, 1fr); }
+        .sidebar { padding-right: 10px; padding-left: 10px; }
+        .page, .topbar { padding-right: 18px; padding-left: 18px; }
+        .studio-grid { grid-template-columns: minmax(215px, 0.7fr) minmax(390px, 1.3fr); }
+        .inspector-panel { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 13px; padding: 13px; }
+        .inspector-panel .panel-head, .inspector-panel .inspector-tabs { grid-column: 1 / -1; }
+        .inspector-panel .panel-head { min-height: auto; border: 0; padding: 0; }
+        .inspector-panel .inspector-tabs { padding: 0 0 9px; }
+        .inspector-pane { padding: 0; }
+        .canvas-layout, .flow-layout { grid-template-columns: 190px minmax(430px, 1fr); }
+        .properties, .queue-panel { grid-column: 1 / -1; }
+        .properties { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .properties h2 { grid-column: 1 / -1; }
+        .queue-panel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .queue-panel h2 { grid-column: 1 / -1; }
+        .queue-list { display: contents; }
+      }
+
+      @media (max-width: 780px) {
+        .app { display: block; }
+        .sidebar { display: none; }
+        .topbar { padding: 0 14px; }
+        .topbar .top-pill:first-child { display: none; }
+        .page { padding: 18px 14px 80px; }
+        .view-head { display: block; }
+        .view-head-actions { margin-top: 14px; }
+        .context-bar { align-items: flex-start; flex-direction: column; }
+        .studio-grid, .below-row, .canvas-layout, .flow-layout { grid-template-columns: 1fr; }
+        .inspector-panel { display: block; }
+        .inspector-panel .panel-head { min-height: 62px; border-bottom: 1px solid var(--hairline); padding: 16px 17px 12px; }
+        .inspector-panel .inspector-tabs { padding: 9px 10px; }
+        .inspector-pane { padding: 3px 15px 0; }
+        .properties { display: block; }
+        .queue-panel { display: block; }
+        .queue-list { display: grid; }
+        .canvas-board { min-height: 510px; padding: 18px; }
+        .canvas-card { margin-top: 34px; padding: 14px; }
+        .canvas-card h3 { font-size: 18px; }
+        .canvas-comment { position: static; width: auto; margin-top: 14px; }
+        .task-grid { grid-template-columns: 1fr; }
+        .switcher-label { min-width: 140px; }
+        .toast { right: 14px; bottom: 74px; }
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      THROWAWAY UI PROTOTYPE — question: what should the core Project analysis surface feel like?
+      Three app-shaped variants on one route: ?variant=A (Studio), B (Canvas), C (Guided loop).
+      State is in memory only. No API, persistence, auth, or production code is involved.
+    -->
+    <div class="app">
+      <aside class="sidebar" aria-label="Project navigation">
+        <div class="brand"><span class="brand-mark">LR</span><span>LangReport</span></div>
+
+        <div class="project-switcher">
+          <span class="eyebrow">Current project</span>
+          <strong>海岚消费洞察</strong>
+          <span>Client project · Active</span>
+        </div>
+
+        <div class="new-project">＋ 新建项目</div>
+        <div class="nav-title eyebrow">Project space</div>
+        <nav class="nav-list">
+          <div class="nav-item active"><span class="nav-icon">◎</span><span>Analysis studio</span></div>
+          <div class="nav-item"><span class="nav-icon">▦</span><span>数据资产</span></div>
+          <div class="nav-item"><span class="nav-icon">◌</span><span>Conversations</span></div>
+          <div class="nav-item"><span class="nav-icon">◇</span><span>Evidence blocks</span></div>
+          <div class="nav-item"><span class="nav-icon">✳</span><span>Visual templates</span></div>
+        </nav>
+
+        <div class="side-divider"></div>
+        <div class="nav-title eyebrow">Pinned assets</div>
+        <div class="asset-mini">
+          <div class="asset-mini-row"><span class="asset-file">CSV</span><span><strong>sales_aug_v3.csv</strong><small>SNAPSHOT V3 · 48K ROWS</small></span></div>
+          <div class="asset-mini-row"><span class="asset-file">MD</span><span><strong>client_metric_notes.md</strong><small>4 CONFIRMED RULES</small></span></div>
+          <div class="asset-mini-row"><span class="asset-file">TPL</span><span><strong>Consulting Neutral</strong><small>VERSION 3 · ACTIVE</small></span></div>
+        </div>
+
+        <div class="sidebar-footer">
+          <div class="memory-meter"><span>Project memory</span><b>04 confirmed</b></div>
+          <div class="user"><span class="avatar">YL</span><span>Y. Lin · Editor</span></div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="crumbs"><span>Projects</span><span class="slash">/</span><strong>海岚消费洞察</strong><span class="slash">/</span><span>Analysis studio</span></div>
+          <div class="top-actions"><span class="top-pill ready"><span class="green-dot"></span> DATA READY</span><span class="top-pill">CYCLE 05 · DRAFT</span><span class="icon-circle">?</span><span class="icon-circle">YL</span></div>
+        </header>
+
+        <div class="page">
+          <div class="view active" data-variant-view="A">
+            <section class="view-head">
+              <div><div class="eyebrow">VARIANT A / STUDIO</div><h1>Analysis studio</h1><p>把一次业务问题收敛成一张可编辑图表。对话、图表和证据依据在同一工作面内完成。</p></div>
+              <div class="view-head-actions"><span class="button">查看 Project brief</span><span class="button primary" data-fake-action="新 Generation Cycle 已准备">＋ 新 Cycle</span></div>
+            </section>
+
+            <div class="context-bar">
+              <div class="context-left"><span class="context-chip active">BRIEF READY</span><strong>区域增长与异常</strong><span class="context-separator">·</span><span class="mono">按月比较净销售额和同比</span></div>
+              <div class="context-right"><span class="context-chip">SNAPSHOT V3</span><span class="context-chip">TEMPLATE V3</span><span class="context-chip">R04</span></div>
+            </div>
+
+            <div class="studio-grid">
+              <section class="panel conversation-panel" aria-label="Conversation and prompt">
+                <div class="panel-head"><div><div class="eyebrow">01 / ask</div><h2>分析对话<span>Clarify before generate</span></h2></div><span class="status">C-014</span></div>
+                <div class="conversation-body">
+                  <div class="message-list">
+                    <div class="message user"><div class="message-meta"><span>Y. Lin</span><span>10:24</span></div><div class="message-bubble">先看 2026 年各区域的月度销售趋势，重点找出增长放缓的区域。</div></div>
+                    <div class="message"><div class="message-meta"><span>LangReport</span><span>10:24</span></div><div class="message-bubble">我找到了 month、region、paid_amount 和 refund_amount。销售额是否按净销售额计算？</div></div>
+                    <div class="clarify"><b>口径确认</b><br />收入 = 支付金额 - 退款金额；同比按自然月对齐。</div>
+                    <div class="message user"><div class="message-meta"><span>Y. Lin</span><span>10:25</span></div><div class="message-bubble">确认。标注同比低于 5% 的区域，并给出一段可审核的发现。</div></div>
+                  </div>
+                  <div class="prompt-chips"><span class="prompt-chip" data-prompt="比较各区域 7–8 月的同比变化，并标注低于 5% 的区域">比较同比</span><span class="prompt-chip" data-prompt="解释西南区域增长放缓可能对应的数据证据">解释异常</span><span class="prompt-chip" data-prompt="把当前图表改成柱状图，保留当前筛选条件">修改图表</span></div>
+                  <div class="composer"><textarea aria-label="Prompt" placeholder="继续描述问题，或告诉 AI 你想如何修改当前图表……"></textarea><div class="composer-bottom"><span class="composer-note">BRIEF LOCKED · ONE SNAPSHOT</span><button class="send-button" data-fake-action="仅演示：会创建新的 Generation Job">生成预览 ↗</button></div></div>
+                </div>
+              </section>
+
+              <section class="panel editor-panel" aria-label="Chart editor">
+                <div class="panel-head editor-head"><div><div class="eyebrow">02 / edit</div><h2>Chart artifact<span>Editable surface · not final report</span></h2></div><span class="status">DRAFT</span></div>
+                <div class="editor-toolbar"><div class="toolbar-left"><span class="toolbar-pill selected">SELECTED</span><span class="toolbar-pill chart-type-label">LINE</span><span class="toolbar-pill">R04</span></div><div class="toolbar-right"><span class="toolbar-pill" data-chart-type="LINE">Line</span><span class="toolbar-pill" data-chart-type="BAR">Bar</span><span class="toolbar-pill" data-chart-type="AREA">Area</span></div></div>
+                <div class="chart-wrap">
+                  <div class="chart-meta"><div><strong>区域净销售额趋势</strong><p>月度 · CNY · 区域分组 · 同比警戒线 5%</p></div><span class="revision-id">R04 / GENERATED</span></div>
+                  <svg viewBox="0 0 700 315" role="img" aria-label="Editable chart preview for regional net sales">
+                    <rect width="700" height="315" fill="#ffffff" />
+                    <line x1="60" y1="22" x2="60" y2="258" stroke="#000000" /><line x1="60" y1="258" x2="678" y2="258" stroke="#000000" />
+                    <line x1="60" y1="70" x2="678" y2="70" stroke="#e6e6e6" /><line x1="60" y1="117" x2="678" y2="117" stroke="#e6e6e6" /><line x1="60" y1="164" x2="678" y2="164" stroke="#e6e6e6" /><line x1="60" y1="211" x2="678" y2="211" stroke="#e6e6e6" />
+                    <line x1="60" y1="193" x2="678" y2="193" stroke="#ff3d8b" stroke-dasharray="5 5" /><text x="595" y="187" font-family="monospace" font-size="9" fill="#ff3d8b">YOY +5%</text>
+                    <text x="7" y="28" font-family="monospace" font-size="9">¥18M</text><text x="7" y="122" font-family="monospace" font-size="9">¥12M</text><text x="7" y="216" font-family="monospace" font-size="9">¥6M</text>
+                    <text x="55" y="279" font-family="monospace" font-size="9">JAN</text><text x="157" y="279" font-family="monospace" font-size="9">MAR</text><text x="259" y="279" font-family="monospace" font-size="9">MAY</text><text x="361" y="279" font-family="monospace" font-size="9">JUL</text><text x="463" y="279" font-family="monospace" font-size="9">SEP</text><text x="565" y="279" font-family="monospace" font-size="9">NOV</text>
+                    <path d="M60 160 L111 147 L162 139 L213 127 L264 119 L315 101 L366 89 L417 80 L468 73 L519 63 L570 48 L621 41 L672 45" fill="none" stroke="#7454d8" stroke-width="4" />
+                    <path d="M60 185 L111 182 L162 186 L213 174 L264 183 L315 169 L366 180 L417 164 L468 176 L519 162 L570 174 L621 158 L672 169" fill="none" stroke="#1ea64a" stroke-width="3" />
+                    <path d="M60 221 L111 215 L162 218 L213 208 L264 214 L315 201 L366 210 L417 197 L468 207 L519 194 L570 202 L621 190 L672 197" fill="none" stroke="#000000" stroke-width="2" />
+                    <circle cx="672" cy="169" r="5" fill="#ff3d8b" stroke="#000000" stroke-width="2" /><rect x="498" y="214" width="142" height="34" rx="4" fill="#dceeb1" stroke="#000000" /><text x="508" y="228" font-family="monospace" font-size="8">西南 / AUG</text><text x="508" y="240" font-family="monospace" font-size="8">YOY +2.1% · FLAG</text>
+                  </svg>
+                  <div class="chart-foot"><span>NET SALES · CNY</span><span>SNAPSHOT V3 · 2026-08-31</span></div>
+                </div>
+                <div class="encoding-row"><div class="encoding"><span class="mono">X / TIME</span><strong>month</strong></div><div class="encoding"><span class="mono">Y / MEASURE</span><strong>net_sales</strong></div><div class="encoding"><span class="mono">COLOR / DIMENSION</span><strong>region</strong></div></div>
+                <div class="finding-editor"><strong>Finding draft · editable</strong><p>西南区域 7–8 月同比增长低于 5% 警戒线。该发现基于净销售额，尚未解释利润表现。</p></div>
+              </section>
+
+              <aside class="panel inspector-panel" aria-label="Chart inspector">
+                <div class="panel-head"><div><div class="eyebrow">03 / inspect</div><h2>Evidence inspector<span>Change one thing at a time</span></h2></div><span class="status">AUDIT</span></div>
+                <div class="inspector-tabs"><button class="inspector-tab active" data-inspector-tab="structure">Structure</button><button class="inspector-tab" data-inspector-tab="visual">Visual</button><button class="inspector-tab" data-inspector-tab="evidence">Evidence</button></div>
+                <div class="inspector-pane active" data-pane="structure"><div class="inspector-section"><h3>Encodings</h3><div class="form-stack"><div class="form-row"><label>X axis</label><div class="fake-input">month <span>TIME</span></div></div><div class="form-row"><label>Y axis</label><div class="fake-input">net_sales <span>SUM</span></div></div><div class="form-row"><label>Series</label><div class="fake-input">region <span>COLOR</span></div></div></div></div><div class="inspector-section"><h3>Validation</h3><div class="validation-list"><div class="validation-row"><i></i><span>Fields exist in Snapshot v3</span></div><div class="validation-row"><i></i><span>TransformPlan is reproducible</span></div><div class="validation-row warning"><i></i><span>1 low-growth flag needs review</span></div></div></div></div>
+                <div class="inspector-pane" data-pane="visual"><div class="inspector-section"><h3>Allowed controls</h3><div class="form-stack"><div class="form-row"><label>Chart type</label><div class="fake-input chart-type-label">LINE <span>3 TYPES</span></div></div><div class="form-row"><label>Project template</label><div class="fake-input">Consulting Neutral <span>V3</span></div></div><div class="form-row"><label>Title style</label><div class="fake-input">Editorial / compact <span>RULE</span></div></div></div></div><div class="inspector-section"><h3>Template rule</h3><p style="margin:0;font-size:11px;line-height:1.45">颜色、脚注和更新时间由 Project Visual Template 控制；编辑后会创建新的 Revision。</p></div></div>
+                <div class="inspector-pane" data-pane="evidence"><div class="inspector-section"><h3>Metric definition</h3><div class="source-card"><span class="asset-file">M</span><span><strong>净销售额</strong><small>paid_amount − refund_amount</small></span></div></div><div class="inspector-section"><h3>Source &amp; lineage</h3><div class="source-card"><span class="asset-file">CSV</span><span><strong>sales_aug_v3.csv</strong><small>Data Snapshot v3 · 48,260 rows</small></span></div><p class="tree-note" style="margin-top:10px;padding-top:10px">paid_amount + refund_amount → net_sales → yoy_growth</p></div></div>
+              </aside>
+            </div>
+
+            <div class="below-row"><section class="sub-panel"><div class="sub-panel-head"><div><div class="eyebrow">04 / revisions</div><h2>Revision history</h2></div><span class="mono">APPEND ONLY</span></div><div class="revision-list"><div class="revision-row"><b>R04</b><span><strong>标注同比警戒线</strong><small>Y. Lin · 2 min ago</small></span><span class="status draft">DRAFT</span></div><div class="revision-row"><b>R03</b><span><strong>确认净销售额口径</strong><small>Y. Lin · 12 min ago</small></span><span class="status">APPROVED</span></div><div class="revision-row"><b>R02</b><span><strong>生成区域趋势图</strong><small>LangReport · 14 min ago</small></span><span class="status">APPROVED</span></div></div></section><section class="sub-panel template"><div class="sub-panel-head"><div><div class="eyebrow">05 / project rules</div><h2>Visual template</h2></div><span class="context-chip active">ACTIVE V3</span></div><div class="template-flex"><div class="swatches"><i></i><i></i><i></i></div><span><strong>Consulting Neutral</strong><small>标题、脚注、单位、颜色和 16:9 导出规则</small></span></div></section></div>
+          </div>
+
+          <div class="view" data-variant-view="B">
+            <section class="view-head"><div><div class="eyebrow">VARIANT B / CANVAS</div><h1>Evidence canvas</h1><p>把 Brief、数据、图表和发现当作可以移动和检查的项目对象。适合开发人员理解对象关系，也适合顾问逐块整理证据。</p></div><div class="view-head-actions"><span class="button">＋ Add object</span><span class="button primary" data-fake-action="Canvas prototype: new block queued">保存当前布局</span></div></section>
+            <div class="context-bar"><div class="context-left"><span class="context-chip active">CANVAS / E-003</span><strong>区域增长与异常</strong><span class="context-separator">·</span><span class="mono">4 objects · 1 selected</span></div><div class="context-right"><span class="context-chip">SNAPSHOT V3</span><span class="context-chip">R04 DRAFT</span></div></div>
+            <div class="canvas-layout">
+              <aside class="object-tree"><div class="tree-title"><div class="eyebrow">Project objects</div><h2>Evidence tree</h2></div><div class="tree"><div class="tree-node"><span class="node-icon">B</span><span>Analysis Brief</span></div><div class="tree-node"><span class="node-icon">D</span><span>Data Snapshot v3</span></div><div class="tree-node indent selected"><span class="node-icon">C</span><span>Chart Artifact</span></div><div class="tree-node indent"><span class="node-icon">F</span><span>Finding draft</span></div><div class="tree-node indent"><span class="node-icon">R</span><span>Review thread</span></div></div><p class="tree-note">选中对象后，右侧只显示该对象可编辑的属性。对象关系比报告排版更重要。</p></aside>
+              <section class="canvas-area"><div class="canvas-toolbar"><strong>Evidence block canvas</strong><span>GRID 12 · REVISION R04</span></div><div class="canvas-board"><span class="canvas-selection">SELECTED · CHART ARTIFACT</span><div class="canvas-card"><div class="eyebrow">CHART ARTIFACT / E-003</div><h3>华东增长稳定，西南区域连续两个月低于同比基线</h3><p>主图：净销售额月度趋势 · 按区域拆分 · 标注同比 &lt; 5% 的月份</p><svg viewBox="0 0 680 230" role="img" aria-label="Canvas chart preview"><rect width="680" height="230" fill="#ffffff" /><line x1="44" y1="15" x2="44" y2="185" stroke="#000" /><line x1="44" y1="185" x2="656" y2="185" stroke="#000" /><line x1="44" y1="60" x2="656" y2="60" stroke="#e6e6e6" /><line x1="44" y1="105" x2="656" y2="105" stroke="#e6e6e6" /><line x1="44" y1="150" x2="656" y2="150" stroke="#e6e6e6" /><path d="M44 121 L94 114 L144 104 L194 101 L244 87 L294 74 L344 78 L394 64 L444 51 L494 45 L544 31 L594 39 L644 26" fill="none" stroke="#7454d8" stroke-width="4" /><path d="M44 145 L94 142 L144 151 L194 140 L244 146 L294 133 L344 139 L394 127 L444 137 L494 124 L544 133 L594 119 L644 128" fill="none" stroke="#1ea64a" stroke-width="3" /><path d="M44 170 L94 164 L144 168 L194 158 L244 165 L294 156 L344 161 L394 151 L444 158 L494 147 L544 154 L594 143 L644 149" fill="none" stroke="#000" stroke-width="2" /><circle cx="644" cy="128" r="5" fill="#ff3d8b" stroke="#000" stroke-width="2" /></svg><div class="chart-foot"><span>NET SALES · CNY</span><span>SOURCE: SNAPSHOT V3</span></div><div class="finding-editor"><strong>Finding draft · F-01</strong><p>西南区域 7–8 月同比低于 5%，需要 Reviewer 确认是否适合放入客户周报。</p></div></div><div class="canvas-comment"><strong>Reviewer comment</strong>结论需要说明：当前数据只能支持销售增长判断，不足以解释利润原因。</div></div></section>
+              <aside class="properties"><div><div class="eyebrow">Selected object</div><h2>Chart properties</h2></div><div class="property-section"><h3>Structure</h3><div class="property-row"><span>Type</span><span class="property-value chart-type-label">LINE</span></div><div class="property-row"><span>X field</span><span class="property-value">month</span></div><div class="property-row"><span>Y field</span><span class="property-value">net_sales</span></div><div class="property-row"><span>Series</span><span class="property-value">region</span></div></div><div class="property-section"><h3>Visual rule</h3><div class="property-row"><span>Template</span><span class="property-value">NEUTRAL V3</span></div><div class="toggle-line"><span>Show footnote</span><span class="fake-toggle"><i></i></span></div><div class="toggle-line"><span>Show source</span><span class="fake-toggle"><i></i></span></div></div><div class="property-section"><h3>Revision</h3><p style="margin:0;font-size:10px;line-height:1.45">任何结构属性变更都会复制 R04，生成新的 Draft Revision。</p></div></aside>
+            </div>
+          </div>
+
+          <div class="view" data-variant-view="C">
+            <section class="view-head"><div><div class="eyebrow">VARIANT C / GUIDED LOOP</div><h1>Analysis loop</h1><p>用有限步骤把用户从数据准备带到审核。适合首个版本和不熟悉数据分析的咨询顾问。</p></div><div class="view-head-actions"><span class="button">查看失败记录</span><span class="button primary" data-fake-action="Guided loop: next step is review">继续下一步 →</span></div></section>
+            <div class="context-bar"><div class="context-left"><span class="context-chip active">STEP 4 / EDIT</span><strong>区域增长与异常</strong><span class="context-separator">·</span><span class="mono">1 primary chart · draft evidence</span></div><div class="context-right"><span class="context-chip">3 / 4 CHECKS PASS</span><span class="context-chip">CYCLE 05</span></div></div>
+            <div class="flow-layout">
+              <aside class="flow-rail"><div class="eyebrow">Generation cycle</div><h2>区域增长与异常</h2><div class="flow-step done"><span class="flow-number">01</span><span><strong>选择数据</strong><small>Snapshot v3 is ready</small></span></div><div class="flow-step done"><span class="flow-number">02</span><span><strong>确认口径</strong><small>Net sales confirmed</small></span></div><div class="flow-step done"><span class="flow-number">03</span><span><strong>生成草稿</strong><small>R03 passed validation</small></span></div><div class="flow-step active"><span class="flow-number">04</span><span><strong>编辑图表</strong><small>Current step · R04 draft</small></span></div><div class="flow-step"><span class="flow-number">05</span><span><strong>提交审核</strong><small>Reviewer checks evidence</small></span></div><div class="flow-footer">每一步都有可见输入、输出和结束原因。自动修复预算：<b>1 / 2</b></div></aside>
+              <section class="flow-main"><div class="flow-main-head"><div><div class="eyebrow">Current task / T-04</div><h2>确认图表表达方式</h2><p>这个图表的目标是比较趋势，而不是展示单月构成。请选择符合 Brief 的图表类型。</p></div><span class="status">NEEDS USER DECISION</span></div><div class="task-card"><h3>选择图表类型</h3><p>当前数据结构：month × region × net_sales。选择会影响 Chart Revision，但不会改变 Data Snapshot。</p><div class="task-grid"><div class="task-option selected" data-chart-type="LINE"><strong>折线图 / Line</strong><small>默认选项，保留趋势和同比基线。</small></div><div class="task-option" data-chart-type="BAR"><strong>柱状图 / Bar</strong><small>更强调月度差异，适合少量月份对比。</small></div><div class="task-option" data-chart-type="AREA"><strong>面积图 / Area</strong><small>强调累计视觉，不推荐用于区域交叉比较。</small></div><div class="task-option"><strong>自定义</strong><small>第一阶段需要遵循三种基础类型。</small></div></div><div class="task-chart"><div class="mono" style="margin-bottom:5px">PREVIEW / <span class="chart-type-label">LINE</span></div><svg viewBox="0 0 660 170" role="img" aria-label="Guided chart preview"><rect width="660" height="170" fill="#f4ecd6" /><line x1="40" y1="18" x2="40" y2="133" stroke="#000" /><line x1="40" y1="133" x2="636" y2="133" stroke="#000" /><line x1="40" y1="62" x2="636" y2="62" stroke="#e6e6e6" /><line x1="40" y1="97" x2="636" y2="97" stroke="#e6e6e6" /><path d="M40 88 L90 82 L140 77 L190 68 L240 61 L290 48 L340 42 L390 34 L440 39 L490 27 L540 21 L590 26 L636 18" fill="none" stroke="#7454d8" stroke-width="4" /><path d="M40 112 L90 108 L140 111 L190 103 L240 106 L290 99 L340 105 L390 94 L440 102 L490 92 L540 98 L590 88 L636 95" fill="none" stroke="#1ea64a" stroke-width="3" /><circle cx="636" cy="95" r="4" fill="#ff3d8b" stroke="#000" stroke-width="2" /></svg></div><div class="flow-actions"><span class="button">回到口径</span><span class="button primary" data-fake-action="Prototype only: R05 draft created">确认并创建 R05</span></div></div></section>
+              <aside class="queue-panel"><div><div class="eyebrow">Output queue</div><h2>待处理对象</h2></div><div class="queue-list"><div class="queue-item active"><div class="queue-item-head"><strong>区域增长与异常</strong><span class="status">DRAFT</span></div><p>主图表等待编辑确认</p><small>R04 · 1 comment</small></div><div class="queue-item"><div class="queue-item-head"><strong>渠道销售构成</strong><span class="status">APPROVED</span></div><p>已通过 Reviewer 审核</p><small>E-002 · R07</small></div><div class="queue-item"><div class="queue-item-head"><strong>客单价变化</strong><span class="status draft">DRAFT</span></div><p>尚未完成指标口径确认</p><small>E-004 · NEEDS INPUT</small></div></div></aside>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div class="switcher" aria-label="Prototype variant switcher"><button type="button" data-prev aria-label="Previous variant">←</button><div class="switcher-label"><strong><span data-variant-key>A</span> — <span data-variant-name>Studio</span></strong><small>UI comparison / throwaway</small></div><button type="button" data-next aria-label="Next variant">→</button></div>
+    <div class="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      const variants = [
+        { key: "A", name: "Studio" },
+        { key: "B", name: "Canvas" },
+        { key: "C", name: "Guided loop" }
+      ];
+
+      const params = new URLSearchParams(window.location.search);
+      let current = (params.get("variant") || "A").toUpperCase();
+      if (!variants.some((variant) => variant.key === current)) current = "A";
+
+      function showToast(message) {
+        const toast = document.querySelector(".toast");
+        toast.textContent = message;
+        toast.classList.add("show");
+        window.clearTimeout(showToast.timer);
+        showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2400);
+      }
+
+      function setVariant(nextKey) {
+        current = nextKey;
+        const url = new URL(window.location.href);
+        url.searchParams.set("variant", current);
+        window.history.replaceState({}, "", url);
+        document.querySelectorAll("[data-variant-view]").forEach((view) => {
+          view.classList.toggle("active", view.dataset.variantView === current);
+        });
+        const selected = variants.find((variant) => variant.key === current);
+        document.querySelector("[data-variant-key]").textContent = selected.key;
+        document.querySelector("[data-variant-name]").textContent = selected.name;
+      }
+
+      function moveVariant(direction) {
+        const index = variants.findIndex((variant) => variant.key === current);
+        const nextIndex = (index + direction + variants.length) % variants.length;
+        setVariant(variants[nextIndex].key);
+      }
+
+      document.querySelector("[data-prev]").addEventListener("click", () => moveVariant(-1));
+      document.querySelector("[data-next]").addEventListener("click", () => moveVariant(1));
+
+      document.addEventListener("keydown", (event) => {
+        const tag = event.target.tagName;
+        if (["INPUT", "TEXTAREA", "SELECT"].includes(tag) || event.target.isContentEditable) return;
+        if (event.key === "ArrowLeft") moveVariant(-1);
+        if (event.key === "ArrowRight") moveVariant(1);
+      });
+
+      document.querySelectorAll("[data-prompt]").forEach((chip) => {
+        chip.addEventListener("click", () => {
+          const textarea = document.querySelector("textarea");
+          textarea.value = chip.dataset.prompt;
+          textarea.focus();
+        });
+      });
+
+      document.querySelectorAll("[data-fake-action]").forEach((action) => {
+        action.addEventListener("click", () => showToast(action.dataset.fakeAction));
+      });
+
+      document.querySelectorAll("[data-chart-type]").forEach((control) => {
+        control.addEventListener("click", () => {
+          const type = control.dataset.chartType;
+          document.querySelectorAll(".chart-type-label").forEach((label) => { label.textContent = type; });
+          document.querySelectorAll("[data-chart-type]").forEach((item) => item.classList.toggle("selected", item.dataset.chartType === type));
+          showToast(`已选择 ${type} 预览；真实应用会创建新的 Draft Revision`);
+        });
+      });
+
+      document.querySelectorAll("[data-inspector-tab]").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const selected = tab.dataset.inspectorTab;
+          document.querySelectorAll("[data-inspector-tab]").forEach((item) => item.classList.toggle("active", item === tab));
+          document.querySelectorAll("[data-pane]").forEach((pane) => pane.classList.toggle("active", pane.dataset.pane === selected));
+        });
+      });
+
+      setVariant(current);
+    </script>
+  </body>
+</html>

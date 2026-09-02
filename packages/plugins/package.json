@@ -1,0 +1,25 @@
+{
+  "name": "@langreport/plugins",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx --test src/index.test.ts"
+  },
+  "dependencies": {
+    "@langreport/contracts": "workspace:*",
+    "@langreport/db": "workspace:*",
+    "@langreport/plugin-sdk": "workspace:*",
+    "@langreport/chart": "workspace:*",
+    "drizzle-orm": "0.45.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.0",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2"
+  }
+}

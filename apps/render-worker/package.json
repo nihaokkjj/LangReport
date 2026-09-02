@@ -9,7 +9,13 @@
     "build": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "flint-chart": "0.5.1"
+    "@langreport/contracts": "workspace:*",
+    "@langreport/chart": "workspace:*",
+    "@langreport/db": "workspace:*",
+    "@langreport/flint-adapter": "workspace:*",
+    "@langreport/plugins": "workspace:*",
+    "@langreport/storage": "workspace:*",
+    "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
     "@types/node": "26.4.0",

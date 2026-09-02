@@ -16,6 +16,9 @@ importers:
       '@fastify/multipart':
         specifier: 10.1.1
         version: 10.1.1
+      '@langreport/chart':
+        specifier: workspace:*
+        version: link:../../packages/chart
       '@langreport/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -25,6 +28,12 @@ importers:
       '@langreport/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@langreport/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
+      '@langreport/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
       '@langreport/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -52,6 +61,34 @@ importers:
         version: 7.0.2
 
   apps/generation-worker:
+    dependencies:
+      '@langreport/chart':
+        specifier: workspace:*
+        version: link:../../packages/chart
+      '@langreport/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@langreport/data-engine':
+        specifier: workspace:*
+        version: link:../../packages/data-engine
+      '@langreport/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@langreport/generation':
+        specifier: workspace:*
+        version: link:../../packages/generation
+      '@langreport/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
+      '@langreport/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
+      '@langreport/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(postgres@3.4.9)
     devDependencies:
       '@types/node':
         specifier: 26.4.0
@@ -65,9 +102,27 @@ importers:
 
   apps/render-worker:
     dependencies:
-      flint-chart:
-        specifier: 0.5.1
-        version: 0.5.1
+      '@langreport/chart':
+        specifier: workspace:*
+        version: link:../../packages/chart
+      '@langreport/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@langreport/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@langreport/flint-adapter':
+        specifier: workspace:*
+        version: link:../../packages/flint-adapter
+      '@langreport/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
+      '@langreport/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(postgres@3.4.9)
     devDependencies:
       '@types/node':
         specifier: 26.4.0
@@ -107,6 +162,28 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
+  packages/chart:
+    dependencies:
+      '@langreport/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@langreport/db':
+        specifier: workspace:*
+        version: link:../db
+      '@langreport/domain':
+        specifier: workspace:*
+        version: link:../domain
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(postgres@3.4.9)
+    devDependencies:
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
   packages/contracts:
     dependencies:
       zod:
@@ -119,6 +196,9 @@ importers:
 
   packages/data-engine:
     dependencies:
+      '@langreport/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       csv-parse:
         specifier: 7.0.2
         version: 7.0.2
@@ -154,6 +234,132 @@ importers:
       drizzle-kit:
         specifier: 0.31.10
         version: 0.31.10
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
+  packages/domain:
+    dependencies:
+      '@langreport/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
+  packages/flint-adapter:
+    dependencies:
+      '@langreport/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      flint-chart:
+        specifier: 0.5.1
+        version: 0.5.1
+      sharp:
+        specifier: 0.35.4
+        version: 0.35.4(@types/node@26.4.0)
+    devDependencies:
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
+  packages/generation:
+    dependencies:
+      '@langreport/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@langreport/data-engine':
+        specifier: workspace:*
+        version: link:../data-engine
+      '@langreport/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
+  packages/memory:
+    dependencies:
+      '@langreport/chart':
+        specifier: workspace:*
+        version: link:../chart
+      '@langreport/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@langreport/db':
+        specifier: workspace:*
+        version: link:../db
+      '@langreport/domain':
+        specifier: workspace:*
+        version: link:../domain
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(postgres@3.4.9)
+    devDependencies:
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
+  packages/plugin-sdk:
+    dependencies:
+      '@langreport/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
+  packages/plugins:
+    dependencies:
+      '@langreport/chart':
+        specifier: workspace:*
+        version: link:../chart
+      '@langreport/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@langreport/db':
+        specifier: workspace:*
+        version: link:../db
+      '@langreport/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(postgres@3.4.9)
+    devDependencies:
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -2025,8 +2231,7 @@ snapshots:
       '@fastify/forwarded': 3.0.2
       ipaddr.js: 2.5.0
 
-  '@img/colour@1.1.0':
-    optional: true
+  '@img/colour@1.1.0': {}
 
   '@img/sharp-darwin-arm64@0.35.4':
     optionalDependencies:
@@ -2318,8 +2523,7 @@ snapshots:
 
   dequal@2.0.3: {}
 
-  detect-libc@2.1.2:
-    optional: true
+  detect-libc@2.1.2: {}
 
   dotenv@17.4.2: {}
 
@@ -2625,7 +2829,6 @@ snapshots:
       '@img/sharp-win32-ia32': 0.35.4
       '@img/sharp-win32-x64': 0.35.4
       '@types/node': 26.4.0
-    optional: true
 
   sonic-boom@4.2.1:
     dependencies:

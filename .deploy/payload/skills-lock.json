@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "alibabacloud-workbench-cli": {
+      "source": "aliyun/alibabacloud-aiops-skills",
+      "sourceType": "github",
+      "skillPath": "skills/developertools/solutions/alibabacloud-workbench-cli/SKILL.md",
+      "computedHash": "32283c21d905872de06c0e6ddf01954526640372e11e3250538d6b704051c712"
+    }
+  }
+}

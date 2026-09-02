@@ -1,0 +1,21 @@
+{
+  "name": "@langreport/flint-adapter",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@langreport/contracts": "workspace:*",
+    "flint-chart": "0.5.1",
+    "sharp": "0.35.4"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.0",
+    "typescript": "7.0.2"
+  }
+}

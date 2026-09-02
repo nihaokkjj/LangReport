@@ -1,0 +1,69 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788169431467,
+      "tag": "0000_parched_salo",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788175151783,
+      "tag": "0001_nice_ultragirl",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788181647284,
+      "tag": "0002_organic_praxagora",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788182585299,
+      "tag": "0003_polite_maddog",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788183005598,
+      "tag": "0004_thin_warstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788185837970,
+      "tag": "0005_glossy_malcolm_colcord",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788186118411,
+      "tag": "0006_cooing_sage",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788246487620,
+      "tag": "0007_lush_starbolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788256081736,
+      "tag": "0009_blushing_power_man",
+      "breakpoints": true
+    }
+  ]
+}

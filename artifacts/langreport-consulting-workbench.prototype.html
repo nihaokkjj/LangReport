@@ -1,0 +1,1648 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LangReport — Consulting Project Workbench Prototype</title>
+    <meta
+      name="description"
+      content="Throwaway static UI prototype for the LangReport consulting project report workbench."
+    />
+    <style>
+      :root {
+        --ink: #000000;
+        --canvas: #ffffff;
+        --surface-soft: #f7f7f5;
+        --hairline: #e6e6e6;
+        --hairline-strong: rgba(0, 0, 0, 0.22);
+        --lime: #dceeb1;
+        --lilac: #c5b0f4;
+        --cream: #f4ecd6;
+        --pink: #efd4d4;
+        --mint: #c8e6cd;
+        --coral: #f3c9b6;
+        --navy: #1f1d3d;
+        --magenta: #ff3d8b;
+        --success: #1ea64a;
+        --warning: #c67c00;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 24px;
+        --radius-pill: 9999px;
+        --sans: Inter, "Avenir Next", "Segoe UI", Helvetica, Arial, sans-serif;
+        --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        background: var(--canvas);
+      }
+
+      body {
+        margin: 0;
+        min-width: 1180px;
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-weight: 330;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .prototype-ribbon {
+        position: fixed;
+        z-index: 20;
+        right: 20px;
+        bottom: 20px;
+        border: 1px solid var(--ink);
+        border-radius: var(--radius-pill);
+        background: var(--navy);
+        color: var(--canvas);
+        padding: 10px 16px;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+      }
+
+      .app-shell {
+        display: flex;
+        min-height: 100vh;
+      }
+
+      .sidebar {
+        display: flex;
+        width: 252px;
+        min-height: 100vh;
+        flex: 0 0 252px;
+        flex-direction: column;
+        border-right: 1px solid var(--hairline);
+        padding: 28px 18px 20px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 10px;
+        font-size: 18px;
+        font-weight: 540;
+        letter-spacing: -0.26px;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        background: var(--ink);
+        color: var(--canvas);
+        font-size: 13px;
+        font-weight: 540;
+        letter-spacing: -0.12em;
+      }
+
+      .mono-label,
+      .eyebrow,
+      .meta-label,
+      .status,
+      .revision,
+      .project-code,
+      .data-note,
+      .trace-step small,
+      .field-kind,
+      .table-head,
+      .chart-caption,
+      .composer-note,
+      .review-meta {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 400;
+        letter-spacing: 0.52px;
+        line-height: 1.25;
+        text-transform: uppercase;
+      }
+
+      .workspace-switcher {
+        margin: 46px 0 26px;
+        border-bottom: 1px solid var(--hairline);
+        padding: 0 10px 20px;
+      }
+
+      .workspace-switcher strong {
+        display: block;
+        margin-top: 11px;
+        font-size: 16px;
+        font-weight: 480;
+      }
+
+      .workspace-switcher span:last-child {
+        display: block;
+        margin-top: 5px;
+        color: rgba(0, 0, 0, 0.58);
+        font-size: 13px;
+      }
+
+      .nav-group {
+        display: grid;
+        gap: 4px;
+      }
+
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-height: 44px;
+        border-radius: var(--radius-md);
+        padding: 10px 12px;
+        font-size: 15px;
+      }
+
+      .nav-item.active {
+        background: var(--lime);
+        font-weight: 480;
+      }
+
+      .nav-glyph {
+        display: grid;
+        width: 18px;
+        height: 18px;
+        place-items: center;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .project-section {
+        margin-top: 34px;
+      }
+
+      .project-section h2 {
+        margin: 0 10px 12px;
+        font-size: 12px;
+        font-family: var(--mono);
+        font-weight: 400;
+        letter-spacing: 0.52px;
+        text-transform: uppercase;
+      }
+
+      .project-item {
+        display: grid;
+        grid-template-columns: 28px 1fr;
+        gap: 9px;
+        align-items: center;
+        min-height: 52px;
+        border-radius: var(--radius-md);
+        padding: 8px 10px;
+      }
+
+      .project-item.current {
+        background: var(--surface-soft);
+      }
+
+      .project-dot {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--lilac);
+        font-family: var(--mono);
+        font-size: 10px;
+      }
+
+      .project-item:nth-child(3) .project-dot {
+        background: var(--pink);
+      }
+
+      .project-item:nth-child(4) .project-dot {
+        background: var(--mint);
+      }
+
+      .project-item strong {
+        display: block;
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 480;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .project-item small {
+        display: block;
+        margin-top: 3px;
+        color: rgba(0, 0, 0, 0.56);
+        font-family: var(--mono);
+        font-size: 10px;
+      }
+
+      .sidebar-footer {
+        margin-top: auto;
+        border-top: 1px solid var(--hairline);
+        padding: 18px 10px 0;
+      }
+
+      .user-line {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 13px;
+      }
+
+      .avatar {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        background: var(--coral);
+        font-family: var(--mono);
+        font-size: 10px;
+      }
+
+      .sidebar-footer small {
+        display: block;
+        margin-top: 15px;
+        color: rgba(0, 0, 0, 0.55);
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.45px;
+        text-transform: uppercase;
+      }
+
+      .main {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 58px;
+        border-bottom: 1px solid var(--hairline);
+        padding: 0 42px;
+      }
+
+      .breadcrumbs {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+      }
+
+      .breadcrumbs strong {
+        font-weight: 480;
+      }
+
+      .crumb-separator {
+        color: rgba(0, 0, 0, 0.36);
+        font-family: var(--mono);
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .connection {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.35px;
+        text-transform: uppercase;
+      }
+
+      .connection i,
+      .green-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--success);
+      }
+
+      .circle-control {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--surface-soft);
+        font-family: var(--mono);
+        font-size: 13px;
+      }
+
+      .content {
+        max-width: 1560px;
+        margin: 0 auto;
+        padding: 40px 42px 84px;
+      }
+
+      .page-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 40px;
+        padding-bottom: 30px;
+      }
+
+      .page-head h1 {
+        max-width: 760px;
+        margin: 13px 0 15px;
+        font-size: clamp(48px, 5vw, 76px);
+        font-weight: 340;
+        letter-spacing: -1.5px;
+        line-height: 0.99;
+      }
+
+      .page-head h1 span {
+        display: inline-block;
+        background: var(--lime);
+        padding: 0 10px 5px;
+      }
+
+      .page-head p {
+        max-width: 500px;
+        margin: 0;
+        font-size: 17px;
+        letter-spacing: -0.16px;
+        line-height: 1.46;
+      }
+
+      .head-meta {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex: 0 0 auto;
+        padding-bottom: 7px;
+      }
+
+      .client-chip,
+      .status-chip,
+      .template-chip,
+      .permission-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border-radius: var(--radius-pill);
+        padding: 8px 12px;
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+      }
+
+      .client-chip {
+        background: var(--lilac);
+      }
+
+      .status-chip {
+        background: var(--mint);
+      }
+
+      .template-chip {
+        background: var(--cream);
+      }
+
+      .permission-chip {
+        background: var(--surface-soft);
+      }
+
+      .overview-strip {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr 1fr 1fr;
+        overflow: hidden;
+        border: 1px solid var(--ink);
+        border-radius: var(--radius-lg);
+        background: var(--ink);
+      }
+
+      .overview-item {
+        min-height: 112px;
+        border-right: 1px solid rgba(0, 0, 0, 0.16);
+        background: var(--cream);
+        padding: 18px 20px;
+      }
+
+      .overview-item:nth-child(2) {
+        background: var(--lime);
+      }
+
+      .overview-item:nth-child(3) {
+        background: var(--lilac);
+      }
+
+      .overview-item:nth-child(4) {
+        border-right: 0;
+        background: var(--navy);
+        color: var(--canvas);
+      }
+
+      .overview-item strong {
+        display: block;
+        margin-top: 14px;
+        font-size: 21px;
+        font-weight: 480;
+        letter-spacing: -0.25px;
+      }
+
+      .overview-item p {
+        margin: 6px 0 0;
+        font-size: 13px;
+        line-height: 1.35;
+      }
+
+      .overview-item .meta-label {
+        opacity: 0.7;
+      }
+
+      .workspace-grid {
+        display: grid;
+        grid-template-columns: minmax(270px, 0.78fr) minmax(520px, 1.56fr) minmax(284px, 0.82fr);
+        gap: 1px;
+        margin-top: 26px;
+        border: 1px solid var(--ink);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        background: var(--ink);
+      }
+
+      .column {
+        min-width: 0;
+        background: var(--canvas);
+        padding: 22px;
+      }
+
+      .column.conversation {
+        background: var(--pink);
+      }
+
+      .column.evidence {
+        background: var(--cream);
+      }
+
+      .column.trace {
+        background: var(--canvas);
+      }
+
+      .column-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        min-height: 58px;
+        border-bottom: 1px solid var(--hairline-strong);
+        padding-bottom: 15px;
+      }
+
+      .column-header h2 {
+        margin: 7px 0 0;
+        font-size: 23px;
+        font-weight: 540;
+        letter-spacing: -0.25px;
+        line-height: 1.2;
+      }
+
+      .column-header h2 span {
+        display: block;
+        margin-top: 4px;
+        font-size: 12px;
+        font-weight: 330;
+        letter-spacing: 0;
+      }
+
+      .column-index {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.5px;
+      }
+
+      .conversation-log {
+        display: grid;
+        gap: 16px;
+        padding: 20px 0;
+      }
+
+      .message {
+        display: grid;
+        gap: 7px;
+      }
+
+      .message-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: rgba(0, 0, 0, 0.62);
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+      }
+
+      .message p {
+        margin: 0;
+        border-radius: var(--radius-md);
+        background: var(--canvas);
+        padding: 13px 14px;
+        font-size: 14px;
+        line-height: 1.48;
+      }
+
+      .message.user p {
+        background: var(--navy);
+        color: var(--canvas);
+      }
+
+      .message.ai p {
+        border: 1px solid var(--hairline-strong);
+      }
+
+      .prompt-suggestion {
+        border-left: 3px solid var(--ink);
+        padding: 5px 0 5px 12px;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      .composer {
+        border: 1px solid var(--ink);
+        border-radius: var(--radius-md);
+        background: var(--canvas);
+        padding: 13px;
+      }
+
+      .composer-placeholder {
+        min-height: 44px;
+        color: rgba(0, 0, 0, 0.55);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .composer-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 13px;
+        border-top: 1px solid var(--hairline);
+        padding-top: 11px;
+      }
+
+      .composer-note {
+        color: rgba(0, 0, 0, 0.56);
+        font-size: 9px;
+      }
+
+      .send-pill,
+      .black-pill,
+      .outline-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 34px;
+        border-radius: var(--radius-pill);
+        padding: 7px 13px;
+        font-size: 12px;
+        font-weight: 480;
+      }
+
+      .send-pill,
+      .black-pill {
+        background: var(--ink);
+        color: var(--canvas);
+      }
+
+      .outline-pill {
+        border: 1px solid var(--ink);
+        background: var(--canvas);
+      }
+
+      .evidence-title {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 20px 0 16px;
+      }
+
+      .evidence-title h3 {
+        max-width: 430px;
+        margin: 0;
+        font-size: 25px;
+        font-weight: 480;
+        letter-spacing: -0.4px;
+        line-height: 1.22;
+      }
+
+      .evidence-title p {
+        max-width: 360px;
+        margin: 9px 0 0;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .revision-stack {
+        display: grid;
+        justify-items: end;
+        gap: 8px;
+        flex: 0 0 auto;
+      }
+
+      .revision {
+        white-space: nowrap;
+      }
+
+      .chart-panel {
+        border: 1px solid var(--ink);
+        border-radius: var(--radius-md);
+        background: var(--canvas);
+        padding: 17px;
+      }
+
+      .chart-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border-bottom: 1px solid var(--hairline);
+        padding-bottom: 14px;
+      }
+
+      .chart-toolbar-left,
+      .chart-toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .tool-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        border: 1px solid var(--hairline-strong);
+        border-radius: var(--radius-pill);
+        padding: 5px 9px;
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: 0.25px;
+        text-transform: uppercase;
+      }
+
+      .tool-pill.selected {
+        border-color: var(--ink);
+        background: var(--lime);
+      }
+
+      .chart-body {
+        padding: 18px 5px 8px;
+      }
+
+      .chart-body svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .chart-caption {
+        display: flex;
+        justify-content: space-between;
+        border-top: 1px solid var(--hairline);
+        padding-top: 11px;
+        color: rgba(0, 0, 0, 0.62);
+        font-size: 9px;
+      }
+
+      .chart-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 13px;
+        font-size: 11px;
+      }
+
+      .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .legend-swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+
+      .legend-swatch.purple {
+        background: #7454d8;
+      }
+
+      .legend-swatch.green {
+        background: var(--success);
+      }
+
+      .legend-swatch.black {
+        background: var(--ink);
+      }
+
+      .insight-block {
+        display: grid;
+        grid-template-columns: 12px 1fr;
+        gap: 12px;
+        margin-top: 18px;
+        border-radius: var(--radius-md);
+        background: var(--lime);
+        padding: 15px 16px;
+      }
+
+      .insight-block i {
+        width: 12px;
+        height: 12px;
+        margin-top: 4px;
+        border-radius: 50%;
+        background: var(--ink);
+      }
+
+      .insight-block strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 14px;
+        font-weight: 540;
+      }
+
+      .insight-block p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .trace-section {
+        border-bottom: 1px solid var(--hairline);
+        padding: 19px 0;
+      }
+
+      .trace-section:first-of-type {
+        padding-top: 20px;
+      }
+
+      .trace-section:last-child {
+        border-bottom: 0;
+      }
+
+      .trace-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+
+      .trace-heading h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 540;
+      }
+
+      .trace-heading span {
+        color: rgba(0, 0, 0, 0.58);
+        font-family: var(--mono);
+        font-size: 10px;
+      }
+
+      .metric-card {
+        border: 1px solid var(--hairline-strong);
+        border-radius: var(--radius-md);
+        background: var(--surface-soft);
+        padding: 12px;
+      }
+
+      .metric-card strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 16px;
+        font-weight: 480;
+      }
+
+      .metric-card p {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .metric-card code {
+        display: block;
+        margin-top: 10px;
+        border-top: 1px solid var(--hairline);
+        padding-top: 9px;
+        font-family: var(--mono);
+        font-size: 10px;
+        line-height: 1.5;
+      }
+
+      .trace-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .trace-step {
+        display: grid;
+        grid-template-columns: 24px 1fr;
+        gap: 9px;
+        align-items: start;
+      }
+
+      .trace-number {
+        display: grid;
+        width: 24px;
+        height: 24px;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--lilac);
+        font-family: var(--mono);
+        font-size: 10px;
+      }
+
+      .trace-step:nth-child(2) .trace-number {
+        background: var(--lime);
+      }
+
+      .trace-step:nth-child(3) .trace-number {
+        background: var(--coral);
+      }
+
+      .trace-step strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 12px;
+        font-weight: 480;
+      }
+
+      .trace-step small {
+        display: block;
+        color: rgba(0, 0, 0, 0.58);
+        font-size: 9px;
+        line-height: 1.45;
+        text-transform: none;
+      }
+
+      .field-table {
+        overflow: hidden;
+        border: 1px solid var(--hairline-strong);
+        border-radius: var(--radius-md);
+        background: var(--canvas);
+      }
+
+      .table-row {
+        display: grid;
+        grid-template-columns: 1fr 68px;
+        gap: 10px;
+        align-items: center;
+        min-height: 36px;
+        border-bottom: 1px solid var(--hairline);
+        padding: 7px 10px;
+      }
+
+      .table-row:last-child {
+        border-bottom: 0;
+      }
+
+      .table-head {
+        min-height: 29px;
+        background: var(--surface-soft);
+        color: rgba(0, 0, 0, 0.58);
+        font-size: 9px;
+      }
+
+      .table-row span:first-child {
+        overflow: hidden;
+        font-family: var(--mono);
+        font-size: 10px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .field-kind {
+        color: rgba(0, 0, 0, 0.58);
+        font-size: 9px;
+        text-align: right;
+      }
+
+      .review-card {
+        border: 1px solid var(--ink);
+        border-radius: var(--radius-md);
+        background: var(--navy);
+        color: var(--canvas);
+        padding: 14px;
+      }
+
+      .review-card-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .review-card strong {
+        font-size: 16px;
+        font-weight: 480;
+      }
+
+      .review-card p {
+        margin: 12px 0 15px;
+        color: rgba(255, 255, 255, 0.76);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .review-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border-radius: var(--radius-pill);
+        background: var(--mint);
+        color: var(--ink);
+        padding: 6px 9px;
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+      }
+
+      .review-meta {
+        display: flex;
+        justify-content: space-between;
+        color: rgba(255, 255, 255, 0.57);
+        font-size: 9px;
+        text-transform: none;
+      }
+
+      .below-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.18fr) minmax(360px, 0.82fr);
+        gap: 26px;
+        margin-top: 26px;
+      }
+
+      .lower-panel {
+        border: 1px solid var(--ink);
+        border-radius: var(--radius-lg);
+        background: var(--canvas);
+        padding: 22px;
+      }
+
+      .lower-panel.template-panel {
+        background: var(--lilac);
+      }
+
+      .lower-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      .lower-header h2 {
+        margin: 8px 0 0;
+        font-size: 23px;
+        font-weight: 540;
+        letter-spacing: -0.25px;
+      }
+
+      .lower-header p {
+        max-width: 390px;
+        margin: 8px 0 0;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .asset-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+
+      .asset-card {
+        min-height: 113px;
+        border: 1px solid var(--hairline-strong);
+        border-radius: var(--radius-md);
+        background: var(--surface-soft);
+        padding: 13px;
+      }
+
+      .asset-card:nth-child(2) {
+        background: var(--cream);
+      }
+
+      .asset-card:nth-child(3) {
+        background: var(--mint);
+      }
+
+      .asset-card .file-type {
+        display: inline-flex;
+        border: 1px solid var(--ink);
+        border-radius: var(--radius-sm);
+        background: var(--canvas);
+        padding: 5px 7px;
+        font-family: var(--mono);
+        font-size: 9px;
+      }
+
+      .asset-card strong {
+        display: block;
+        overflow: hidden;
+        margin-top: 16px;
+        font-size: 13px;
+        font-weight: 480;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .asset-card small {
+        display: block;
+        margin-top: 5px;
+        color: rgba(0, 0, 0, 0.6);
+        font-family: var(--mono);
+        font-size: 9px;
+      }
+
+      .template-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        align-items: center;
+      }
+
+      .template-preview {
+        min-height: 150px;
+        border: 1px solid var(--ink);
+        border-radius: var(--radius-md);
+        background: var(--canvas);
+        padding: 13px;
+      }
+
+      .template-preview-top {
+        display: flex;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--hairline);
+        padding-bottom: 9px;
+      }
+
+      .mini-line {
+        width: 44%;
+        height: 8px;
+        border-radius: 2px;
+        background: var(--ink);
+      }
+
+      .mini-line.short {
+        width: 18%;
+        background: var(--lilac);
+      }
+
+      .mini-chart {
+        display: flex;
+        align-items: flex-end;
+        gap: 7px;
+        height: 72px;
+        margin-top: 16px;
+        border-bottom: 1px solid var(--ink);
+        padding: 0 8px;
+      }
+
+      .mini-bar {
+        width: 19%;
+        height: 38%;
+        background: var(--ink);
+      }
+
+      .mini-bar:nth-child(2) {
+        height: 62%;
+        background: var(--magenta);
+      }
+
+      .mini-bar:nth-child(3) {
+        height: 48%;
+        background: var(--ink);
+      }
+
+      .mini-bar:nth-child(4) {
+        height: 82%;
+        background: var(--success);
+      }
+
+      .mini-bar:nth-child(5) {
+        height: 68%;
+        background: var(--ink);
+      }
+
+      .template-copy h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 540;
+      }
+
+      .template-copy p {
+        margin: 9px 0 14px;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .token-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .token {
+        border: 1px solid var(--ink);
+        border-radius: var(--radius-pill);
+        background: var(--canvas);
+        padding: 5px 8px;
+        font-family: var(--mono);
+        font-size: 9px;
+      }
+
+      .footer-note {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        margin-top: 23px;
+        border-top: 1px solid var(--hairline);
+        padding-top: 15px;
+        color: rgba(0, 0, 0, 0.55);
+        font-family: var(--mono);
+        font-size: 10px;
+        line-height: 1.5;
+        text-transform: uppercase;
+      }
+
+      @media (max-width: 1420px) {
+        body {
+          min-width: 1024px;
+        }
+
+        .sidebar {
+          width: 224px;
+          flex-basis: 224px;
+        }
+
+        .content,
+        .topbar {
+          padding-right: 28px;
+          padding-left: 28px;
+        }
+
+        .workspace-grid {
+          grid-template-columns: minmax(244px, 0.76fr) minmax(450px, 1.45fr) minmax(260px, 0.78fr);
+        }
+
+        .column {
+          padding: 17px;
+        }
+      }
+
+      @media (max-width: 1120px) {
+        body {
+          min-width: 840px;
+        }
+
+        .sidebar {
+          width: 198px;
+          flex-basis: 198px;
+          padding-right: 12px;
+          padding-left: 12px;
+        }
+
+        .workspace-grid {
+          grid-template-columns: 1fr 1.45fr;
+        }
+
+        .column.trace {
+          grid-column: 1 / -1;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 16px;
+        }
+
+        .column.trace .column-header {
+          grid-column: 1 / -1;
+        }
+
+        .trace-section,
+        .trace-section:first-of-type {
+          padding-top: 0;
+          padding-bottom: 0;
+          border-bottom: 0;
+        }
+
+        .trace-section:last-child {
+          border-bottom: 0;
+        }
+
+        .below-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 760px) {
+        body {
+          min-width: 0;
+        }
+
+        .app-shell {
+          display: block;
+        }
+
+        .sidebar {
+          display: none;
+        }
+
+        .topbar {
+          padding: 0 18px;
+        }
+
+        .connection {
+          display: none;
+        }
+
+        .content {
+          padding: 28px 18px 72px;
+        }
+
+        .page-head {
+          display: block;
+        }
+
+        .page-head h1 {
+          font-size: 54px;
+        }
+
+        .head-meta {
+          margin-top: 22px;
+        }
+
+        .overview-strip,
+        .workspace-grid,
+        .column.trace {
+          grid-template-columns: 1fr;
+        }
+
+        .overview-item {
+          border-right: 0;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.18);
+        }
+
+        .overview-item:last-child {
+          border-bottom: 0;
+        }
+
+        .column.trace {
+          display: block;
+        }
+
+        .column.trace .column-header {
+          display: flex;
+        }
+
+        .trace-section,
+        .trace-section:first-of-type {
+          border-bottom: 1px solid var(--hairline);
+          padding: 19px 0;
+        }
+
+        .asset-grid,
+        .template-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .footer-note {
+          display: block;
+        }
+
+        .footer-note span {
+          display: block;
+          margin-top: 6px;
+        }
+
+        .prototype-ribbon {
+          right: 12px;
+          bottom: 12px;
+          font-size: 9px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- THROWAWAY PROTOTYPE: static HTML only. No JavaScript, API calls, persistence, or interaction state. -->
+    <div class="prototype-ribbon">static prototype · no logic</div>
+
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Workspace navigation">
+        <div class="brand">
+          <span class="brand-mark">LR</span>
+          <span>LangReport</span>
+        </div>
+
+        <div class="workspace-switcher">
+          <span class="mono-label">Workspace</span>
+          <strong>Northstar Consulting</strong>
+          <span>8 members · 12 active projects</span>
+        </div>
+
+        <nav class="nav-group" aria-label="Primary navigation">
+          <div class="nav-item active"><span class="nav-glyph">01</span><span>项目工作台</span></div>
+          <div class="nav-item"><span class="nav-glyph">02</span><span>数据资产</span></div>
+          <div class="nav-item"><span class="nav-glyph">03</span><span>证据模块</span></div>
+          <div class="nav-item"><span class="nav-glyph">04</span><span>视觉模板</span></div>
+        </nav>
+
+        <section class="project-section" aria-labelledby="projects-title">
+          <h2 id="projects-title">Recent projects</h2>
+          <div class="project-item current">
+            <span class="project-dot">HC</span>
+            <span><strong>海岚消费洞察</strong><small>ACTIVE · 04 EVIDENCE</small></span>
+          </div>
+          <div class="project-item">
+            <span class="project-dot">BN</span>
+            <span><strong>北岸零售复盘</strong><small>REVIEW · 08 EVIDENCE</small></span>
+          </div>
+          <div class="project-item">
+            <span class="project-dot">MR</span>
+            <span><strong>宏观市场研究</strong><small>DRAFT · 02 EVIDENCE</small></span>
+          </div>
+        </section>
+
+        <div class="sidebar-footer">
+          <div class="user-line"><span class="avatar">YL</span><span>Y. Lin · Editor</span></div>
+          <small>LangReport prototype / v0.1</small>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="breadcrumbs">
+            <span>项目工作台</span><span class="crumb-separator">/</span><strong>海岚消费洞察</strong>
+          </div>
+          <div class="topbar-actions">
+            <span class="connection"><i></i>local workspace</span>
+            <span class="circle-control">?</span>
+            <span class="circle-control">YL</span>
+          </div>
+        </header>
+
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <div class="eyebrow">CONSULTING PROJECT / 2026-08</div>
+              <h1>海岚消费<span>洞察</span></h1>
+              <p>将客户销售数据整理成可以进入管理层报告的证据模块。每张图都保留口径、血缘、模板和审核版本。</p>
+            </div>
+            <div class="head-meta">
+              <span class="client-chip">CLIENT · HAILAN</span>
+              <span class="status-chip"><span class="green-dot"></span>IN PROGRESS</span>
+            </div>
+          </section>
+
+          <section class="overview-strip" aria-label="Project overview">
+            <div class="overview-item">
+              <span class="meta-label">Analysis brief</span>
+              <strong>区域增长与异常</strong>
+              <p>按月比较销售额、同比和区域差异</p>
+            </div>
+            <div class="overview-item">
+              <span class="meta-label">Data snapshot</span>
+              <strong>sales_aug_v3.csv</strong>
+              <p>48,260 rows · 12 fields · READY</p>
+            </div>
+            <div class="overview-item">
+              <span class="meta-label">Evidence status</span>
+              <strong>03 / 06 approved</strong>
+              <p>1 revision waiting for review</p>
+            </div>
+            <div class="overview-item">
+              <span class="meta-label">Current template</span>
+              <strong>Consulting Neutral</strong>
+              <p>Version 3 · updated 2h ago</p>
+            </div>
+          </section>
+
+          <section class="workspace-grid" aria-label="Consulting project workbench">
+            <section class="column conversation" aria-labelledby="conversation-title">
+              <div class="column-header">
+                <div>
+                  <div class="eyebrow">01 / conversation</div>
+                  <h2 id="conversation-title">分析对话<span>From question to brief</span></h2>
+                </div>
+                <span class="column-index">C-014</span>
+              </div>
+
+              <div class="conversation-log">
+                <div class="message user">
+                  <div class="message-label"><span>顾问 / Y. Lin</span><span>10:24</span></div>
+                  <p>先看 2026 年各区域的月度销售趋势，重点找出增长放缓的区域。图表需要能直接放进客户周报。</p>
+                </div>
+
+                <div class="message ai">
+                  <div class="message-label"><span>LangReport / brief check</span><span>10:24</span></div>
+                  <p>我识别到一个时间字段、四个区域和销售金额字段。生成前需要确认：销售额是否使用扣除退款后的净销售额？</p>
+                </div>
+
+                <div class="prompt-suggestion">当前项目口径：收入 = 支付金额 - 退款金额；同比按自然月对齐。</div>
+
+                <div class="message user">
+                  <div class="message-label"><span>顾问 / Y. Lin</span><span>10:25</span></div>
+                  <p>确认，使用净销售额。按月展示区域趋势，并标注同比低于 5% 的区域。</p>
+                </div>
+
+                <div class="message ai">
+                  <div class="message-label"><span>LangReport / generation</span><span>10:25</span></div>
+                  <p>已生成 Draft Evidence Block。使用 Data Snapshot v3 和 Consulting Neutral v3，发现已关联到图表和字段血缘。</p>
+                </div>
+              </div>
+
+              <div class="composer" aria-label="Static message composer">
+                <div class="composer-placeholder">继续描述你想验证的业务问题，或指出图表中需要修改的地方……</div>
+                <div class="composer-footer">
+                  <span class="composer-note">BRIEF LOCKED · SNAPSHOT V3</span>
+                  <span class="send-pill">生成预览 ↗</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="column evidence" aria-labelledby="evidence-title">
+              <div class="column-header">
+                <div>
+                  <div class="eyebrow">02 / evidence</div>
+                  <h2 id="evidence-title">证据模块<span>Editable chart artifact</span></h2>
+                </div>
+                <span class="column-index">E-003</span>
+              </div>
+
+              <div class="evidence-title">
+                <div>
+                  <h3>华东增长稳定，西南区域连续两个月低于同比基线</h3>
+                  <p>主图：净销售额月度趋势 · 按区域拆分 · 标注同比 &lt; 5% 的月份</p>
+                </div>
+                <div class="revision-stack">
+                  <span class="revision">REVISION R04</span>
+                  <span class="template-chip">TEMPLATE V3</span>
+                </div>
+              </div>
+
+              <div class="chart-panel">
+                <div class="chart-toolbar">
+                  <div class="chart-toolbar-left">
+                    <span class="tool-pill selected">可编辑</span>
+                    <span class="tool-pill">LINE</span>
+                    <span class="tool-pill">MONTH</span>
+                  </div>
+                  <div class="chart-toolbar-right">
+                    <span class="tool-pill">标题</span>
+                    <span class="tool-pill">颜色</span>
+                    <span class="tool-pill">导出</span>
+                  </div>
+                </div>
+
+                <div class="chart-body">
+                  <svg viewBox="0 0 700 330" role="img" aria-label="Monthly net sales by region">
+                    <rect x="0" y="0" width="700" height="330" fill="#ffffff" />
+                    <line x1="66" y1="28" x2="66" y2="276" stroke="#000000" stroke-width="1" />
+                    <line x1="66" y1="276" x2="674" y2="276" stroke="#000000" stroke-width="1" />
+                    <line x1="66" y1="78" x2="674" y2="78" stroke="#e6e6e6" stroke-width="1" />
+                    <line x1="66" y1="128" x2="674" y2="128" stroke="#e6e6e6" stroke-width="1" />
+                    <line x1="66" y1="178" x2="674" y2="178" stroke="#e6e6e6" stroke-width="1" />
+                    <line x1="66" y1="228" x2="674" y2="228" stroke="#e6e6e6" stroke-width="1" />
+                    <line x1="66" y1="204" x2="674" y2="204" stroke="#ff3d8b" stroke-width="1" stroke-dasharray="5 5" />
+                    <text x="4" y="33" fill="#000000" font-size="10" font-family="monospace">¥18M</text>
+                    <text x="4" y="133" fill="#000000" font-size="10" font-family="monospace">¥12M</text>
+                    <text x="4" y="233" fill="#000000" font-size="10" font-family="monospace">¥6M</text>
+                    <text x="594" y="198" fill="#ff3d8b" font-size="9" font-family="monospace">YOY +5%</text>
+                    <text x="60" y="298" fill="#000000" font-size="10" font-family="monospace">JAN</text>
+                    <text x="160" y="298" fill="#000000" font-size="10" font-family="monospace">MAR</text>
+                    <text x="260" y="298" fill="#000000" font-size="10" font-family="monospace">MAY</text>
+                    <text x="360" y="298" fill="#000000" font-size="10" font-family="monospace">JUL</text>
+                    <text x="460" y="298" fill="#000000" font-size="10" font-family="monospace">SEP</text>
+                    <text x="560" y="298" fill="#000000" font-size="10" font-family="monospace">NOV</text>
+                    <path d="M66 178 L116 161 L166 151 L216 136 L266 128 L316 105 L366 94 L416 84 L466 78 L516 69 L566 54 L616 43 L666 49 L666 276 L66 276 Z" fill="#c5b0f4" opacity="0.34" />
+                    <path d="M66 180 L116 162 L166 153 L216 137 L266 130 L316 108 L366 96 L416 85 L466 80 L516 71 L566 57 L616 46 L666 52" fill="none" stroke="#7454d8" stroke-width="4" />
+                    <path d="M66 221 L116 215 L166 219 L216 208 L266 217 L316 203 L366 211 L416 196 L466 207 L516 195 L566 208 L616 191 L666 202" fill="none" stroke="#1ea64a" stroke-width="3" />
+                    <path d="M66 246 L116 238 L166 240 L216 232 L266 236 L316 224 L366 230 L416 222 L466 229 L516 215 L566 221 L616 211 L666 216" fill="none" stroke="#000000" stroke-width="2" />
+                    <circle cx="666" cy="202" r="5" fill="#ff3d8b" stroke="#000000" stroke-width="2" />
+                    <rect x="504" y="220" width="126" height="36" rx="4" fill="#dceeb1" stroke="#000000" stroke-width="1" />
+                    <text x="514" y="235" fill="#000000" font-size="9" font-family="monospace">西南 / AUG</text>
+                    <text x="514" y="248" fill="#000000" font-size="9" font-family="monospace">YOY +2.1% · FLAG</text>
+                  </svg>
+                </div>
+
+                <div class="chart-caption"><span>NET SALES · CURRENCY: CNY</span><span>DATA AS OF 2026-08-31</span></div>
+                <div class="chart-legend">
+                  <span class="legend-item"><i class="legend-swatch purple"></i>华东</span>
+                  <span class="legend-item"><i class="legend-swatch green"></i>华南</span>
+                  <span class="legend-item"><i class="legend-swatch black"></i>西南</span>
+                  <span class="legend-item"><i class="legend-swatch" style="background: #ff3d8b"></i>同比警戒线</span>
+                </div>
+              </div>
+
+              <div class="insight-block">
+                <i></i>
+                <div>
+                  <strong>可审核发现 / Finding 01</strong>
+                  <p>西南区域 7–8 月同比增长为 3.4% 和 2.1%，低于项目设定的 5% 警戒线。结论仅基于净销售额，不代表利润表现。</p>
+                </div>
+              </div>
+            </section>
+
+            <aside class="column trace" aria-labelledby="trace-title">
+              <div class="column-header">
+                <div>
+                  <div class="eyebrow">03 / trace & review</div>
+                  <h2 id="trace-title">证据依据<span>Why this chart exists</span></h2>
+                </div>
+                <span class="column-index">AUDIT</span>
+              </div>
+
+              <section class="trace-section">
+                <div class="trace-heading"><h3>Metric Definition</h3><span>CONFIRMED</span></div>
+                <div class="metric-card">
+                  <strong>净销售额</strong>
+                  <p>客户项目中“销售额”默认指支付金额扣除退款金额后的结果。</p>
+                  <code>paid_amount - refund_amount<br />period = calendar month</code>
+                </div>
+              </section>
+
+              <section class="trace-section">
+                <div class="trace-heading"><h3>TransformPlan</h3><span>4 STEPS</span></div>
+                <div class="trace-list">
+                  <div class="trace-step"><span class="trace-number">01</span><span><strong>选择字段</strong><small>month · region · paid_amount · refund_amount</small></span></div>
+                  <div class="trace-step"><span class="trace-number">02</span><span><strong>计算净销售额</strong><small>paid_amount - refund_amount</small></span></div>
+                  <div class="trace-step"><span class="trace-number">03</span><span><strong>按月和区域聚合</strong><small>group by month, region · sum net_sales</small></span></div>
+                  <div class="trace-step"><span class="trace-number">04</span><span><strong>计算同比并标记</strong><small>compare same calendar month · flag &lt; 5%</small></span></div>
+                </div>
+              </section>
+
+              <section class="trace-section">
+                <div class="trace-heading"><h3>Field lineage</h3><span>SNAPSHOT V3</span></div>
+                <div class="field-table">
+                  <div class="table-row table-head"><span>OUTPUT FIELD</span><span>TYPE</span></div>
+                  <div class="table-row"><span>net_sales</span><span class="field-kind">MEASURE</span></div>
+                  <div class="table-row"><span>month</span><span class="field-kind">TIME</span></div>
+                  <div class="table-row"><span>region</span><span class="field-kind">DIMENSION</span></div>
+                  <div class="table-row"><span>yoy_growth</span><span class="field-kind">CALC</span></div>
+                </div>
+              </section>
+
+              <section class="trace-section">
+                <div class="trace-heading"><h3>Review</h3><span>R04</span></div>
+                <div class="review-card">
+                  <div class="review-card-top"><strong>待审核</strong><span class="review-status"><span class="green-dot"></span>READY</span></div>
+                  <p>数据口径、字段血缘和视觉模板已通过自动检查。Reviewer 需要确认结论是否适合客户周报。</p>
+                  <div class="review-meta"><span>Reviewer · M. Chen</span><span>未解决评论 1</span></div>
+                </div>
+              </section>
+            </aside>
+          </section>
+
+          <section class="below-grid">
+            <section class="lower-panel" aria-labelledby="assets-title">
+              <div class="lower-header">
+                <div>
+                  <div class="eyebrow">04 / project assets</div>
+                  <h2 id="assets-title">数据与证据资产</h2>
+                </div>
+                <span class="permission-chip">PROJECT EDITOR</span>
+              </div>
+              <div class="asset-grid">
+                <div class="asset-card"><span class="file-type">CSV</span><strong>sales_aug_v3.csv</strong><small>READY · 48,260 ROWS</small></div>
+                <div class="asset-card"><span class="file-type">CSV</span><strong>region_targets.csv</strong><small>READY · 24 ROWS</small></div>
+                <div class="asset-card"><span class="file-type">E-003</span><strong>区域增长与异常</strong><small>DRAFT · REVISION R04</small></div>
+              </div>
+            </section>
+
+            <section class="lower-panel template-panel" aria-labelledby="template-title">
+              <div class="lower-header">
+                <div>
+                  <div class="eyebrow">05 / visual template</div>
+                  <h2 id="template-title">项目视觉规范</h2>
+                </div>
+                <span class="template-chip">V3 ACTIVE</span>
+              </div>
+              <div class="template-layout">
+                <div class="template-preview" aria-label="Static visual template preview">
+                  <div class="template-preview-top"><span class="mini-line"></span><span class="mini-line short"></span></div>
+                  <div class="mini-chart"><i class="mini-bar"></i><i class="mini-bar"></i><i class="mini-bar"></i><i class="mini-bar"></i><i class="mini-bar"></i></div>
+                </div>
+                <div class="template-copy">
+                  <h3>Consulting Neutral</h3>
+                  <p>克制的客户报告风格，默认显示来源、更新时间、单位和口径提示。</p>
+                  <div class="token-list"><span class="token">INK / BLACK</span><span class="token">ACCENT / LILAC</span><span class="token">FOOTNOTE / ON</span><span class="token">EXPORT / 16:9</span></div>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <footer class="footer-note"><span>Static first-phase workbench · consulting project report</span><span>One snapshot · one evidence block · revision traceable</span></footer>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,2 @@
+ALTER TABLE "generation_jobs" ADD COLUMN "theme_source" text DEFAULT 'request' NOT NULL;--> statement-breakpoint
+ALTER TABLE "generation_jobs" ADD COLUMN "theme_config" jsonb DEFAULT '{}'::jsonb NOT NULL;

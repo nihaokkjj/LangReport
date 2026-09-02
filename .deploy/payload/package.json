@@ -1,0 +1,19 @@
+{
+  "name": "langreport",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter @langreport/web --filter @langreport/api dev",
+    "dev:all": "pnpm --parallel --filter @langreport/web --filter @langreport/api --filter @langreport/generation-worker --filter @langreport/render-worker dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @langreport/db db:generate",
+    "db:push": "pnpm --filter @langreport/db db:push",
+    "db:studio": "pnpm --filter @langreport/db db:studio",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.19.0"
+}

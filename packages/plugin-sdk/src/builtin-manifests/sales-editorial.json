@@ -1,0 +1,73 @@
+{
+  "$schema": "https://langreport.example/schemas/plugin-manifest/v1.json",
+  "apiVersion": "langreport.dev/v1",
+  "kind": "ChartPlugin",
+  "metadata": {
+    "id": "sales-editorial",
+    "version": "1.0.0",
+    "name": "Sales Editorial",
+    "description": "销售趋势和区域对比图表规范"
+  },
+  "compatibility": {
+    "flintAdapter": ">=0.1 <0.2",
+    "renderers": ["vega-lite"]
+  },
+  "templates": [
+    {
+      "id": "monthly-regional-sales",
+      "name": "月度区域销售",
+      "intentHints": ["销售趋势", "区域对比", "同比"],
+      "requiredFields": [
+        { "role": "time", "semanticTypes": ["Date", "Month"] },
+        { "role": "category", "semanticTypes": ["Region", "Category"] },
+        { "role": "measure", "semanticTypes": ["Quantity", "Currency"] }
+      ],
+      "allowedRenderers": ["vega-lite"],
+      "payload": {
+        "chartType": "Line Chart",
+        "encodings": {
+          "x": { "fieldRole": "time" },
+          "y": { "fieldRole": "measure" },
+          "color": { "fieldRole": "category" }
+        }
+      }
+    }
+  ],
+  "themes": [
+    {
+      "id": "sales-brand",
+      "name": "Sales Brand",
+      "payload": {
+        "extends": "economist",
+        "ink": { "series": { "single": "#2563EB" } }
+      }
+    }
+  ],
+  "semanticTypes": [
+    {
+      "id": "Region",
+      "description": "表示销售区域或地理分区",
+      "examples": ["华东", "华南", "North America"]
+    }
+  ],
+  "validators": [
+    {
+      "id": "time-required-for-trend",
+      "when": { "templateId": "monthly-regional-sales" },
+      "rules": [
+        {
+          "kind": "required-role",
+          "role": "time",
+          "severity": "error",
+          "message": "趋势图必须包含时间字段"
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "prompt": "按月份展示各区域销售额趋势",
+      "templateId": "monthly-regional-sales"
+    }
+  ]
+}
