@@ -25,10 +25,10 @@ docker compose --env-file .env.production -f infra/docker-compose.prod.yml up -d
 
 ```sh
 docker compose --env-file .env.production -f infra/docker-compose.prod.yml ps
-docker compose --env-file .env.production -f infra/docker-compose.prod.yml logs -f api generation-worker render-worker
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml logs -f nginx api generation-worker render-worker
 ```
 
-API 只绑定到 ECS 本机的 `127.0.0.1:4000`，PostgreSQL、MinIO 和 Workers 不映射到公网。Generation Worker 负责处理 `queued` Generation Job，Render Worker 负责处理 `rendering` Generation Job。后续应由 Nginx/Caddy 监听 80/443，并反向代理到 `127.0.0.1:4000`。
+生产 Compose 已包含 Nginx。Nginx 监听 ECS 的 80 端口，并在 Compose 内部将请求代理到 `api:4000`；API、PostgreSQL、MinIO 和 Workers 不直接映射到公网。Generation Worker 负责处理 `queued` Generation Job，Render Worker 负责处理 `rendering` Generation Job。
 
 ## 3. 初始化数据库
 
@@ -44,10 +44,11 @@ docker compose --env-file .env.production -f infra/docker-compose.prod.yml run -
 在 Vercel 的 Production 环境设置：
 
 ```text
-NEXT_PUBLIC_API_URL=https://api.example.com
+API_PROXY_ORIGIN=http://<ECS_PUBLIC_IP>
+NEXT_PUBLIC_API_URL=/api
 ```
 
-`api.example.com` 应指向 ECS 的公网 IP 或负载均衡器，并配置 HTTPS。不要把数据库或 MinIO 地址填入 Vercel。
+前端请求 `/api/...`，由 Vercel Rewrite 转发到 ECS 的 Nginx，再由 Nginx 转发到 API。这样无独立域名时也不会发生浏览器的 HTTPS 页面访问 HTTP API 的混合内容问题。不要把数据库或 MinIO 地址填入 Vercel。
 
 ## 注意事项
 
@@ -55,4 +56,4 @@ NEXT_PUBLIC_API_URL=https://api.example.com
 - 当前上传接口会将文件读入内存，2 核 4 GiB 服务器不适合高并发大文件上传。
 - 2 核 4 GiB ECS 建议 Generation Worker 和 Render Worker 各运行一个实例；增加实例前先观察内存和任务耗时。
 - `db:push` 适合首次部署或开发阶段；正式生产发布前应补齐并固定迁移流程。
-- 必须配置 ECS 安全组，仅按需开放 22、80、443；不要开放 5432、9000、9001、4000 到公网。
+- 必须配置 ECS 安全组，仅按需开放 22、80；未来配置 HTTPS 后再开放 443；不要开放 5432、9000、9001、4000 到公网。

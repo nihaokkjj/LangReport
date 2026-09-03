@@ -58,13 +58,29 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
-    ports:
-      - "127.0.0.1:4000:4000"
+    expose:
+      - "4000"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 12
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
   generation-worker:
     build:
