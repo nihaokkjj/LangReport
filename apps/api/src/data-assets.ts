@@ -22,6 +22,20 @@ export class DataAssetError extends Error {
   }
 }
 
+export type PublicDataAsset = Omit<typeof dataAssets.$inferSelect, "objectKey"> & {
+  latestSnapshot: Omit<typeof dataSnapshots.$inferSelect, "normalizedObjectKey"> | null;
+};
+
+export function toPublicDataAsset(
+  asset: typeof dataAssets.$inferSelect,
+  latestSnapshot: typeof dataSnapshots.$inferSelect | null
+): PublicDataAsset {
+  const { objectKey: _objectKey, ...publicAsset } = asset;
+  if (!latestSnapshot) return { ...publicAsset, latestSnapshot: null };
+  const { normalizedObjectKey: _normalizedObjectKey, ...publicSnapshot } = latestSnapshot;
+  return { ...publicAsset, latestSnapshot: publicSnapshot };
+}
+
 export type IngestDataAssetInput = {
   projectId: string;
   createdBy: string;
@@ -149,10 +163,7 @@ export async function getDataAsset(assetId: string) {
     .orderBy(desc(dataSnapshots.version))
     .limit(1);
 
-  return {
-    ...asset,
-    latestSnapshot: latestSnapshot ?? null
-  };
+  return toPublicDataAsset(asset, latestSnapshot ?? null);
 }
 
 export function inferSourceType(name: string, mimeType: string): Exclude<DataSourceType, "pasted"> {

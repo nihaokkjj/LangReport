@@ -3,16 +3,20 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./http": "./src/http.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "tsc --noEmit -p tsconfig.json"
+    "build": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx --test src/http.test.ts"
   },
   "dependencies": {
     "zod": "4.5.4"
   },
   "devDependencies": {
+    "@types/node": "26.4.0",
+    "tsx": "4.23.13",
     "typescript": "7.0.2"
   }
 }

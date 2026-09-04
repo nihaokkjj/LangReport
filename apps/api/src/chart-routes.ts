@@ -34,6 +34,7 @@ import {
 } from "@langreport/chart";
 import { chartRevisions, conversations, conversationMessages, dataAssets, dataSnapshots, db, generationJobs } from "@langreport/db";
 import { getObject } from "@langreport/storage";
+import { sendHttpError } from "./http-errors.js";
 
 const RENDERER_VERSION = "vega-lite-svg-v1";
 
@@ -121,7 +122,7 @@ export async function registerChartRoutes(app: FastifyInstance): Promise<void> {
           eq(generationJobs.idempotencyKey, idempotencyKey)
         )).limit(1);
         if (existing) {
-          if (existing.inputFingerprint !== fingerprint) return reply.code(409).send({ error: "幂等键已经用于另一组编辑输入" });
+          if (existing.inputFingerprint !== fingerprint) return sendHttpError(reply, 409, "幂等键已经用于另一组编辑输入", "IDEMPOTENCY_CONFLICT");
           return reply.send({ job: existing, reused: true });
         }
         const conversationId = await createEditConversation(source.artifact.projectId, source.revision.revision, userId);
@@ -331,7 +332,7 @@ function fingerprintFor(value: unknown): string {
 }
 
 function sendChartError(reply: FastifyReply, error: unknown) {
-  if (error instanceof ChartServiceError) return reply.code(error.statusCode).send({ error: error.message, code: error.code });
-  if (error instanceof Error && error.name === "ZodError") return reply.code(400).send({ error: error.message, code: "INVALID_INPUT" });
-  return reply.code(500).send({ error: "图表处理失败", code: "CHART_ERROR" });
+  if (error instanceof ChartServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code);
+  if (error instanceof Error && error.name === "ZodError") return sendHttpError(reply, 400, error.message, "INVALID_INPUT");
+  return sendHttpError(reply, 500, "图表处理失败", "CHART_ERROR");
 }

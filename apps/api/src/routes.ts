@@ -9,6 +9,8 @@ import { MemoryServiceError, acceptMemoryCandidate, createMemoryExtractionJob, d
 import { PluginServiceError, getWorkspacePlugin, installPlugin, listBuiltinPluginCatalog, listProjectPlugins, listWorkspacePlugins, resolveProjectPluginContext, restorePluginInstallation, revokePluginInstallation, setProjectPluginBinding, validatePluginManifest } from "@langreport/plugins";
 import { DataAssetError, getDataAsset, inferSourceType, ingestDataAsset, listDataAssets } from "./data-assets.js";
 import { registerChartRoutes } from "./chart-routes.js";
+import { sendHttpError } from "./http-errors.js";
+import { isDevBootstrapAllowed } from "./http-contracts.js";
 
 const DEV_USER_ID = "local-dev-user";
 const RENDERER_VERSION = "vega-lite-svg-v1";
@@ -23,10 +25,11 @@ function assertProjectId(projectId: string): void {
   if (!projectIdPattern.test(projectId)) throw new DataAssetError("项目 ID 无效");
 }
 
-export async function registerRoutes(app: FastifyInstance): Promise<void> {
+export async function registerRoutes(app: FastifyInstance, environment: { NODE_ENV?: string; APP_ENV?: string } = process.env): Promise<void> {
   await registerChartRoutes(app);
 
   app.post("/api/v1/dev/bootstrap", async (request, reply) => {
+    if (!isDevBootstrapAllowed(environment)) return sendHttpError(reply, 404, "资源不存在", "NOT_FOUND");
     const userId = userIdFromRequest(request);
     const workspaceName = "LangReport Local";
     const projectName = "销售分析 Demo";
@@ -80,7 +83,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       const userId = userIdFromRequest(request);
       const rows = await db.select({
         project: projects,
-        workspace: { id: workspaces.id, name: workspaces.name }
+        workspace: { id: workspaces.id, name: workspaces.name, createdAt: workspaces.createdAt }
       }).from(projects)
         .innerJoin(members, eq(members.workspaceId, projects.workspaceId))
         .innerJoin(projectMembers, and(eq(projectMembers.projectId, projects.id), eq(projectMembers.userId, userId)))
@@ -146,7 +149,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Params: { workspaceId: string } }>("/api/v1/workspaces/:workspaceId/plugins", async (request, reply) => {
     try {
       const body = (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>;
-      if (!body.manifest || typeof body.idempotencyKey !== "string") return reply.code(400).send({ error: "需要 manifest 和 idempotencyKey" });
+      if (!body.manifest || typeof body.idempotencyKey !== "string") return sendHttpError(reply, 400, "需要 manifest 和 idempotencyKey", "INVALID_INPUT");
       const result = await installPlugin({
         workspaceId: request.params.workspaceId,
         userId: userIdFromRequest(request),
@@ -247,9 +250,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       assertProjectId(request.params.projectId);
       await assertChartAction(request.params.projectId, userIdFromRequest(request), "manage_data");
       const part = await request.file();
-      if (!part) return reply.code(400).send({ error: "请上传文件" });
+      if (!part) return sendHttpError(reply, 400, "请上传文件", "INVALID_INPUT");
       const bytes = await part.toBuffer();
-      if (part.file.truncated) return reply.code(413).send({ error: "文件不能超过 50 MB" });
+      if (part.file.truncated) return sendHttpError(reply, 413, "文件不能超过 50 MB", "PAYLOAD_TOO_LARGE");
 
       const asset = await ingestDataAsset({
         projectId: request.params.projectId,
@@ -540,7 +543,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         eq(generationJobs.idempotencyKey, idempotencyKey)
       )).limit(1);
       if (existing) {
-        if (existing.inputFingerprint !== fingerprint) return reply.code(409).send({ error: "幂等键已经用于另一组生成输入" });
+        if (existing.inputFingerprint !== fingerprint) return sendHttpError(reply, 409, "幂等键已经用于另一组生成输入", "IDEMPOTENCY_CONFLICT");
         return reply.send({ job: existing, reused: true });
       }
 
@@ -781,11 +784,11 @@ function assistantReplyForMessage(content: string): string {
 }
 
 function sendDataError(reply: FastifyReply, error: unknown) {
-  if (error instanceof PluginServiceError) return reply.code(error.statusCode).send({ error: error.message, code: error.code, details: error.details });
-  if (error instanceof ChartServiceError) return reply.code(error.statusCode).send({ error: error.message, code: error.code });
-  if (error instanceof MemoryServiceError) return reply.code(error.statusCode).send({ error: error.message, code: error.code, details: error.details });
+  if (error instanceof PluginServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code, error.details);
+  if (error instanceof ChartServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code);
+  if (error instanceof MemoryServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code, error.details);
   if (error instanceof DataAssetError || error instanceof Error && ["DataParseError", "ZodError"].includes(error.name)) {
-    return reply.code(400).send({ error: error.message });
+    return sendHttpError(reply, 400, error.message, "INVALID_INPUT");
   }
-  return reply.code(500).send({ error: "数据处理失败" });
+  return sendHttpError(reply, 500, "数据处理失败", "DATA_PROCESSING_ERROR");
 }
