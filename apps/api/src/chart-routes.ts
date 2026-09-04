@@ -297,7 +297,7 @@ async function transitionRoute(request: { params: { revisionId: string }; body: 
       note: body.note,
       expectedStatus: body.expectedStatus
     });
-    return reply.send({ revision });
+    return reply.send({ revision: next });
   } catch (error) {
     return sendChartError(reply, error);
   }

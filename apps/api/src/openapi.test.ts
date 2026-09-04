@@ -61,3 +61,33 @@ test("hides internal documentation and bootstrap routes in production", async ()
     await app.close();
   }
 });
+
+test("documents the Generation Job async state and failure trace contract", async () => {
+  const app = await buildApp({ environment: developmentEnvironment, logger: false });
+  await app.ready();
+
+  try {
+    const response = await app.inject({ method: "GET", url: "/openapi.json" });
+    const document = response.json() as {
+      paths: Record<string, Record<string, { requestBody?: { content?: Record<string, { schema?: { properties?: Record<string, unknown> } }> }; responses?: Record<string, { content?: Record<string, { schema?: { properties?: Record<string, unknown> } }> }> }>>;
+    };
+    const createOperation = document.paths["/api/v1/projects/{projectId}/generation-jobs"]?.post;
+    const getOperation = document.paths["/api/v1/generation-jobs/{jobId}"]?.get;
+    assert.ok(createOperation);
+    assert.ok(getOperation);
+    assert.ok(createOperation.responses?.["202"]);
+    assert.ok(createOperation.responses?.["200"]);
+    const createJobSchema = createOperation.responses?.["202"]?.content?.["application/json"]?.schema;
+    const getJobSchema = getOperation.responses?.["200"]?.content?.["application/json"]?.schema;
+    const createJobProperties = createJobSchema?.properties?.job as { properties?: Record<string, { enum?: unknown[] }> } | undefined;
+    const getJobProperties = getJobSchema?.properties?.job as { properties?: Record<string, unknown> } | undefined;
+    const statusEnum = createJobProperties?.properties?.status?.enum ?? [];
+    assert.deepEqual(statusEnum, ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "succeeded", "failed"]);
+    assert.ok(getJobProperties?.properties?.errorCode);
+    assert.ok(getJobProperties?.properties?.errorMessage);
+    assert.ok(getJobProperties?.properties?.snapshotId);
+    assert.ok(getJobProperties?.properties?.metricDefinitionId);
+  } finally {
+    await app.close();
+  }
+});

@@ -374,7 +374,14 @@ export async function transitionChartRevision(input: {
   if (input.expectedStatus && input.expectedStatus !== record.revision.status) {
     throw new ChartServiceError("REVISION_CONFLICT", "图表版本状态已变化，请刷新后重试", 409);
   }
-  transitionRevision(record.revision.status, input.nextStatus);
+  try {
+    transitionRevision(record.revision.status, input.nextStatus);
+  } catch (error) {
+    if (error instanceof ChartDomainError) {
+      throw new ChartServiceError(error.code, error.message, 400);
+    }
+    throw error;
+  }
   if (input.nextStatus === "archived" && record.artifact.publishedRevisionId === record.revision.id) {
     throw new ChartServiceError("PUBLISHED_REVISION_REQUIRED", "当前已发布版本不能直接归档，请先发布替代版本");
   }
