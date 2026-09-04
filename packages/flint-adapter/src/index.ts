@@ -4,6 +4,10 @@ import type { FlintSpec } from "@langreport/contracts";
 
 export const FLINT_VERSION = "0.5.1";
 export const RENDERER_VERSION = "vega-lite-svg-v1";
+export const DESIGN_FONT_FAMILIES = {
+  sans: 'Inter, "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+  mono: '"JetBrains Mono", "SF Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace'
+} as const;
 
 export type RenderedChart = {
   vegaLiteSpec: Record<string, unknown>;
@@ -23,7 +27,7 @@ export function toFlintAssemblyInput(spec: FlintSpec): Record<string, unknown> {
       encodings: spec.chartSpec.encodings,
       baseSize: spec.chartSpec.baseSize
     },
-    ...(spec.theme === "default" ? {} : { theme_spec: spec.theme }),
+    ...(spec.theme === "default" && Object.keys(spec.themeConfig).length === 0 ? {} : { theme_spec: { extends: spec.theme, ...spec.themeConfig } }),
     options: { addTooltips: true }
   };
 }
@@ -64,21 +68,26 @@ function renderDeterministicSvg(spec: FlintSpec): string {
   const maxValue = Math.max(...numericValues, 0);
   const minValue = Math.min(...numericValues, 0);
   const range = maxValue - minValue || 1;
-  const colors = spec.theme === "swiss" ? ["#ff3d8b", "#1f1d3d", "#1ea64a", "#c5b0f4"] : ["#000000", "#ff3d8b", "#1ea64a", "#1f1d3d"];
+  const configuredSingle = readNestedString(spec.themeConfig, ["ink", "series", "single"]);
+  const colors = configuredSingle
+    ? [configuredSingle, "#ff3d8b", "#1ea64a", "#1f1d3d"]
+    : spec.theme === "swiss" ? ["#ff3d8b", "#1f1d3d", "#1ea64a", "#c5b0f4"] : ["#000000", "#ff3d8b", "#1ea64a", "#1f1d3d"];
   const xPosition = (value: string) => xValues.length <= 1 ? plotWidth / 2 : xValues.indexOf(value) * plotWidth / (xValues.length - 1);
   const yPosition = (value: number) => plotHeight - ((value - minValue) / range) * plotHeight;
   const parts: string[] = [];
+  const sansFont = escapeXml(DESIGN_FONT_FAMILIES.sans);
+  const monoFont = escapeXml(DESIGN_FONT_FAMILIES.mono);
   parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(spec.chartSpec.title)}">`);
   parts.push(`<rect width="${width}" height="${height}" fill="#ffffff"/>`);
-  parts.push(`<text x="${left}" y="32" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="540" fill="#000000">${escapeXml(spec.chartSpec.title)}</text>`);
-  if (spec.chartSpec.subtitle) parts.push(`<text x="${left}" y="54" font-family="Inter, Arial, sans-serif" font-size="12" fill="#000000">${escapeXml(spec.chartSpec.subtitle)}</text>`);
+  parts.push(`<text x="${left}" y="32" font-family="${sansFont}" font-size="22" font-weight="540" fill="#000000">${escapeXml(spec.chartSpec.title)}</text>`);
+  if (spec.chartSpec.subtitle) parts.push(`<text x="${left}" y="54" font-family="${sansFont}" font-size="12" fill="#000000">${escapeXml(spec.chartSpec.subtitle)}</text>`);
   parts.push(`<line x1="${left}" y1="${top + plotHeight}" x2="${left + plotWidth}" y2="${top + plotHeight}" stroke="#000000" stroke-width="1"/>`);
   parts.push(`<line x1="${left}" y1="${top}" x2="${left}" y2="${top + plotHeight}" stroke="#000000" stroke-width="1"/>`);
-  parts.push(`<text x="${left - 12}" y="${top + 4}" text-anchor="end" font-family="monospace" font-size="11" fill="#000000">${formatNumber(maxValue)}</text>`);
-  parts.push(`<text x="${left - 12}" y="${top + plotHeight}" text-anchor="end" font-family="monospace" font-size="11" fill="#000000">${formatNumber(minValue)}</text>`);
+  parts.push(`<text x="${left - 12}" y="${top + 4}" text-anchor="end" font-family="${monoFont}" font-size="11" fill="#000000">${formatNumber(maxValue)}</text>`);
+  parts.push(`<text x="${left - 12}" y="${top + plotHeight}" text-anchor="end" font-family="${monoFont}" font-size="11" fill="#000000">${formatNumber(minValue)}</text>`);
   for (const [index, value] of xValues.entries()) {
     const x = left + (xValues.length <= 1 ? plotWidth / 2 : index * plotWidth / (xValues.length - 1));
-    parts.push(`<text x="${x}" y="${top + plotHeight + 24}" text-anchor="middle" font-family="monospace" font-size="10" fill="#000000">${escapeXml(value)}</text>`);
+    parts.push(`<text x="${x}" y="${top + plotHeight + 24}" text-anchor="middle" font-family="${monoFont}" font-size="10" fill="#000000">${escapeXml(value)}</text>`);
   }
   for (const [seriesIndex, seriesValue] of series.entries()) {
     const points = rows.filter((row) => !colorField || String(row[colorField] ?? "") === seriesValue);
@@ -112,7 +121,7 @@ function renderDeterministicSvg(spec: FlintSpec): string {
     if (colorField && seriesValue) {
       const legendX = left + seriesIndex * 120;
       parts.push(`<circle cx="${legendX}" cy="${height - 18}" r="4" fill="${colors[seriesIndex % colors.length]}"/>`);
-      parts.push(`<text x="${legendX + 10}" y="${height - 14}" font-family="monospace" font-size="10" fill="#000000">${escapeXml(seriesValue)}</text>`);
+      parts.push(`<text x="${legendX + 10}" y="${height - 14}" font-family="${monoFont}" font-size="10" fill="#000000">${escapeXml(seriesValue)}</text>`);
     }
   }
   parts.push("</svg>");
@@ -125,4 +134,13 @@ function formatNumber(value: number): string {
 
 function escapeXml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[character] ?? character);
+}
+
+function readNestedString(value: Record<string, unknown>, path: string[]): string | undefined {
+  let current: unknown = value;
+  for (const key of path) {
+    if (typeof current !== "object" || current === null || !(key in current)) return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return typeof current === "string" && /^#[0-9a-f]{6}$/i.test(current) ? current : undefined;
 }

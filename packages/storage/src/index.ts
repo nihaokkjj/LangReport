@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { config } from "dotenv";
 import { resolve } from "node:path";
 
@@ -34,6 +34,10 @@ export async function getObject(key: string): Promise<Buffer> {
   const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   if (!response.Body) throw new Error(`对象不存在：${key}`);
   return Buffer.from(await response.Body.transformToByteArray());
+}
+
+export async function deleteObject(key: string): Promise<void> {
+  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
 export function storageObjectKey(input: {

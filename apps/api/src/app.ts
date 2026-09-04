@@ -1,6 +1,6 @@
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { sql } from "drizzle-orm";
 import { createOpenApiDocument } from "@langreport/contracts/http";
 import { db } from "@langreport/db";
@@ -8,21 +8,31 @@ import { registerRoutes } from "./routes.js";
 import { attachRequestId, sendHttpError } from "./http-errors.js";
 import { attachRouteContracts, isInternalSurfaceAllowed } from "./http-contracts.js";
 import { swaggerUiHtml } from "./swagger.js";
+import { AuthenticationError, configureAuth, createJwtAuthProvider, type AuthProvider, type AuthenticatedUser } from "./auth.js";
+
+export type { AuthProvider, AuthenticatedUser } from "./auth.js";
 
 export type AppOptions = {
   environment?: NodeJS.ProcessEnv;
   logger?: boolean;
+  authProvider?: AuthProvider;
 };
 
 export async function buildApp(options: AppOptions = {}): Promise<FastifyInstance> {
   const environment = options.environment ?? process.env;
+  configureAuth(environment);
+  const authProvider = options.authProvider ?? createJwtAuthProvider(environment);
   const app = Fastify({
     logger: options.logger ?? true,
-    requestIdHeader: "x-request-id"
+    requestIdHeader: "x-request-id",
+    ajv: {
+      customOptions: { useDefaults: false }
+    }
   });
 
   await app.register(cors, {
-    origin: environment.WEB_ORIGIN ?? "http://localhost:3000"
+    origin: environment.WEB_ORIGIN ?? "http://localhost:3000",
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
   });
 
   await app.register(multipart, {
@@ -31,6 +41,18 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
       files: 1
     }
   });
+
+  if (authProvider) {
+    app.addHook("preHandler", async (request) => {
+      try {
+        const user = await authProvider(request);
+        if (user) (request as FastifyRequest & { user?: AuthenticatedUser }).user = user;
+      } catch (error) {
+        if (error instanceof AuthenticationError) throw error;
+        throw new AuthenticationError("认证 Provider 未能确认当前用户");
+      }
+    });
+  }
 
   attachRouteContracts(app);
   attachRequestId(app);

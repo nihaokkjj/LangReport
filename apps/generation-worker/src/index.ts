@@ -4,10 +4,11 @@ import { db, chartRevisions, dataAssets, dataSnapshots, generationJobs, memoryEx
 import { getObject } from "@langreport/storage";
 import type { ColumnProfile, DataRow } from "@langreport/data-engine";
 import { applyRevisionPatch } from "@langreport/chart";
-import { chartEditPatchSchema, flintSpecSchema, themePresetSchema, type TransformPlan } from "@langreport/contracts";
+import { chartEditPatchSchema, flintSpecSchema, pluginUsageSchema, themePresetSchema, type TransformPlan } from "@langreport/contracts";
 import { getMemoryContextForGeneration, processMemoryExtractionJob } from "@langreport/memory";
 import { pluginContextSchema } from "@langreport/contracts";
 import { PluginServiceError, resolvePluginContextForWorkspace } from "@langreport/plugins";
+import { resolveThemePayload } from "@langreport/plugin-sdk";
 
 const workerName = "generation-worker";
 const pollIntervalMs = Number(process.env.GENERATION_POLL_INTERVAL_MS ?? 1000);
@@ -53,6 +54,13 @@ export async function processGenerationJob(jobId: string): Promise<void> {
       return;
     }
     if (pluginContext.success) pluginManifests = await resolvePluginContextForWorkspace(job.workspaceId, pluginContext.data);
+    const pluginThemeRef = pluginContext.success && pluginContext.data.themeRef?.source === "plugin" ? pluginContext.data.themeRef : null;
+    const pluginThemeManifest = pluginThemeRef
+      ? pluginManifests.find((manifest) => manifest.pluginId === pluginThemeRef.pluginId && manifest.version === pluginThemeRef.version && manifest.contentHash === pluginThemeRef.contentHash)
+      : undefined;
+    const themeConfig = pluginThemeRef && pluginThemeManifest
+      ? resolveThemePayload(pluginThemeManifest, pluginThemeRef.capabilityId)
+      : asRecord(job.job.themeConfig);
     await setStatus(jobId, "planning", { memoryContext });
     const theme = themePresetSchema.parse(job.job.theme);
     const artifacts = generateArtifacts({
@@ -61,6 +69,8 @@ export async function processGenerationJob(jobId: string): Promise<void> {
       rows: snapshotPayload.rows,
       theme,
       themeVersion: job.job.themeVersion,
+      themeConfig,
+      pluginThemeRef,
       memoryContext,
       pluginManifests,
       plan: isTransformPlan(job.job.transformPlan) ? job.job.transformPlan : undefined
@@ -70,6 +80,7 @@ export async function processGenerationJob(jobId: string): Promise<void> {
       transformPlan: artifacts.plan,
       fieldLineage: artifacts.transform.lineage,
       validation: artifacts.validation,
+      pluginUsage: artifacts.pluginUsage,
       repairCount: artifacts.repairCount,
       previewData: {
         columns: artifacts.transform.columns,
@@ -179,6 +190,10 @@ async function setStatus(jobId: string, status: typeof generationJobs["status"][
   await db.update(generationJobs).set({ ...values, status, updatedAt: new Date() } as never).where(eq(generationJobs.id, jobId));
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
 async function failJob(jobId: string, errorCode: string, errorMessage: string, validation?: unknown): Promise<void> {
   await db.update(generationJobs).set({
     status: "failed",
@@ -197,8 +212,10 @@ function hasPluginContext(value: unknown): boolean {
   return typeof value === "object" && value !== null && !Array.isArray(value) && Object.keys(value).length > 0;
 }
 
-console.log(`${workerName} ready; polling PostgreSQL-backed Generation Jobs.`);
-void pollOnce().catch((error) => console.error(`${workerName} initial poll failed`, error));
-setInterval(() => {
-  void pollOnce().catch((error) => console.error(`${workerName} poll failed`, error));
-}, pollIntervalMs);
+if (process.env.LANGREPORT_WORKER_TEST !== "1") {
+  console.log(`${workerName} ready; polling PostgreSQL-backed Generation Jobs.`);
+  void pollOnce().catch((error) => console.error(`${workerName} initial poll failed`, error));
+  setInterval(() => {
+    void pollOnce().catch((error) => console.error(`${workerName} poll failed`, error));
+  }, pollIntervalMs);
+}

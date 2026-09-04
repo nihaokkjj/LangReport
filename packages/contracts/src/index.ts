@@ -90,7 +90,8 @@ export const flintSpecSchema = z.object({
     baseSize: z.object({ width: z.number().int().positive(), height: z.number().int().positive() })
   }),
   theme: themePresetSchema,
-  themeVersion: z.string().min(1)
+  themeVersion: z.string().min(1),
+  themeConfig: z.record(z.string(), z.unknown()).default({})
 });
 
 export const validationIssueSchema = z.object({
@@ -378,6 +379,13 @@ export const pluginSnapshotSchema = z.object({
     capabilities: z.record(z.string(), z.array(z.unknown()))
   }).strict())
 }).strict();
+export const pluginUsageSchema = z.object({
+  version: z.literal("v1"),
+  selectedTemplate: pluginCapabilityReferenceSchema.nullable(),
+  selectedTheme: pluginThemeRefSchema.nullable(),
+  usedCapabilities: z.array(pluginCapabilityReferenceSchema),
+  unusedCapabilities: z.array(pluginCapabilityReferenceSchema)
+}).strict();
 export const pluginManifestValidationIssueSchema = z.object({
   code: z.string().min(1),
   path: z.string().min(1),
@@ -481,6 +489,7 @@ export type PluginConflict = z.infer<typeof pluginConflictSchema>;
 export type PluginThemeRef = z.infer<typeof pluginThemeRefSchema>;
 export type PluginContext = z.infer<typeof pluginContextSchema>;
 export type PluginSnapshot = z.infer<typeof pluginSnapshotSchema>;
+export type PluginUsage = z.infer<typeof pluginUsageSchema>;
 export type PluginManifestValidationIssue = z.infer<typeof pluginManifestValidationIssueSchema>;
 export type PluginManifestValidationReport = z.infer<typeof pluginManifestValidationReportSchema>;
 export type PluginEnableRequest = z.infer<typeof pluginEnableRequestSchema>;

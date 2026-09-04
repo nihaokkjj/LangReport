@@ -65,6 +65,7 @@
 - `POST /api/v1/projects/:projectId/generation-jobs` — `createGenerationJob` — 公开
 - `POST /api/v1/projects/:projectId/generate` — `createGenerationJobAlias` — 公开
 - `GET /api/v1/generation-jobs/:jobId` — `getGenerationJob` — 公开
+- `POST /api/v1/generation-jobs/:jobId/retry` — `retryGenerationJob` — 公开
 - `GET /api/v1/generation-jobs/:jobId/outputs/:format` — `getGenerationJobOutput` — 公开
 
 ### Memory

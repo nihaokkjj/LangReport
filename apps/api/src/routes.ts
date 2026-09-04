@@ -6,20 +6,17 @@ import { assertChartAction, ChartServiceError, getProjectAccess, getProjectTheme
 import { analysisBriefs, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, db, evidenceBlocks, generationJobs, members, metricDefinitions, projectMembers, projects, workspaces } from "@langreport/db";
 import { getObject } from "@langreport/storage";
 import { MemoryServiceError, acceptMemoryCandidate, createMemoryExtractionJob, deleteMemory, getConversationMemory, getMemoryContextForGeneration, listMemoryCandidates, listProjectMemory, listWorkspaceMemory, rejectMemoryCandidate, updateConversationMemory } from "@langreport/memory";
-import { PluginServiceError, getWorkspacePlugin, installPlugin, listBuiltinPluginCatalog, listProjectPlugins, listWorkspacePlugins, resolveProjectPluginContext, restorePluginInstallation, revokePluginInstallation, setProjectPluginBinding, validatePluginManifest } from "@langreport/plugins";
+import { PluginServiceError, assertProjectThemeReference, getWorkspacePlugin, installPlugin, listBuiltinPluginCatalog, listProjectPlugins, listWorkspacePlugins, resolveProjectPluginContext, restorePluginInstallation, revokePluginInstallation, setProjectPluginBinding, validatePluginManifest } from "@langreport/plugins";
 import { DataAssetError, getDataAsset, inferSourceType, ingestDataAsset, listDataAssets } from "./data-assets.js";
 import { registerChartRoutes } from "./chart-routes.js";
 import { sendHttpError } from "./http-errors.js";
 import { isDevBootstrapAllowed } from "./http-contracts.js";
+import { AuthenticationError, userIdFromRequest } from "./auth.js";
 
-const DEV_USER_ID = "local-dev-user";
 const RENDERER_VERSION = "vega-lite-svg-v1";
+const MAX_GENERATION_ATTEMPTS = 3;
+const retryableGenerationErrors = new Set(["GENERATION_FAILED", "RENDER_FAILED"]);
 const projectIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function userIdFromRequest(request: { headers: Record<string, string | string[] | undefined> }): string {
-  const value = request.headers["x-user-id"];
-  return typeof value === "string" && value.trim() ? value.trim() : DEV_USER_ID;
-}
 
 function assertProjectId(projectId: string): void {
   if (!projectIdPattern.test(projectId)) throw new DataAssetError("项目 ID 无效");
@@ -129,7 +126,7 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
 
   app.get<{ Params: { workspaceId: string } }>("/api/v1/workspaces/:workspaceId/plugin-catalog", async (request, reply) => {
     try {
-      await listWorkspacePlugins(request.params.workspaceId, userIdFromRequest(request));
+      await listWorkspacePlugins(request.params.workspaceId, userIdFromRequest(request), request.id);
       return reply.send({ plugins: listBuiltinPluginCatalog() });
     } catch (error) {
       return sendDataError(reply, error);
@@ -138,7 +135,7 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
 
   app.post<{ Params: { workspaceId: string } }>("/api/v1/workspaces/:workspaceId/plugins/validate", async (request, reply) => {
     try {
-      await listWorkspacePlugins(request.params.workspaceId, userIdFromRequest(request));
+      await listWorkspacePlugins(request.params.workspaceId, userIdFromRequest(request), request.id);
       const validation = validatePluginManifest(request.body);
       return reply.send({ summary: validation.summary, validationReport: validation.parsed.validationReport });
     } catch (error) {
@@ -155,9 +152,10 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
         userId: userIdFromRequest(request),
         manifest: body.manifest,
         source: body.source === "builtin" ? "builtin" : "uploaded",
-        idempotencyKey: body.idempotencyKey
+        idempotencyKey: body.idempotencyKey,
+        requestId: request.id
       });
-      return reply.code(result.reused ? 200 : 201).send({ installation: result.installation, summary: result.parsed.validationReport, reused: result.reused });
+      return reply.code(result.reused ? 200 : 201).send({ installation: result.installation, summary: result.parsed.validationReport, reused: result.reused, auditEventId: result.auditEventId ?? null });
     } catch (error) {
       return sendDataError(reply, error);
     }
@@ -165,7 +163,7 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
 
   app.get<{ Params: { workspaceId: string } }>("/api/v1/workspaces/:workspaceId/plugins", async (request, reply) => {
     try {
-      return reply.send({ plugins: await listWorkspacePlugins(request.params.workspaceId, userIdFromRequest(request)) });
+      return reply.send({ plugins: await listWorkspacePlugins(request.params.workspaceId, userIdFromRequest(request), request.id) });
     } catch (error) {
       return sendDataError(reply, error);
     }
@@ -173,7 +171,7 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
 
   app.get<{ Params: { workspaceId: string; installationId: string } }>("/api/v1/workspaces/:workspaceId/plugins/:installationId", async (request, reply) => {
     try {
-      return reply.send({ plugin: await getWorkspacePlugin({ workspaceId: request.params.workspaceId, installationId: request.params.installationId, userId: userIdFromRequest(request) }) });
+      return reply.send({ plugin: await getWorkspacePlugin({ workspaceId: request.params.workspaceId, installationId: request.params.installationId, userId: userIdFromRequest(request), requestId: request.id }) });
     } catch (error) {
       return sendDataError(reply, error);
     }
@@ -182,7 +180,8 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
   app.post<{ Params: { workspaceId: string; installationId: string } }>("/api/v1/workspaces/:workspaceId/plugins/:installationId/revoke", async (request, reply) => {
     try {
       const body = (request.body && typeof request.body === "object" ? request.body : {}) as { reason?: unknown };
-      return reply.send({ installation: await revokePluginInstallation({ workspaceId: request.params.workspaceId, installationId: request.params.installationId, userId: userIdFromRequest(request), reason: typeof body.reason === "string" ? body.reason : undefined }) });
+      const result = await revokePluginInstallation({ workspaceId: request.params.workspaceId, installationId: request.params.installationId, userId: userIdFromRequest(request), reason: typeof body.reason === "string" ? body.reason : undefined, requestId: request.id });
+      return reply.send(result);
     } catch (error) {
       return sendDataError(reply, error);
     }
@@ -190,7 +189,7 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
 
   app.post<{ Params: { workspaceId: string; installationId: string } }>("/api/v1/workspaces/:workspaceId/plugins/:installationId/restore", async (request, reply) => {
     try {
-      return reply.send({ installation: await restorePluginInstallation({ workspaceId: request.params.workspaceId, installationId: request.params.installationId, userId: userIdFromRequest(request) }) });
+      return reply.send(await restorePluginInstallation({ workspaceId: request.params.workspaceId, installationId: request.params.installationId, userId: userIdFromRequest(request), requestId: request.id }));
     } catch (error) {
       return sendDataError(reply, error);
     }
@@ -199,7 +198,7 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
   app.get<{ Params: { projectId: string } }>("/api/v1/projects/:projectId/plugins", async (request, reply) => {
     try {
       assertProjectId(request.params.projectId);
-      return reply.send({ plugins: await listProjectPlugins(request.params.projectId, userIdFromRequest(request)) });
+      return reply.send({ plugins: await listProjectPlugins(request.params.projectId, userIdFromRequest(request), request.id) });
     } catch (error) {
       return sendDataError(reply, error);
     }
@@ -209,7 +208,7 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
     try {
       assertProjectId(request.params.projectId);
       const body = pluginEnableRequestSchema.parse(request.body);
-      const result = await setProjectPluginBinding({ projectId: request.params.projectId, installationId: request.params.installationId, userId: userIdFromRequest(request), ...body });
+      const result = await setProjectPluginBinding({ projectId: request.params.projectId, installationId: request.params.installationId, userId: userIdFromRequest(request), requestId: request.id, ...body });
       return reply.send(result);
     } catch (error) {
       return sendDataError(reply, error);
@@ -219,7 +218,7 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
   app.get<{ Params: { projectId: string } }>("/api/v1/projects/:projectId/capabilities", async (request, reply) => {
     try {
       assertProjectId(request.params.projectId);
-      const result = await resolveProjectPluginContext({ projectId: request.params.projectId, userId: userIdFromRequest(request) });
+      const result = await resolveProjectPluginContext({ projectId: request.params.projectId, userId: userIdFromRequest(request), requestId: request.id });
       return reply.send({ context: result.context, manifests: result.manifests.map((manifest) => ({ pluginId: manifest.pluginId, version: manifest.version, contentHash: manifest.contentHash, capabilities: manifest.capabilities })) });
     } catch (error) {
       return sendDataError(reply, error);
@@ -469,6 +468,8 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
             transformPlan: job.transformPlan,
             fieldLineage: job.fieldLineage,
             flintSpec: job.flintSpec,
+            pluginContext: job.pluginContext,
+            pluginUsage: job.pluginUsage,
             validation: job.validation,
             previewData: job.previewData,
             repairCount: job.repairCount,
@@ -506,7 +507,8 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
         projectId: request.params.projectId,
         userId,
         renderer: body.renderer,
-        themeRef: hasThemeOverride ? null : projectTheme.themeRef
+        themeRef: hasThemeOverride ? null : projectTheme.themeRef,
+        requestId: request.id
       });
       const resolvedTheme = hasThemeOverride ? body.theme : projectTheme.preset;
       const resolvedThemeVersion = hasThemeVersionOverride
@@ -596,6 +598,43 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
 
   app.post<{ Params: { projectId: string } }>("/api/v1/projects/:projectId/generation-jobs", createGenerationJob);
   app.post<{ Params: { projectId: string } }>("/api/v1/projects/:projectId/generate", createGenerationJob);
+
+  app.post<{ Params: { jobId: string } }>("/api/v1/generation-jobs/:jobId/retry", async (request, reply) => {
+    try {
+      const [job] = await db.select().from(generationJobs).where(eq(generationJobs.id, request.params.jobId)).limit(1);
+      if (!job) throw new ChartServiceError("GENERATION_JOB_NOT_FOUND", "生成任务不存在", 404);
+      await assertChartAction(job.projectId, userIdFromRequest(request), "create_revision");
+
+      if (job.status !== "failed") {
+        if (job.status === "succeeded") {
+          throw new ChartServiceError("GENERATION_RETRY_NOT_ALLOWED", "已完成的生成任务不能重试", 409);
+        }
+        return reply.send({ job, reused: true });
+      }
+      if (!retryableGenerationErrors.has(job.errorCode ?? "")) {
+        throw new ChartServiceError("GENERATION_RETRY_NOT_ALLOWED", "当前失败原因需要修正输入后创建新的生成任务", 409);
+      }
+      if (job.attemptCount >= MAX_GENERATION_ATTEMPTS) {
+        throw new ChartServiceError("GENERATION_RETRY_LIMIT", `生成任务最多尝试 ${MAX_GENERATION_ATTEMPTS} 次`, 409);
+      }
+
+      const [existingRevision] = await db.select({ id: chartRevisions.id }).from(chartRevisions)
+        .where(eq(chartRevisions.generationJobId, job.id)).limit(1);
+      const [requeued] = await db.update(generationJobs).set({
+        status: existingRevision ? "rendering" : "queued",
+        errorCode: null,
+        errorMessage: null,
+        updatedAt: new Date()
+      }).where(and(eq(generationJobs.id, job.id), eq(generationJobs.status, "failed"))).returning();
+      if (!requeued) {
+        const [current] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id)).limit(1);
+        return reply.send({ job: current ?? job, reused: true });
+      }
+      return reply.code(202).send({ job: requeued, reused: false });
+    } catch (error) {
+      return sendDataError(reply, error);
+    }
+  });
 
   app.get<{ Params: { conversationId: string } }>("/api/v1/conversations/:conversationId/memory", async (request, reply) => {
     try {
@@ -784,6 +823,7 @@ function assistantReplyForMessage(content: string): string {
 }
 
 function sendDataError(reply: FastifyReply, error: unknown) {
+  if (error instanceof AuthenticationError) return sendHttpError(reply, error.statusCode, error.message, error.code);
   if (error instanceof PluginServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code, error.details);
   if (error instanceof ChartServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code);
   if (error instanceof MemoryServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code, error.details);

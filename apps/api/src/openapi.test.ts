@@ -33,6 +33,7 @@ test("serves OpenAPI JSON and a standard Swagger UI page", async () => {
     assert.ok(document.paths["/api/v1/projects/{projectId}/metric-definitions"]?.post);
     assert.ok(document.paths["/api/v1/projects/{projectId}/generation-jobs"]?.post);
     assert.ok(document.paths["/api/v1/generation-jobs/{jobId}"]?.get);
+    assert.ok(document.paths["/api/v1/generation-jobs/{jobId}/retry"]?.post);
 
     const docsResponse = await app.inject({ method: "GET", url: "/docs" });
     assert.equal(docsResponse.statusCode, 200);

@@ -80,6 +80,9 @@ importers:
       '@langreport/memory':
         specifier: workspace:*
         version: link:../../packages/memory
+      '@langreport/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
       '@langreport/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
@@ -275,6 +278,9 @@ importers:
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -294,6 +300,9 @@ importers:
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
       typescript:
         specifier: 7.0.2
         version: 7.0.2

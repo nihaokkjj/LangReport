@@ -187,6 +187,7 @@ export const generationJobs = pgTable("generation_jobs", {
   themeSource: text("theme_source").notNull().default("request"),
   themeConfig: jsonb("theme_config").notNull().default({}),
   pluginContext: jsonb("plugin_context").notNull().default({}),
+  pluginUsage: jsonb("plugin_usage").notNull().default({}),
   operation: generationJobOperation("operation").notNull().default("generate"),
   artifactId: uuid("artifact_id"),
   baseRevisionId: uuid("base_revision_id"),

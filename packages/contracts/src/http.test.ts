@@ -51,6 +51,7 @@ const expectedRoutes = [
   "DELETE /api/v1/memories/:memoryId",
   "GET /api/v1/chart-revisions/:revisionId/memory-context",
   "GET /api/v1/generation-jobs/:jobId",
+  "POST /api/v1/generation-jobs/:jobId/retry",
   "GET /api/v1/generation-jobs/:jobId/outputs/:format",
   "GET /api/v1/projects/:projectId/chart-artifacts",
   "GET /api/v1/projects/:projectId/chart-artifacts/:artifactId",
@@ -161,7 +162,7 @@ test("OpenAPI document is generated from the route contracts", () => {
   assert.equal(document.paths["/docs"], undefined);
   assert.equal(document.paths["/openapi.json"], undefined);
   assertSchemaIsOpenApiSafe(document);
-  assert.doesNotMatch(JSON.stringify(document), /DATABASE_URL|POSTGRES_PASSWORD|S3_SECRET_KEY|API_KEY|Authorization/i);
+  assert.doesNotMatch(JSON.stringify(document), /DATABASE_URL|POSTGRES_PASSWORD|S3_SECRET_KEY|AUTH_JWT_SECRET|API_KEY/i);
 
   const pasteOperation = document.paths["/api/v1/projects/{projectId}/data-assets/paste"]?.post as Record<string, any>;
   assert.equal(pasteOperation.requestBody.content["application/json"].schema.type, "object");

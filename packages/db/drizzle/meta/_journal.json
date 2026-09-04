@@ -64,6 +64,13 @@
       "when": 1788256081736,
       "tag": "0009_blushing_power_man",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788256081737,
+      "tag": "0010_plugin_usage",
+      "breakpoints": true
     }
   ]
 }

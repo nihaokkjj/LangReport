@@ -1,6 +1,6 @@
 # Phase 5：声明式插件设计与实施方案
 
-> 状态：Proposed（后续阶段，不属于第一阶段产品承诺）
+> 状态：Partially implemented（插件管理入口、能力使用追踪、Theme 渲染转换、真实 PostgreSQL/MinIO Worker-Render 链路、API/Job 集成验收、本地迁移兼容、签名 JWT 回归和本地浏览器端到端验收已落地；真实登录网关、部署数据库和生产环境验收待完成）
 >
 > 依据：`README.md`、`docs/mvp-roadmap.md`、`docs/phase1-consulting-report.md`、`docs/architecture.md`、`docs/domain-model.md`、`docs/plugin-manifest.md`、ADR 0005，以及当前工作树中的 Phase 3/4 实现。
 
@@ -60,24 +60,32 @@ Phase 5 只增加声明式能力，不改变 Phase 2 的受限 TransformPlan 执
 
 ## 3. 当前代码基线和主要缺口
 
-当前仓库已经具备：
+以下状态以当前工作树为准，不以本文件原先的路线图描述为准：
 
-- `docs/plugin-manifest.md` 中的 Manifest 包络、能力范围和安装流程草案；
-- ADR 0005 对声明式插件边界的决策；
-- `packages/contracts`、`packages/domain`、`packages/db`、`packages/generation`、`packages/chart` 的分层基础；
-- Workspace/Project 角色检查、`audit_events`、Generation Job 幂等字段和 Chart Revision 追溯字段；
-- 现有内置 Theme、Flint Adapter、Vega-Lite Renderer 和四类生成校验。
+| 层 | 当前状态 | 证据 | 收尾要求 |
+| --- | --- | --- | --- |
+| Manifest Contract / SDK | 已落地 | `packages/contracts`、`packages/plugin-sdk` 已提供 strict Schema、规范化、SHA-256、能力目录、Theme 继承和 Validator DSL | 补齐边界测试、限制参数和对外错误码说明 |
+| 内置插件 | 已落地 | `packages/plugin-sdk/src/builtin-manifests/sales-editorial.json` | 作为端到端验收的固定 fixture，不自动启用 |
+| 数据库结构 | 已落地 | `packages/db/src/schema.ts`、`packages/db/drizzle/0007_lush_starbolt.sql` 和 `packages/db/drizzle/0010_plugin_usage.sql` 已包含 Manifest、Installation、Binding、Job/Revision/Theme 字段；`pnpm db:verify` 会在隔离 schema 重放完整 SQL 链并验证历史 Phase 2–4 数据、默认值和索引 | 在部署数据库上按发布流程执行同一迁移校验；不再重复生成 0007 |
+| 安装和 Project Binding 服务 | 已落地 | `packages/plugins/src/index.ts` 已提供安装、查询、撤销、恢复、启用/禁用、能力解析、事务锁、幂等、失败审计和审计事件 ID 回执 | 补齐更完整的跨 Workspace/Revision 集成测试 |
+| 插件 API | 核心已落地 | `apps/api/src/routes.ts:130-232` 已注册 11 个插件相关路由，Contracts 也已登记 | 接入正式认证；当前安装入口实际只处理 JSON，不宣称已支持 multipart |
+| Generation Job | 已落地 | 创建 Job 时写入 `pluginContext`、`pluginUsage` 并加入 `inputFingerprint`；API 集成测试验证插件上下文固化和插件状态变化导致的指纹变化；真实 Worker 集成测试验证实际能力使用结果 | 补齐部署环境验收 |
+| Generation Worker | 已落地 | 已加载精确哈希 Manifest，并执行 Template requiredFields、语义提示、Renderer 限制和 Validator；真实 PostgreSQL/MinIO 测试已跑通 Job → Worker | 补齐部署环境验收 |
+| Render Worker / Revision | 已落地 | 根据 `plugin_usage` 过滤并保存 `pluginSnapshot`，插件 Theme 配置进入 Flint Spec/导出；真实 MinIO 测试验证 SVG/PNG/Vega-Lite、撤销后历史 Revision 和失败 Job 不创建 Revision | 补齐部署环境验收 |
+| Web 主工作台 | 已落地 | `/plugins` 提供 Workspace 安装管理、Project 启用/禁用、能力目录和 Theme 选择；主工作台右上角提供入口并显示 Revision 插件快照条；追溯卡片通过独立 API 读取并覆盖 loading、无插件和损坏态 | 补齐部署环境验收 |
+| Web API Console | 已落地但仅用于调试 | `apps/web/app/api-console/page.tsx` 从 OpenAPI 动态展示 `Plugins` 标签并手动发送请求 | 不把 API Console 作为产品管理入口 |
+| 正式身份认证 | 已接入签名 JWT Provider，待部署登录网关验收 | 非生产仍兼容 `x-user-id`；生产可自动校验 HS256 JWT（Bearer 或 HttpOnly Cookie），也保留 `buildApp` 的 `authProvider` 接入点；无有效认证时拒绝请求 | 配置部署环境的 JWT 签发网关、密钥和 Claim 校验，并执行真实登录回归 |
+| 验收测试 | 不完整 | SDK、Generation、API、真实 PostgreSQL/MinIO Worker/Render 集成测试已增加；`pnpm db:verify` 和签名 JWT 回归已通过；2026-09-04 已用本地 Chrome 验证 `/plugins` 安装 → 启用 → Theme/Manifest 校验、主工作台上传 → 生成 → Revision 快照、撤销后历史 Revision 读取、插件上下文 API、损坏/无插件状态，并检查 390px 移动宽度无溢出；`provision:production` 已提供显式确认的首次 Workspace 初始化；`pnpm phase5:smoke` 已提供部署后 JWT/插件 API/伪造身份头验收 | 补齐真实登录网关、部署数据库和生产环境验收 |
 
-当前尚未具备：
+当前实现与设计目标的关键差异：
 
-- `PluginManifest` 的严格 Schema、规范化和内容哈希实现；
-- 插件版本、Workspace 安装和 Project 启用关系；
-- 插件能力索引、兼容性解析和冲突诊断；
-- 插件 Theme/Validator/语义接入 Generation Worker；
-- 插件管理 API、Project 扩展设置和 Revision 插件追溯界面；
-- 插件删除、撤销、版本漂移和历史 Revision 保留测试。
+1. 插件管理入口已增加为主产品路由 `/plugins`；API Console 仍只用于调试。
+2. `POST /api/v1/workspaces/:workspaceId/plugins` 当前接收 JSON Manifest、`source` 和 `idempotencyKey`，没有实现设计中提到的 multipart 原始文件上传。
+3. `pluginContext` 和 `pluginUsage` 已进入 Job；生成器已将插件语义提示、Template `requiredFields`、Renderer 限制和 Validator 执行纳入确定性校验。
+4. 插件 Theme 已解析为安全的 `themeConfig` 写入 Flint Spec，Flint Adapter 和确定性 SVG/PNG/Vega-Lite 渲染会消费该配置；真实 PostgreSQL/MinIO Worker 集成已验证颜色和 Theme 元数据进入输出。
+5. 身份边界已区分开发和生产；生产默认校验签名 JWT 并将 `sub` 写入请求上下文，仍需在部署环境配置真实签发网关，不能继续把可伪造的 `x-user-id` 当作认证。
 
-架构文档中已经预留 `packages/plugin-sdk`。本阶段按该边界新增包；Manifest 的解析和校验不放入 API 路由，也不让 Worker 各自实现一套规则。
+本阶段后续工作以这些差异为待办事实。Manifest 的解析和校验继续只放在 `packages/plugin-sdk`，API 路由和 Worker 不各自实现第二套规则。
 
 ## 4. 领域模型
 
@@ -167,6 +175,18 @@ type CapabilityReference = {
 ```
 
 Chart Revision 的 `pluginSnapshot` 保存该 Revision 实际使用的插件定义，而不只保存当前 Installation ID。至少要包含所用模板、Theme、语义、Validator 和 Renderer 声明的规范化内容、来源版本、哈希及 Flint/Renderer 版本。插件撤销、软删除或后续版本安装都不能改变这个快照。
+
+### 4.6 启用能力与实际使用能力
+
+`enabledPlugins` 表示本次 Job 可用的精确 Installation 集合，不等于最终使用的能力集合。为避免 Revision 快照虚胖或产生“启用了就等于使用了”的错误证据，目标 Contract 需要区分：
+
+- `enabledPlugins`：解析时全部启用的插件来源；
+- `selectedTemplate`：本次生成实际选中的 Template，可为空；
+- `selectedTheme`：本次实际生效的内置或插件 Theme，可为空；
+- `usedCapabilities`：实际影响意图、字段映射、校验或渲染的能力引用；
+- `unusedCapabilities`：可选的诊断信息，不进入 Revision 的必要快照。
+
+Job 必须先保存可复现且不再变化的 `pluginContext`；Worker 根据确定性结果写入独立的 `pluginUsage`/`usedCapabilities` 输出，不能回写影响幂等性的输入上下文或 `inputFingerprint`。Revision 的 `pluginSnapshot` 至少保存 `usedCapabilities` 对应的完整能力 payload 和来源，不得只保存能力名称或 Installation ID。
 
 ## 5. Manifest 校验和安全模型
 
@@ -316,12 +336,13 @@ MVP 中“删除插件”统一解释为撤销 Workspace Installation：从可�
 ### 7.4 既有表的变化
 
 - `generation_jobs` 增加 `plugin_context` JSONB，保存创建 Job 时的解析快照；
+- `generation_jobs` 增加 `plugin_usage` JSONB，保存 Worker 确认的实际 Template、Theme、语义、Validator 和 Renderer 能力引用；该字段是 Job 输出，不参与创建时的 `input_fingerprint`；
 - `chart_revisions` 增加 `plugin_snapshot` JSONB，默认空快照以兼容 Phase 2–4 历史数据；
 - `project_themes` 增加规范化 `theme_ref` JSONB，保留现有 `preset` 以兼容内置 Theme；
 - `audit_events` 继续作为安装、启用、禁用、撤销、冲突和权限拒绝的追加式记录；
 - 不直接把插件能力复制成多张可变表，能力目录从不可变 Manifest 解析并可由包内缓存加速，避免 Manifest 与索引漂移。
 
-当前迁移序列为 `0006`，本阶段生成并审查下一份迁移（预计为 `0007`）。迁移必须显式覆盖历史 JSONB 默认值、部分唯一索引、状态枚举、Workspace 约束和既有 Job/Revision 读取兼容性；本阶段不依赖 `db:push` 代替迁移。
+当前工作树的迁移日志已经包含 `0007` 插件迁移；文档和实施不得再把它描述为“待生成”。迁移必须显式覆盖历史 JSONB 默认值、部分唯一索引、状态枚举、Workspace 约束和既有 Job/Revision 读取兼容性；本阶段不依赖 `db:push` 代替迁移。若迁移日志中存在编号间隔（当前可见 0008 缺失），先确认是否为有意跳号，再执行真实数据库迁移。
 
 ## 8. 权限和状态机
 
@@ -368,15 +389,15 @@ Project Binding：Disabled ──启用──→ Enabled
 
 ### 9.1 Job 创建时解析
 
-API 创建 Generation Job 时，在写入 Job 的事务中调用 `PluginResolutionService`：
+API 创建 Generation Job 时，在确定性地计算输入指纹后调用 `PluginResolutionService`，并在 Job 入队前固化结果：
 
 1. 根据 Project 和 Workspace 读取 `enabled` Binding；
 2. 确认每个 Binding 指向已安装、未撤销且兼容当前 Adapter/Renderer 的 Manifest；
 3. 从所有 Manifest 构建能力目录并执行冲突检测；
-4. 根据请求的 `ThemeRef`、Project Theme 和内置默认 Theme 解析最终 Theme；
-5. 将启用插件来源、能力引用、Theme 引用、平台版本和空冲突列表写入 `plugin_context`；
+4. 根据请求的 `ThemeRef`、Project Theme 和内置默认 Theme 解析最终 Theme；没有显式选择时，插件 Theme 不得自动生效；
+5. 将启用插件来源、完整能力引用、Theme 引用、平台版本和空冲突列表写入 `plugin_context`；
 6. 将 `plugin_context` 的稳定序列化哈希纳入 `generation_jobs.input_fingerprint`；
-7. 事务提交后才投递 Job。
+7. 通过唯一幂等键写入 Job，确认写入成功后才投递 Job；重试不能创建第二个 Job。
 
 如果冲突或兼容性失败，API 返回可解释错误，Job 不进入生成队列。若系统选择允许“排队后失败”，必须写入明确的 `PLUGIN_CONTEXT_INVALID`，不能退化为无插件生成。
 
@@ -384,11 +405,13 @@ API 创建 Generation Job 时，在写入 Job 的事务中调用 `PluginResoluti
 
 Generation Worker 只消费 Job 已固化的 `plugin_context`：
 
-- 将模板字段要求、语义提示和示例以结构化能力目录提供给意图解析和 TransformPlan 生成；
-- 选择模板时保留 `CapabilityReference`，不能只保存裸模板名；
-- 将插件语义作为字段识别提示，最终字段仍必须来自 Data Snapshot；
+- 将 Template 的字段要求、语义提示和示例作为带来源的结构化能力目录提供给意图解析和 TransformPlan 生成；
+- 选择 Template 时同时检查 `intentHints`、`requiredFields` 和 `allowedRenderers`，并记录完整 `CapabilityReference`，不能只保存裸模板名；
+- 将插件语义作为候选字段识别提示，最终字段、数据和转换仍必须来自 Data Snapshot 与平台允许的 TransformPlan；
+- 生成 Flint Spec 后，确定性校验 Template 的字段角色与语义映射；不满足要求时进入可解释失败或有限修复，不降级成无插件生成；
 - 将插件 Validator 编译结果与平台基础校验合并，平台基础校验优先且不可被插件关闭；
 - 只使用 `plugin_context` 中明确选择的 Theme，不因模型文本自行改变 Project Theme；
+- 记录实际使用的 Template、Theme、语义和 Validator 引用到 `plugin_usage`，用于生成 `usedCapabilities`；
 - 每个插件校验问题包含 `pluginId`、版本、能力 ID、规则 ID、错误码和字段路径；
 - 若 Job 快照引用的 Manifest 内容哈希与数据库内容不一致，任务失败并记录完整错误。
 
@@ -396,13 +419,13 @@ Generation Worker 只消费 Job 已固化的 `plugin_context`：
 
 ### 9.3 Render Worker 和 Revision
 
-Render Worker 不加载或执行插件。它接收已经校验的 Flint Spec、解析后的 Theme、平台允许的 Renderer 和 Job 的插件上下文，只负责固定版本的 Flint/Vega-Lite 编译和导出。
+Render Worker 不执行插件代码。它可以根据 Job 已固化的精确引用重新解析不可变 Manifest，以构建快照，但不能读取“当前最新插件集合”替换 Job 输入；它接收已经校验的 Flint Spec、解析后的 Theme、平台允许的 Renderer 和 Job 的插件上下文，只负责固定版本的 Flint/Vega-Lite 编译和导出。
 
 创建 Chart Revision 时：
 
 1. 从 Job 读取 `plugin_context`；
-2. 只提取本次实际使用的能力定义，生成 `plugin_snapshot`；
-3. 与 Flint Adapter、Renderer、Theme、Memory 和 Data Snapshot 元数据一并写入不可变 Revision；
+2. 根据 Generation Worker 记录在 `plugin_usage` 中的 `usedCapabilities` 只提取本次实际使用的能力定义，生成 `plugin_snapshot`；
+3. 确认 Flint Adapter 已消费的是解析后的安全 Theme 配置，而不是未解释的 Manifest payload；与 Renderer、Theme、Memory 和 Data Snapshot 元数据一并写入不可变 Revision；
 4. 输出对象继续按 Revision 归属保存；
 5. 插件撤销或删除后，旧 Revision 仍可以预览、导出和审计，重新渲染时优先使用快照并验证平台 Renderer 兼容性。
 
@@ -439,7 +462,7 @@ Render Worker 不加载或执行插件。它接收已经校验的 Flint Spec、�
 | --- | --- | --- |
 | `GET` | `/api/v1/workspaces/:workspaceId/plugin-catalog` | 查看平台内置插件目录 |
 | `POST` | `/api/v1/workspaces/:workspaceId/plugins/validate` | 校验 Manifest，返回规范化摘要、哈希、能力和错误报告，不安装 |
-| `POST` | `/api/v1/workspaces/:workspaceId/plugins` | 校验并安装 Manifest，支持 JSON 或受限 multipart 上传 |
+| `POST` | `/api/v1/workspaces/:workspaceId/plugins` | 校验并安装 JSON Manifest；multipart 原始文件上传不属于当前 MVP |
 | `GET` | `/api/v1/workspaces/:workspaceId/plugins` | 查看 Workspace 已安装插件、版本、哈希和状态 |
 | `GET` | `/api/v1/workspaces/:workspaceId/plugins/:installationId` | 查看安装详情、能力和兼容性报告 |
 | `POST` | `/api/v1/workspaces/:workspaceId/plugins/:installationId/revoke` | 撤销安装，不删除历史版本 |
@@ -452,6 +475,13 @@ Render Worker 不加载或执行插件。它接收已经校验的 Flint Spec、�
 安装请求至少需要 Manifest 内容和幂等键。返回结果应包含 `installationId`、`pluginId`、版本、规范化哈希、校验结果、兼容性、能力摘要和审计事件 ID。重复安装相同 Workspace、版本和哈希应返回原 Installation；相同版本不同哈希应返回 `PLUGIN_VERSION_HASH_CONFLICT`。
 
 启用/禁用请求至少需要 `enabled`、`expectedVersion` 或等效并发条件和幂等键。启用失败时返回全部冲突来源，而不是只返回第一个冲突能力。
+
+当前代码的接口边界需要和目标设计明确区分：
+
+- `GET /api/v1/workspaces/:workspaceId/plugin-catalog`、校验、安装、Workspace 查询、撤销、恢复、Project Binding、能力解析和 Revision 快照查询都已经注册；
+- 当前安装请求是 JSON：`{ manifest, source?, idempotencyKey }`。Manifest 原文上传、`sourceObjectKey` 写入和 multipart 处理属于后续增量，不作为当前已完成能力；
+- 安装、启用、禁用、撤销和恢复服务已写入 `audit_events`，成功响应返回对应 `auditEventId`；幂等复用响应返回原变更事件 ID（历史记录缺失时为 `null`），前端不自行推断审计结果；
+- 当前路由通过 `x-user-id` 兼容非生产开发环境；生产环境由 `apps/api/src/auth.ts` 自动校验 `AUTH_JWT_SECRET` 对应的 HS256 Bearer/Cookie Token，并拒绝伪造身份头。部署时仍需配置真实 Token 签发网关，前端产品请求不得让用户编辑身份头。
 
 建议的稳定错误码：
 
@@ -474,6 +504,18 @@ Render Worker 不加载或执行插件。它接收已经校验的 Flint Spec、�
 
 在现有数据工作区中增加两个管理入口，不改变当前“对话 → 数据 → 图表 → Revision”的信息架构：
 
+### 11.0 当前入口和目标入口
+
+当前 `apps/web` 提供主工作台、`/api-console` 和 `/plugins`。API Console 从 OpenAPI 动态生成 `Plugins` 标签，适合调试和验收；产品入口是 `/plugins`，主工作台右上角的“插件”链接会进入该页面。
+
+目标入口分为三处：
+
+1. Workspace 设置中的“插件”：负责目录、Manifest 校验、安装、查看、撤销和恢复；
+2. Project 设置中的“扩展”：负责查看 Project Binding、启用/禁用精确版本、查看能力目录和选择插件 Theme；
+3. Evidence/Revision 追溯区域中的“插件上下文”：负责查看本次 Revision 实际使用的插件来源和能力快照。
+
+三个入口都只负责展示状态和发起请求；权限、作用域、冲突、兼容性和版本检查必须由服务端再次执行。
+
 ### Workspace 插件设置
 
 - 内置插件目录：名称、用途、支持的 Adapter/Renderer、版本和能力摘要；
@@ -490,17 +532,41 @@ Render Worker 不加载或执行插件。它接收已经校验的 Flint Spec、�
 - 插件 Theme 需要明确选择，选择后显示其继承的内置 Theme 和最终解析配置；
 - 空目录、插件撤销、不兼容、冲突和权限不足都提供可解释状态。
 
-生成结果的 Revision 追溯区域增加“插件上下文”卡片，显示本次使用的插件版本、能力 ID、Adapter/Renderer 版本和哈希。前端只展示和发起操作，权限、冲突、兼容性和版本检查必须由服务端再次执行。
+生成结果的 Revision 追溯 API 已提供“插件上下文”数据；主工作台在已有 Revision 结果上方显示插件快照条，当前 `/plugins` 能力目录可查看生成前的有效能力。前端只展示和发起操作，权限、冲突、兼容性和版本检查必须由服务端再次执行。
+
+### 11.1 前端调用顺序
+
+Workspace 插件设置打开时：
+
+1. 并行读取内置目录和已安装列表；
+2. 用户选择 Manifest 后先调用校验接口，只展示校验报告，不改变安装列表；
+3. 用户确认后调用安装接口，客户端生成一次性的 `idempotencyKey`；
+4. 安装成功后重新读取列表和详情；撤销/恢复也采用“提交 → 重新读取”的方式；
+5. `403`、`409` 和 `PLUGIN_*` 错误必须显示服务端原因，不把失败状态伪装成成功。
+
+Project 扩展设置打开时：
+
+1. 读取 Project 插件 Binding 和能力目录；
+2. 启用/禁用时发送 `enabled`、当前 `expectedVersion` 和新的 `idempotencyKey`；
+3. 收到 `PLUGIN_CAPABILITY_CONFLICT` 或版本冲突后刷新列表和能力目录，再让用户处理；
+4. 选择插件 Theme 时通过现有 Project Theme 接口保存精确 `ThemeRef`，不能只保存 Theme 名称；
+5. 只有服务端解析成功的能力目录才能被生成流程使用。
+
+Revision 追溯卡片在已有 Revision 数据加载后调用 `GET /api/v1/chart-revisions/:revisionId/plugin-context`。无插件时显示“本次未使用插件”，快照损坏或来源无法解析时显示阻塞性追溯错误。
+
+前端请求状态至少要区分 `idle`、`loading`、`submitting`、`success`、`empty` 和 `error`；启用/禁用按钮在请求期间锁定，不能通过重复点击绕过幂等语义。移动端使用抽屉或全屏面板承载详情，不能要求用户在窄屏横向滚动完整 Manifest。
 
 ## 12. 推荐实施步骤
 
-### Step 1：冻结 Contracts 和规范化规则
+本节按当前代码基线排序：标记为“已落地”的步骤不再重复实现，而是补齐验证或将其作为后续步骤的依赖；标记为“部分落地”的步骤必须在 Phase 5 关闭前完成。
+
+### Step 1：冻结 Contracts 和规范化规则（核心已落地，需补边界测试）
 
 在 `packages/contracts` 定义 Manifest、Capability、ThemeRef、Installation、Binding、ResolutionContext、PluginSnapshot、校验报告和 API 请求/响应 Schema。实现稳定 JSON 规范化、SHA-256、禁止字段扫描、长度/深度限制和稳定错误码。
 
 完成标准：同一语义 JSON 在键顺序或空白变化后得到相同哈希；未知字段、禁止字段、远程地址、无效 SemVer 和超限 Manifest 均被拒绝；所有调用方引用同一套 Contracts。
 
-### Step 2：实现 `packages/plugin-sdk`
+### Step 2：实现 `packages/plugin-sdk`（核心已落地，需补覆盖）
 
 按架构文档新增 `packages/plugin-sdk`，至少包含：
 
@@ -515,15 +581,15 @@ Render Worker 不加载或执行插件。它接收已经校验的 Flint Spec、�
 
 完成标准：内置和上传 Manifest 走同一解析路径；SDK 的纯函数测试覆盖禁止代码、Theme 循环、Validator 未知规则、Renderer allowlist、重复能力和同版本哈希冲突。
 
-### Step 3：增加 DB Schema 和迁移
+### Step 3：增加 DB Schema 和迁移（结构与 0007 已落地，临时库迁移验收已完成）
 
-在 `packages/db/src/schema.ts` 增加 `plugin_manifests`、`plugin_installations`、`project_plugin_bindings` 及相关枚举、约束和索引；为 `generation_jobs`、`chart_revisions`、`project_themes` 增加插件/Theme 快照字段。生成 `0007` 迁移并用本地历史数据验证。
+`packages/db/src/schema.ts`、`packages/db/drizzle/0007_lush_starbolt.sql` 和 `packages/db/drizzle/0010_plugin_usage.sql` 已增加 `plugin_manifests`、`plugin_installations`、`project_plugin_bindings` 及相关枚举、约束和索引，并为 `generation_jobs`、`chart_revisions`、`project_themes` 增加插件/Theme 字段。`pnpm db:verify` 会在隔离 schema 执行工作树中的完整 SQL 链，先写入代表 Phase 2–4 的历史 Job/Revision/Theme，再验证新字段默认值、既有输出和部分唯一索引；部署数据库仍需按发布流程执行同一命令并确认实际备份/回滚策略。不得再次生成或覆盖 0007。
 
 完成标准：跨 Workspace 的 Manifest、Installation 和 Binding 关系无法通过 Repository 查询绕过作用域；历史 Job/Revision 在新字段默认值下可以读取；删除/撤销操作不会级联删除旧 Revision 或其输出对象。
 
-### Step 4：实现安装、启用和审计服务
+### Step 4：实现安装、启用和审计服务（核心与并发审计验收已落地）
 
-在 `packages/plugin-sdk` 或独立的 Extensions 领域服务中实现 `PluginInstallationService`、`ProjectPluginService` 和 `PluginResolutionService`。所有方法接收 `workspaceId`，Project 方法同时接收 `projectId`；服务负责幂等、expected version、冲突、兼容性、软撤销和 `audit_events`。
+在 `packages/plugin-sdk` 或独立的 Extensions 领域服务中实现 `PluginInstallationService`、`ProjectPluginService` 和 `PluginResolutionService`。所有方法接收 `workspaceId`，Project 方法同时接收 `projectId`；服务负责幂等、expected version、冲突、兼容性、软撤销和 `audit_events`。当前服务已对 Workspace、Project 做事务锁定，并对权限拒绝和 409 冲突写入带 request ID 的失败审计。
 
 安装事务建议顺序：
 
@@ -544,23 +610,31 @@ Render Worker 不加载或执行插件。它接收已经校验的 Flint Spec、�
 
 完成标准：相同请求重试不会生成重复 Installation/Binding；无权限用户不能改变状态；同一 Project 的重复版本和能力冲突会原子失败；撤销后历史 Revision 和审计记录仍可读。
 
-### Step 5：接入 Generation Job 和 Chart Revision
+补充验证：安装、启用、禁用、撤销和恢复接口的成功响应已返回对应审计事件 ID；API 测试通过 `auditEventId` 和 `requestId + entityId + action` 双重定位审计，并覆盖权限拒绝、幂等冲突、同一安装幂等键并发和 Theme `expectedVersion` 并发冲突。
 
-在 API 创建 Generation Job 时解析并写入 `plugin_context`，把其哈希加入 `inputFingerprint`。Generation Worker 只消费 Job 快照；Render Worker 创建 Revision 时写入实际使用能力的 `plugin_snapshot`。插件内容不得覆盖平台基础校验和 Renderer allowlist。
+### Step 5：接入 Generation Job 和 Chart Revision（核心闭环已落地，需真实链路验收）
 
-完成标准：改变 Project 插件启用集合会改变后续 Job fingerprint；同一个已创建 Job 不会因当前启用集合变化而改变输入；生成失败不会创建成功 Revision；删除/撤销插件后旧 Revision 仍能预览、导出并显示插件来源。
+在 API 创建 Generation Job 时解析并写入 `plugin_context`，把其哈希加入 `inputFingerprint`。Generation Worker 只消费 Job 快照；Render Worker 创建 Revision 时写入实际使用能力的 `plugin_snapshot`。插件内容不得覆盖平台基础校验和 Renderer allowlist。Render Worker 对同一个 Job 使用 PostgreSQL advisory lock 做 single-flight，未取得锁的并发调用交给后续轮询，已有 Revision 恢复逻辑保持幂等。API 集成测试已验证带插件和撤销后无插件 Job 的上下文与指纹不同，真实 PostgreSQL/MinIO Worker/Render 测试已验证模板、语义、Validator、Theme、SVG/PNG/Vega-Lite、撤销后的历史快照以及失败 Job 不创建 Revision。
 
-### Step 6：增加 API 和 Web 管理界面
+完成标准：改变 Project 插件启用集合会改变后续 Job fingerprint；同一个已创建 Job 不会因当前启用集合变化而改变输入；生成失败不会创建成功 Revision；删除/撤销插件后旧 Revision 仍能预览、导出并显示插件来源；Revision 能区分启用但未使用的能力与实际使用的能力；插件 Theme 经安全解析后确实影响 Flint Spec/导出，或者明确记录为未使用。
 
-实现 Workspace 插件目录、Manifest 校验/安装/撤销/恢复、Project 启用/禁用、能力目录和 Revision 追溯接口。Web 端增加 Workspace/Project 两层设置和错误、空、加载、冲突、不兼容状态。
+### Step 6：增加 API 和 Web 管理界面（已落地，需异常态、跨域权限和部署验收）
+
+API 路由已覆盖 Workspace 插件目录、Manifest 校验/安装/撤销/恢复、Project 启用/禁用、能力目录和 Revision 追溯；`apps/web/app/plugins/page.tsx` 已提供 Workspace/Project 两层管理入口，API Console 继续保留为调试入口；主工作台也已显示 Revision 插件快照条，并通过独立追溯请求处理 loading、无插件和损坏状态。核心角色读写权限已有 API 集成覆盖，本地 Chrome 已完成浏览器全链路验收，剩余工作是更完整的跨 Workspace/Revision 权限矩阵和部署环境验收。
 
 完成标准：管理员可从上传到安装，Project Editor 可在已安装范围内启用精确版本；Viewer/Reviewer 不能修改；用户能在生成前看到冲突和 Theme 来源，在 Revision 中看到实际插件版本与哈希。
 
-### Step 7：补齐迁移、兼容性和端到端验证
+### Step 7：接入正式认证和运行时边界（签名 JWT 边界已落地，待部署网关验收）
 
-使用内置销售插件完成一条垂直验收：安装 → Project 启用 → 模板/语义发现 → Theme 选择 → Validator → 生成 → Revision 快照 → 撤销插件 → 历史 Revision 读取。再覆盖上传插件和失败重试。
+`apps/api/src/auth.ts` 已将 `x-user-id`/`local-dev-user` 限制在非生产环境；配置 `AUTH_JWT_SECRET` 后，`buildApp` 自动验证 HS256 Bearer/Cookie Token 并将 `sub` 写入 `request.user`，也支持部署侧通过 `authProvider` 注入用户。当前 API 集成测试已覆盖 Owner/Admin 安装、Editor 启用、Reviewer 只读、Viewer 拒绝 Project 插件/能力读取和跨 Workspace 资源 ID；剩余工作是配置真实 Token 签发网关并完成部署登录回归。
 
-完成标准：所有路线图验收、权限、越权、幂等、并发、删除保留、版本漂移和错误分类测试通过；文档中的字段、状态和 API 与最终实现一致。
+完成标准：生产环境没有可伪造的用户身份头；权限矩阵与第 8 节一致；跨 Workspace 的 Installation、Binding、能力和 Revision 请求统一返回约定的 403/404；审计记录使用真实操作者 ID。
+
+### Step 8：补齐迁移、兼容性和端到端验证（本地完成，待部署验收）
+
+使用内置销售插件完成一条垂直验收：安装 → Project 启用 → 模板/语义发现 → Theme 选择 → Validator → 生成 → Revision 快照 → 撤销插件 → 历史 Revision 读取。该链路已在本地 Chrome 和真实 PostgreSQL/MinIO Worker/Render 中通过；上传 Manifest 的读取 → 校验 → 安装 → 启用 → 撤销路径、追溯卡片的损坏态和无插件态也已通过浏览器验收。失败重试已覆盖可恢复的 `RENDER_FAILED` 重新入队、并发幂等、不可重试错误和次数上限；本地迁移兼容与签名 JWT 回归已通过，仍需在部署数据库、真实登录网关和生产环境执行验收。
+
+完成标准：所有路线图验收、权限、越权、幂等、并发、删除保留、版本漂移、Theme 实际渲染和错误分类测试通过；文档中的字段、状态、API 和前端入口与最终实现一致。
 
 ## 13. 测试与路线图验收
 
@@ -580,8 +654,13 @@ Render Worker 不加载或执行插件。它接收已经校验的 Flint Spec、�
 - Generation Job 的 `plugin_context` 固化启用版本，插件状态变化不会改写排队中的 Job；
 - `inputFingerprint` 包含插件上下文哈希，插件集合/版本/内容变化不会错误复用旧 Job；
 - Chart Revision 的 `plugin_snapshot` 包含实际使用能力和完整来源，插件撤销/删除不影响历史预览和导出；
+- Template 的 `requiredFields`、`allowedRenderers` 和插件语义提示参与生成前确定性校验，并保留实际使用能力引用；
+- 选中的插件 Theme 能够转换为 Flint Adapter 可消费的安全 Theme 配置，并在 SVG/PNG/Vega-Lite 输出中可观察；
 - 安装、启用、禁用、撤销、恢复、冲突和权限拒绝均有追加式审计事件；
-- 相同安装/启用请求重试和并发执行不会创建重复或互相覆盖的状态。
+- 相同安装/启用请求重试和并发执行不会创建重复或互相覆盖的状态；
+- `POST /api/v1/generation-jobs/:jobId/retry` 只重新入队可恢复的生成/渲染失败；确定性失败和超过三次尝试返回稳定错误码，已有 Revision 恢复时不会生成重复版本；
+- Web 设置页覆盖加载、空目录、上传校验、安装确认、撤销/恢复、冲突、权限不足和网络失败；
+- `pnpm --filter @langreport/web typecheck`、API/SDK/插件服务测试和数据库迁移验收全部通过。
 
 ### 13.2 对应路线图验收
 
@@ -595,20 +674,22 @@ Render Worker 不加载或执行插件。它接收已经校验的 Flint Spec、�
 | 模板、Theme、语义、Validator 能力发现 | Project 能力目录和 Generation Job context 返回每项能力的来源插件/版本 |
 | 插件冲突检测 | 重复能力 ID、重复插件版本和不兼容 Renderer 阻止启用/生成并展示来源 |
 | 未知字段或可执行代码拒绝 | strict Schema、递归禁止字段和地址检查返回稳定错误码 |
+| Web 插件管理入口 | Workspace 设置可完成目录/校验/安装/撤销/恢复；Project 设置可完成启用/禁用和能力查看；Revision 可查看快照 |
+| 前端不绕过服务端规则 | 前端只提交 Manifest、精确 Installation、ThemeRef 和并发参数；权限/冲突/兼容性由 API 决定 |
 | Project 使用精确插件版本 | Job/Revision 保存 `pluginId + version + contentHash`，不存在 `latest` 或浮动范围引用 |
 | 插件删除不破坏已有 Chart Revision | 撤销/软删除只阻止新生成；历史 Revision 使用自身 `plugin_snapshot` 和输出对象继续可读 |
 
 ## 14. 建议交付顺序
 
-按以下 PR 顺序实施，先冻结安全边界，再接入生成链路：
+按“先修正事实基线，再补一条可验收垂直闭环”的顺序实施，不重复开发已经存在的核心代码：
 
-1. `contracts` 和 `packages/plugin-sdk`：规范化、严格 Schema、哈希、兼容性、能力目录和纯单元测试；
-2. `packages/db`：插件表、既有表字段和 `0007` 迁移；
-3. 安装/启用/撤销服务：Workspace/Project 权限、冲突、幂等和审计；
-4. 内置 Manifest 目录和管理员上传/校验 API；
-5. Project Binding、能力发现和 ThemeRef 选择；
-6. Generation Worker 的 Job context、Validator/语义/模板接入；
-7. Render Worker 的 Revision plugin snapshot 和历史保留；
-8. Web 管理界面、Revision 追溯和端到端验收。
+1. **基线和迁移验收**：确认 `0007_lush_starbolt.sql`、`0010_plugin_usage.sql` 已纳入迁移链；`pnpm db:verify` 已自动验证插件表、JSONB 默认值、历史 Phase 2–4 数据和唯一索引，发布前仍需在部署数据库执行同一校验并确认实际备份/回滚策略；
+2. **认证收口**：配置 `AUTH_JWT_SECRET`、Issuer/Audience 和外部登录网关，使签名 JWT 的 `sub` 进入 `request.user`；保持生产环境关闭伪造 `x-user-id` 的路径，补真实登录回归；
+3. **服务和 API 收口**：安装/启用/撤销/恢复的事务锁、并发、幂等、request ID 审计、审计事件 ID 回执和错误响应测试已补。明确 JSON-only MVP，multipart 原始文件上传另列任务；
+4. **能力闭环**：Template `requiredFields`、语义提示、Validator 引用和 `usedCapabilities` 已接入；插件 Theme 已完成到 Flint Spec/Renderer 的安全转换，真实 PostgreSQL/MinIO Worker 输出差异已验证，剩余部署环境验收；
+5. **Workspace 管理入口**：`/plugins` 已实现目录、Manifest 校验、安装、安装状态、撤销和恢复；成功后刷新服务端状态，失败显示稳定错误码；
+6. **Project 扩展入口**：`/plugins` 已实现 Binding 列表、精确版本启用/禁用、能力目录和 Plugin Theme 选择；使用 `expectedVersion + idempotencyKey`；
+7. **Revision 追溯入口**：主工作台已展示实际使用插件数量、能力数量、ThemeRef 和 Renderer；本地 Chrome 已验收撤销后的历史快照、独立追溯 API、损坏态和无插件态；
+8. **端到端验收和发布门槛**：真实 Worker/Render 的撤销后历史 Revision、失败 Job、可恢复失败重试、Theme 实际输出、桌面/移动端页面、迁移兼容、签名 JWT 回归和全部类型检查已通过；仍需执行部署数据库、真实登录网关和生产环境验收。
 
 Phase 5 完成的判定标准是：管理员可以安装一个通过严格校验的声明式插件；Project 可以启用该插件的精确版本；生成链路可以发现并使用其模板、Theme、语义和 Validator；冲突、不兼容、越权和重试都有明确结果；生成的 Chart Revision 保存插件来源与能力快照；插件被撤销或删除后，已有 Revision 的预览、导出和审计仍然完整。

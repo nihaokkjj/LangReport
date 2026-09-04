@@ -53,6 +53,10 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
       S3_BUCKET: ${S3_BUCKET:-langreport}
       WEB_ORIGIN: ${WEB_ORIGIN:?WEB_ORIGIN is required}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}
+      AUTH_SESSION_COOKIE: ${AUTH_SESSION_COOKIE:-langreport_session}
+      AUTH_JWT_ISSUER: ${AUTH_JWT_ISSUER:-}
+      AUTH_JWT_AUDIENCE: ${AUTH_JWT_AUDIENCE:-}
     depends_on:
       postgres:
         condition: service_healthy

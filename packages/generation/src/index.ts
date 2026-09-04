@@ -5,12 +5,14 @@ import {
   type ConversationIntent,
   type FlintSpec,
   type MemoryContext,
+  type PluginThemeRef,
+  type PluginUsage,
   type TransformPlan,
   type ValidationIssue,
   type ValidationReport
 } from "@langreport/contracts";
 import { executeTransformPlan, type ColumnProfile, type DataRow, type TransformResult } from "@langreport/data-engine";
-import { evaluatePluginValidators, type ParsedPluginManifest } from "@langreport/plugin-sdk";
+import { evaluatePluginValidators, type ParsedPluginManifest, type ResolvedCapability } from "@langreport/plugin-sdk";
 
 export type GenerationInput = {
   prompt: string;
@@ -19,6 +21,8 @@ export type GenerationInput = {
   memoryContext?: MemoryContext;
   theme?: FlintSpec["theme"];
   themeVersion?: string;
+  themeConfig?: Record<string, unknown>;
+  pluginThemeRef?: PluginThemeRef | null;
   pluginManifests?: ParsedPluginManifest[];
 };
 
@@ -29,6 +33,7 @@ export type GenerationArtifacts = {
   flintSpec: FlintSpec;
   validation: ValidationReport;
   repairCount: number;
+  pluginUsage: PluginUsage;
 };
 
 const DATE_NAME_HINTS = ["日期", "时间", "月份", "月", "季度", "年份", "年", "date", "month", "time", "year"];
@@ -131,6 +136,7 @@ export function generateFlintSpec(input: {
   transform: TransformResult;
   theme?: FlintSpec["theme"];
   themeVersion?: string;
+  themeConfig?: Record<string, unknown>;
   chartTypeOverride?: FlintSpec["chartSpec"]["chartType"];
 }): FlintSpec {
   const { intent, transform } = input;
@@ -167,7 +173,8 @@ export function generateFlintSpec(input: {
       baseSize: { width: 920, height: 520 }
     },
     theme: input.theme ?? "economist",
-    themeVersion: input.themeVersion ?? "v1"
+    themeVersion: input.themeVersion ?? "v1",
+    themeConfig: input.themeConfig ?? {}
   });
 }
 
@@ -206,38 +213,57 @@ export function validateFlintSpec(specInput: unknown): ValidationReport {
 /** Run the deterministic generation path and retain a bounded repair count. */
 export function generateArtifacts(input: GenerationInput & { plan?: TransformPlan }): GenerationArtifacts {
   const intent = parseConversationIntent(input.prompt, input.profiles);
-  const pluginTemplate = selectPluginTemplate(input.prompt, input.pluginManifests ?? []);
+  const pluginManifests = input.pluginManifests ?? [];
+  const pluginTemplate = selectPluginTemplate(input.prompt, pluginManifests, "vega-lite");
   const pluginTemplateId = pluginTemplate?.id;
   const pluginChartType = pluginTemplate?.payload.chartType;
   const chartTypeOverride = pluginChartType === "Line Chart" || pluginChartType === "Bar Chart" || pluginChartType === "Area Chart" ? pluginChartType : undefined;
   let plan = input.plan ? transformPlanSchema.parse(input.plan) : generateTransformPlan(intent, input.profiles);
   let repairCount = 0;
   let transform = executeTransformPlan(plan, input.rows);
-  let flintSpec = generateFlintSpec({ intent, transform, theme: input.theme, themeVersion: input.themeVersion, chartTypeOverride });
+  const themeConfig = input.themeConfig ?? {};
+  let flintSpec = generateFlintSpec({ intent, transform, theme: input.theme, themeVersion: input.themeVersion, themeConfig, chartTypeOverride });
   let validation = validateFlintSpec(flintSpec);
   while (!validation.valid && repairCount < 2) {
     repairCount += 1;
     plan = repairPlan(plan, validation, input.profiles);
     transform = executeTransformPlan(plan, input.rows);
-    flintSpec = generateFlintSpec({ intent, transform, theme: input.theme, themeVersion: input.themeVersion, chartTypeOverride });
+    flintSpec = generateFlintSpec({ intent, transform, theme: input.theme, themeVersion: input.themeVersion, themeConfig, chartTypeOverride });
     validation = validateFlintSpec(flintSpec);
   }
-  validation = applyPluginValidation(validation, input.pluginManifests ?? [], {
+  const pluginSemanticTypes = semanticTypesFromPlugins(input.profiles, pluginManifests);
+  flintSpec = {
+    ...flintSpec,
+    semanticTypes: { ...flintSpec.semanticTypes, ...pluginSemanticTypes }
+  };
+  validation = applyPluginValidation(validation, pluginManifests, {
     templateId: pluginTemplateId,
     renderer: "vega-lite",
     columns: input.profiles.map((profile) => profile.name),
-    roles: rolesForIntent(intent),
+    roles: { ...rolesForIntent(intent), [flintSpec.chartSpec.encodings.y.field]: "measure" },
     semanticTypes: flintSpec.semanticTypes,
     nullRates: Object.fromEntries(input.profiles.map((profile) => [profile.name, input.rows.length ? profile.nullCount / input.rows.length : 0])),
     cardinalities: Object.fromEntries(input.profiles.map((profile) => [profile.name, profile.distinctCount]))
   });
-  return { intent, plan, transform, flintSpec, validation, repairCount };
+  const pluginUsage = buildPluginUsage({
+    manifests: pluginManifests,
+    template: pluginTemplate,
+    themeRef: input.pluginThemeRef ?? null,
+    semanticTypes: pluginSemanticTypes,
+    renderer: "vega-lite"
+  });
+  return { intent, plan, transform, flintSpec, validation, repairCount, pluginUsage };
 }
 
-function selectPluginTemplate(prompt: string, manifests: ParsedPluginManifest[]): ParsedPluginManifest["manifest"]["templates"][number] | undefined {
+function selectPluginTemplate(prompt: string, manifests: ParsedPluginManifest[], renderer: string): ParsedPluginManifest["manifest"]["templates"][number] | undefined {
   const normalized = prompt.toLocaleLowerCase();
+  const compact = normalized.replace(/[额]/g, "");
   for (const manifest of manifests) {
-    const template = manifest.manifest.templates.find((candidate) => candidate.intentHints.some((hint) => normalized.includes(hint.toLocaleLowerCase())));
+    const template = manifest.manifest.templates.find((candidate) => candidate.intentHints.some((hint) => {
+      const normalizedHint = hint.toLocaleLowerCase();
+      return (normalized.includes(normalizedHint) || compact.includes(normalizedHint.replace(/[额]/g, "")))
+        && (candidate.allowedRenderers.length === 0 || candidate.allowedRenderers.includes(renderer));
+    }));
     if (template) return template;
   }
   return undefined;
@@ -257,19 +283,81 @@ function applyPluginValidation(
   context: Parameters<typeof evaluatePluginValidators>[1]
 ): ValidationReport {
   if (manifests.length === 0) return base;
+  const template = context.templateId
+    ? manifests.flatMap((manifest) => manifest.manifest.templates).find((candidate) => candidate.id === context.templateId)
+    : undefined;
+  const requirementIssues: ValidationIssue[] = template?.requiredFields.flatMap((required) => {
+    const matching = Object.entries(context.roles ?? {}).some(([field, role]) => role === required.role && required.semanticTypes.some((type) => context.semanticTypes?.[field] === type));
+    return matching ? [] : [{ code: "PLUGIN_TEMPLATE_REQUIRED_FIELD_MISSING", message: `模板 ${template.name} 缺少 ${required.role} 角色或匹配的语义类型（${required.semanticTypes.join("、")}）`, severity: "error" as const, field: required.role }];
+  }) ?? [];
   const pluginIssues = manifests.flatMap((manifest) => evaluatePluginValidators(manifest, context));
-  if (pluginIssues.length === 0) return base;
-  const issues: ValidationIssue[] = pluginIssues.map((issue) => ({
+  if (pluginIssues.length === 0 && requirementIssues.length === 0) return base;
+  const issues: ValidationIssue[] = [...requirementIssues, ...pluginIssues.map((issue) => ({
     code: issue.code,
     message: `[${issue.pluginId}@${issue.pluginVersion}/${issue.validatorId}] ${issue.message}`,
     severity: issue.severity,
     field: issue.field
-  }));
+  }))];
   return {
     ...base,
-    valid: base.valid && !pluginIssues.some((issue) => issue.severity === "error"),
+    valid: base.valid && !requirementIssues.some((issue) => issue.severity === "error") && !pluginIssues.some((issue) => issue.severity === "error"),
     issues: [...base.issues, ...issues]
   };
+}
+
+function semanticTypesFromPlugins(profiles: ColumnProfile[], manifests: ParsedPluginManifest[]): Record<string, string> {
+  const declarations = manifests.flatMap((manifest) => manifest.manifest.semanticTypes);
+  const result: Record<string, string> = {};
+  for (const profile of profiles) {
+    const matched = declarations.find((declaration) => {
+      const field = profile.name.toLocaleLowerCase();
+      return declaration.examples.some((example) => profile.sampleValues.some((value) => String(value ?? "").toLocaleLowerCase() === example.toLocaleLowerCase()))
+        || field.includes(declaration.id.toLocaleLowerCase());
+    });
+    if (matched) result[profile.name] = matched.id;
+  }
+  return result;
+}
+
+function buildPluginUsage(input: {
+  manifests: ParsedPluginManifest[];
+  template: ParsedPluginManifest["manifest"]["templates"][number] | undefined;
+  themeRef: PluginThemeRef | null;
+  semanticTypes: Record<string, string>;
+  renderer: string;
+}): PluginUsage {
+  const all = input.manifests.flatMap((manifest) => manifest.capabilities);
+  const usedKeys = new Set<string>();
+  const selectedTemplate = input.template ? capabilityRefFor(all, "template", input.template.id) : null;
+  if (selectedTemplate) usedKeys.add(`${selectedTemplate.kind}:${selectedTemplate.id}`);
+  const selectedTheme = input.themeRef;
+  if (selectedTheme?.source === "plugin") usedKeys.add(`theme:${selectedTheme.capabilityId}`);
+  for (const semanticType of new Set(Object.values(input.semanticTypes))) {
+    if (capabilityRefFor(all, "semantic-type", semanticType)) usedKeys.add(`semantic-type:${semanticType}`);
+  }
+  for (const manifest of input.manifests) {
+    for (const validator of manifest.manifest.validators) {
+      if (!validator.when?.templateId || validator.when.templateId === input.template?.id) usedKeys.add(`validator:${validator.id}`);
+    }
+    if (manifest.manifest.compatibility.renderers.includes(input.renderer)) usedKeys.add(`renderer:${input.renderer}`);
+  }
+  const usedCapabilities = all.filter((capability) => usedKeys.has(capability.capabilityKey)).map(toCapabilityReference);
+  return {
+    version: "v1",
+    selectedTemplate,
+    selectedTheme,
+    usedCapabilities,
+    unusedCapabilities: all.filter((capability) => !usedKeys.has(capability.capabilityKey)).map(toCapabilityReference)
+  };
+}
+
+function capabilityRefFor(capabilities: ResolvedCapability[], kind: ResolvedCapability["kind"], id: string): PluginUsage["usedCapabilities"][number] | null {
+  const capability = capabilities.find((candidate) => candidate.kind === kind && candidate.id === id);
+  return capability ? toCapabilityReference(capability) : null;
+}
+
+function toCapabilityReference(capability: ResolvedCapability): PluginUsage["usedCapabilities"][number] {
+  return { kind: capability.kind, id: capability.id, pluginId: capability.pluginId, version: capability.version, contentHash: capability.contentHash };
 }
 
 function repairPlan(plan: TransformPlan, validation: ValidationReport, profiles: ColumnProfile[]): TransformPlan {

@@ -1,7 +1,7 @@
-import { and, asc, desc, eq, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
-import { chartRevisions, conversationMessages, conversations, db, dataAssets, evidenceBlocks, generationJobs, projects } from "@langreport/db";
-import { flintSpecSchema, memoryContextSchema, pluginContextSchema, validationReportSchema, type FlintSpec, type ValidationReport } from "@langreport/contracts";
+import { chartRevisions, conversationMessages, conversations, db, dataAssets, evidenceBlocks, generationJobs, projects, withAdvisoryLock } from "@langreport/db";
+import { flintSpecSchema, memoryContextSchema, pluginContextSchema, pluginUsageSchema, validationReportSchema, type FlintSpec, type ValidationReport } from "@langreport/contracts";
 import { createDerivedRevision, createInitialRevision } from "@langreport/chart";
 import { renderChart, FLINT_VERSION, RENDERER_VERSION } from "@langreport/flint-adapter";
 import { buildPluginSnapshot, PluginServiceError } from "@langreport/plugins";
@@ -12,6 +12,10 @@ const pollIntervalMs = Number(process.env.RENDER_POLL_INTERVAL_MS ?? 1000);
 let polling = false;
 
 export async function processRenderJob(jobId: string): Promise<void> {
+  await withAdvisoryLock(`generation-render:${jobId}`, () => processRenderJobLocked(jobId));
+}
+
+async function processRenderJobLocked(jobId: string): Promise<void> {
   const [record] = await db
     .select({
       job: generationJobs,
@@ -26,6 +30,25 @@ export async function processRenderJob(jobId: string): Promise<void> {
   if (!record || record.job.status !== "rendering") return;
 
   try {
+    const [existingRevision] = await db.select().from(chartRevisions)
+      .where(eq(chartRevisions.generationJobId, record.job.id)).limit(1);
+    if (existingRevision) {
+      const spec = flintSpecSchema.parse(existingRevision.flintSpec);
+      const validation = validationReportSchema.parse(existingRevision.validation);
+      await persistEvidenceBlock({ job: record.job, revision: existingRevision, spec, validation });
+      await db.update(generationJobs).set({
+        status: "succeeded",
+        outputs: existingRevision.outputObjects,
+        vegaLiteSpec: existingRevision.vegaLiteSpec,
+        errorCode: null,
+        errorMessage: null,
+        updatedAt: new Date()
+      }).where(and(
+        eq(generationJobs.id, jobId),
+        or(eq(generationJobs.status, "rendering"), eq(generationJobs.status, "validating"))
+      ));
+      return;
+    }
     const validation = validationReportSchema.safeParse(record.job.validation);
     if (!validation.success || !validation.data.valid) {
       await failRenderJob(jobId, "VALIDATION_FAILED", "渲染前校验未通过");
@@ -40,8 +63,11 @@ export async function processRenderJob(jobId: string): Promise<void> {
     const [sourceRevision] = record.job.operation === "edit" && record.job.baseRevisionId
       ? await db.select({ pluginSnapshot: chartRevisions.pluginSnapshot }).from(chartRevisions).where(eq(chartRevisions.id, record.job.baseRevisionId)).limit(1)
       : [];
-    const pluginSnapshot = parsedPluginContext.success
-      ? await buildPluginSnapshot({ workspaceId: record.workspaceId, context: parsedPluginContext.data, rendererVersion: RENDERER_VERSION })
+    const pluginUsage = pluginUsageSchema.safeParse(record.job.pluginUsage);
+    const pluginSnapshot = record.job.operation === "edit" && sourceRevision?.pluginSnapshot
+      ? sourceRevision.pluginSnapshot
+      : parsedPluginContext.success
+      ? await buildPluginSnapshot({ workspaceId: record.workspaceId, context: parsedPluginContext.data, rendererVersion: RENDERER_VERSION, usedCapabilities: pluginUsage.success ? pluginUsage.data.usedCapabilities : undefined })
       : sourceRevision?.pluginSnapshot ?? {};
     const rendered = await renderChart(spec);
     const outputBase = {
@@ -79,7 +105,7 @@ export async function processRenderJob(jobId: string): Promise<void> {
           id: spec.theme,
           preset: spec.theme,
           version: spec.themeVersion,
-          config: record.job.themeConfig,
+          config: spec.themeConfig,
           source: record.job.themeSource,
           themeRef: parsedPluginContext.success ? parsedPluginContext.data.themeRef : null
         },
@@ -104,7 +130,7 @@ export async function processRenderJob(jobId: string): Promise<void> {
           id: spec.theme,
           preset: spec.theme,
           version: spec.themeVersion,
-          config: record.job.themeConfig,
+          config: spec.themeConfig,
           source: record.job.themeSource,
           themeRef: parsedPluginContext.success ? parsedPluginContext.data.themeRef : null
         },
@@ -211,7 +237,7 @@ async function pollOnce(): Promise<void> {
     if (!candidate) return;
     const [claimed] = await db
       .update(generationJobs)
-      .set({ attemptCount: sql`${generationJobs.attemptCount} + 1`, updatedAt: new Date() })
+      .set({ updatedAt: new Date() })
       .where(and(eq(generationJobs.id, candidate.id), eq(generationJobs.status, "rendering")))
       .returning({ id: generationJobs.id });
     if (claimed) await processRenderJob(claimed.id);
@@ -256,8 +282,10 @@ function hasPluginContext(value: unknown): boolean {
   return typeof value === "object" && value !== null && !Array.isArray(value) && Object.keys(value).length > 0;
 }
 
-console.log(`${workerName} ready; polling rendering Generation Jobs.`);
-void pollOnce().catch((error) => console.error(`${workerName} initial poll failed`, error));
-setInterval(() => {
-  void pollOnce().catch((error) => console.error(`${workerName} poll failed`, error));
-}, pollIntervalMs);
+if (process.env.LANGREPORT_WORKER_TEST !== "1") {
+  console.log(`${workerName} ready; polling rendering Generation Jobs.`);
+  void pollOnce().catch((error) => console.error(`${workerName} initial poll failed`, error));
+  setInterval(() => {
+    void pollOnce().catch((error) => console.error(`${workerName} poll failed`, error));
+  }, pollIntervalMs);
+}

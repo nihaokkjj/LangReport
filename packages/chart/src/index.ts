@@ -538,26 +538,31 @@ export async function getProjectTheme(projectId: string, userId: string) {
 }
 
 export async function updateProjectTheme(projectId: string, userId: string, input: ProjectThemeInput) {
-  await assertChartAction(projectId, userId, "manage_theme");
+  const access = await assertChartAction(projectId, userId, "manage_theme");
   const parsed = projectThemeSchema.parse(input);
-  const [existing] = await db.select().from(projectThemes).where(eq(projectThemes.projectId, projectId)).limit(1);
-  if (parsed.expectedVersion !== undefined && existing && parsed.expectedVersion !== existing.version) {
-    throw new ChartServiceError("THEME_CONFLICT", "Project Theme 已被其他用户更新", 409);
-  }
-  const nextVersion = (existing?.version ?? 0) + 1;
-  const theme = existing
-    ? (await db.update(projectThemes).set({ preset: parsed.preset, themeRef: parsed.themeRef ?? null, config: parsed.config, version: nextVersion, updatedBy: userId, updatedAt: new Date() }).where(eq(projectThemes.projectId, projectId)).returning())[0]
-    : (await db.insert(projectThemes).values({ projectId, preset: parsed.preset, themeRef: parsed.themeRef ?? null, config: parsed.config, version: nextVersion || 1, updatedBy: userId }).returning())[0];
-  await writeAudit(db, {
-    workspaceId: (await getProjectAccess(projectId, userId)).workspaceId,
-    projectId,
-    actorId: userId,
-    action: "project_theme.updated",
-    entityType: "project_theme",
-    entityId: projectId,
-    metadata: { version: theme.version, preset: theme.preset }
+  return db.transaction(async (tx) => {
+    await tx.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId)).for("update").limit(1);
+    const [existing] = await tx.select().from(projectThemes).where(eq(projectThemes.projectId, projectId)).limit(1);
+    const currentVersion = existing?.version ?? 1;
+    if (parsed.expectedVersion !== undefined && parsed.expectedVersion !== currentVersion) {
+      throw new ChartServiceError("THEME_CONFLICT", "Project Theme 已被其他用户更新", 409);
+    }
+    const nextVersion = existing ? existing.version + 1 : 1;
+    const theme = existing
+      ? (await tx.update(projectThemes).set({ preset: parsed.preset, themeRef: parsed.themeRef ?? null, config: parsed.config, version: nextVersion, updatedBy: userId, updatedAt: new Date() }).where(eq(projectThemes.projectId, projectId)).returning())[0]
+      : (await tx.insert(projectThemes).values({ projectId, preset: parsed.preset, themeRef: parsed.themeRef ?? null, config: parsed.config, version: nextVersion, updatedBy: userId }).returning())[0];
+    if (!theme) throw new ChartServiceError("THEME_UPDATE_FAILED", "Project Theme 保存失败", 500);
+    await writeAudit(tx, {
+      workspaceId: access.workspaceId,
+      projectId,
+      actorId: userId,
+      action: "project_theme.updated",
+      entityType: "project_theme",
+      entityId: projectId,
+      metadata: { version: theme.version, preset: theme.preset }
+    });
+    return theme;
   });
-  return theme;
 }
 
 export async function createShare(input: { revisionId: string; userId: string; expiresAt?: Date }) {

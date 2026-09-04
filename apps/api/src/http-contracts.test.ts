@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { routeContracts } from "@langreport/contracts/http";
+import { getRouteContract, routeContracts } from "@langreport/contracts/http";
 import { buildApp } from "./app.js";
-import { isDevBootstrapAllowed } from "./http-contracts.js";
+import { isDevBootstrapAllowed, runtimeRouteSchema } from "./http-contracts.js";
 
 test("development bootstrap is disabled in production", () => {
   assert.equal(isDevBootstrapAllowed({ NODE_ENV: "production" }), false);
@@ -20,4 +20,10 @@ test("Fastify registers every route with its HTTP contract", async () => {
   } finally {
     await app.close();
   }
+});
+
+test("multipart upload keeps its OpenAPI body but skips Fastify JSON body validation", () => {
+  const contract = getRouteContract("POST", "/api/v1/projects/:projectId/data-assets/upload");
+  assert.ok(contract);
+  assert.equal(runtimeRouteSchema(contract).body, undefined);
 });

@@ -165,7 +165,7 @@ export function buildCapabilityCatalog(manifests: readonly ParsedPluginManifest[
     grouped.set(capability.capabilityKey, group);
   }
   const conflicts = [...grouped.entries()]
-    .filter(([, records]) => new Set(records.map((record) => `${record.pluginId}@${record.version}`)).size > 1)
+    .filter(([capabilityKey, records]) => !capabilityKey.startsWith("renderer:") && new Set(records.map((record) => `${record.pluginId}@${record.version}`)).size > 1)
     .map(([capabilityKey, records]) => ({
       capabilityKey,
       sources: records.map(({ kind, id, pluginId, version, contentHash }) => ({ kind, id, pluginId, version, contentHash }))

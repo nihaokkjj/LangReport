@@ -13,6 +13,7 @@ packages/db/drizzle/*
 !packages/db/drizzle/0002_organic_praxagora.sql
 !packages/db/drizzle/0003_polite_maddog.sql
 !packages/db/drizzle/0004_thin_warstar.sql
+!packages/db/drizzle/0010_plugin_usage.sql
 !packages/db/drizzle/meta/
 packages/db/drizzle/meta/*
 !packages/db/drizzle/meta/_journal.json

@@ -148,6 +148,7 @@ Plugin Manifest 只能声明模板、Theme、语义、校验器、示例和平�
 ## 11. 可靠性与安全
 
 - 每个 Generation Job 和 Render Job 都必须有幂等键、状态、重试次数和错误分类。
+- Render Worker 对同一个 Generation Job 使用 PostgreSQL advisory lock 做 single-flight；跨进程并发调用不能重复创建 Chart Revision，未取得锁的调用交给后续轮询。
 - Approved Chart Revision 不可变；任何修改都产生新 Revision。
 - 模型默认只接收字段摘要、统计信息和少量脱敏样本。
 - 完整原始数据只通过受控 Worker 权限访问，不直接暴露给浏览器或模型供应商。

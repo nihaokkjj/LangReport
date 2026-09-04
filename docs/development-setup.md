@@ -88,6 +88,9 @@ POST /api/v1/projects/:projectId/generation-jobs
 GET  /api/v1/generation-jobs/:jobId
     查询任务状态、Intent、TransformPlan、字段血缘、Flint Spec 和校验结果
 
+POST /api/v1/generation-jobs/:jobId/retry
+    重新入队可恢复的生成/渲染失败任务；确定性失败和超过三次尝试会被拒绝
+
 GET  /api/v1/generation-jobs/:jobId/outputs/:format
     下载 png、svg 或 vegaLite 输出
 ```
@@ -127,6 +130,14 @@ pnpm --filter @langreport/db db:migrate
 ```
 
 提交 migration 文件，不要在共享环境直接依赖 `db:push`。
+
+发布前可以用隔离 schema 重放完整迁移链，并验证 Phase 2–4 历史 Job、Revision、Project Theme 在新增插件字段后的默认值和原值：
+
+```powershell
+pnpm db:verify
+```
+
+该命令只创建并删除 `migration_verify_*` 临时 schema，不会修改现有业务表；它还会校验迁移文件与 Drizzle journal 一致，并检查 Phase 5 的部分唯一索引仍存在。
 
 ## 7. 阶段 2 实现顺序
 

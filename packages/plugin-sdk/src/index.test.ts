@@ -118,6 +118,12 @@ test("capability catalog reports duplicate capability keys with all sources", ()
   assert.equal(catalog.capabilities.filter((item) => item.capabilityKey === "template:monthly-regional-sales").length, 2);
 });
 
+test("shared renderer compatibility does not create a capability conflict", () => {
+  const first = parseManifest(manifest);
+  const second = parseManifest({ ...manifest, metadata: { ...manifest.metadata, id: "sales-ops" } });
+  assert.equal(buildCapabilityCatalog([first, second]).conflicts.some((item) => item.capabilityKey === "renderer:vega-lite"), false);
+});
+
 test("validator DSL reports structured issues without executing code", () => {
   const parsed = parseManifest({
     ...manifest,

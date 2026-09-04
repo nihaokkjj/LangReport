@@ -35,6 +35,8 @@ import {
 import { chartRevisions, conversations, conversationMessages, dataAssets, dataSnapshots, db, generationJobs } from "@langreport/db";
 import { getObject } from "@langreport/storage";
 import { sendHttpError } from "./http-errors.js";
+import { AuthenticationError, userIdFromRequest } from "./auth.js";
+import { assertProjectThemeReference, PluginServiceError } from "@langreport/plugins";
 
 const RENDERER_VERSION = "vega-lite-svg-v1";
 
@@ -227,7 +229,9 @@ export async function registerChartRoutes(app: FastifyInstance): Promise<void> {
   app.put<{ Params: { projectId: string } }>("/api/v1/projects/:projectId/theme", async (request, reply) => {
     try {
       const body = projectThemeSchema.parse(request.body);
-      return reply.send({ theme: await updateProjectTheme(request.params.projectId, userIdFromRequest(request), body) });
+      const userId = userIdFromRequest(request);
+      await assertProjectThemeReference({ projectId: request.params.projectId, userId, themeRef: body.themeRef ?? null, requestId: request.id });
+      return reply.send({ theme: await updateProjectTheme(request.params.projectId, userId, body) });
     } catch (error) {
       return sendChartError(reply, error);
     }
@@ -322,16 +326,13 @@ async function createEditConversation(projectId: string, revision: number, userI
   return conversation.id;
 }
 
-function userIdFromRequest(request: { headers: Record<string, string | string[] | undefined> }): string {
-  const value = request.headers["x-user-id"];
-  return typeof value === "string" && value.trim() ? value.trim() : "local-dev-user";
-}
-
 function fingerprintFor(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 function sendChartError(reply: FastifyReply, error: unknown) {
+  if (error instanceof AuthenticationError) return sendHttpError(reply, error.statusCode, error.message, error.code);
+  if (error instanceof PluginServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code, error.details);
   if (error instanceof ChartServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code);
   if (error instanceof Error && error.name === "ZodError") return sendHttpError(reply, 400, error.message, "INVALID_INPUT");
   return sendHttpError(reply, 500, "图表处理失败", "CHART_ERROR");

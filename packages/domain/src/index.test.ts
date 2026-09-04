@@ -25,7 +25,8 @@ const spec: FlintSpec = {
     baseSize: { width: 920, height: 520 }
   },
   theme: "economist",
-  themeVersion: "v1"
+  themeVersion: "v1",
+  themeConfig: {}
 };
 
 test("only legal revision transitions are accepted", () => {

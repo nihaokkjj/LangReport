@@ -12,15 +12,18 @@
   --navy: #1f1d3d;
   --magenta: #ff3d8b;
   --success: #1ea64a;
-  --sans: Inter, "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  /* DESIGN.md's open-source substitutes for figmaSans and figmaMono. */
+  --font-sans: "Inter", "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --sans: var(--font-sans);
+  --mono: var(--font-mono);
   --left-rail: 250px;
   --right-rail: 320px;
 }
 
 * { box-sizing: border-box; }
 html { min-width: 320px; background: var(--canvas); }
-body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--sans); font-weight: 330; -webkit-font-smoothing: antialiased; }
+body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-weight: 330; font-feature-settings: "kern"; -webkit-font-smoothing: antialiased; }
 button, input, textarea, select { font: inherit; }
 button { color: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .42; }
@@ -51,8 +54,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .menu-create { display: block; margin-top: 4px; border-top: 1px solid var(--hairline); border-radius: 0; padding: 12px 8px 8px; }
 .menu-create:hover { background: var(--lilac); }
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
+.plugin-link { border-bottom: 1px solid var(--ink); padding: 2px 0; color: inherit; font-size: 11px; text-decoration: none; }
+.plugin-link:hover { background: var(--lime); }
 .connection-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
 .connection-dot.attention { background: var(--magenta); animation: pulse 1s ease-in-out infinite alternate; }
+.plugin-trace-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--hairline); background: var(--cream); padding: 10px clamp(16px, 3vw, 48px); }
+.plugin-trace-banner strong { display: block; margin-top: 4px; font-size: 12px; font-weight: 540; }
+.plugin-trace-banner > div > span { display: block; margin-top: 4px; font-size: 11px; line-height: 1.45; }
+.plugin-trace-error { background: var(--pink); }
+.plugin-trace-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; font-family: var(--mono); font-size: 9px; letter-spacing: .25px; }
+.plugin-trace-meta span { border: 1px solid rgba(0,0,0,.15); border-radius: 50px; padding: 5px 8px; }
 .rail-toggle, .mobile-inspector-button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: var(--surface); font-size: 20px; line-height: 1; }
 .rail-toggle:hover, .mobile-inspector-button:hover { background: var(--lime); }
 .mobile-inspector-button { display: none; font-size: 15px; }

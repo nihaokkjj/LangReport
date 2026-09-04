@@ -15,7 +15,10 @@ import {
   pluginInstallations,
   pluginManifests,
   projectPluginBindings,
-  members
+  projectMembers,
+  members,
+  projects,
+  workspaces
 } from "@langreport/db";
 import {
   DEFAULT_FLINT_ADAPTER_VERSION,
@@ -86,26 +89,35 @@ export async function installPlugin(input: {
   manifest: unknown;
   source?: PluginManifestSource;
   idempotencyKey: string;
+  requestId?: string;
 }) {
-  await assertWorkspaceAdmin(input.workspaceId, input.userId);
-  const source = input.source ?? "uploaded";
-  const parsed = validatePluginManifest(input.manifest, {
-    flintAdapterVersion: DEFAULT_FLINT_ADAPTER_VERSION,
-    supportedRenderers: [DEFAULT_RENDERER]
-  }).parsed;
-  if (source === "builtin") {
-    const builtin = loadBuiltinManifests().find((candidate) => candidate.contentHash === parsed.contentHash);
-    if (!builtin) throw new PluginServiceError("PLUGIN_BUILTIN_NOT_FOUND", "只能安装平台内置目录中的精确插件版本", 400);
-  }
+  return withPluginFailureAudit({ workspaceId: input.workspaceId, actorId: input.userId, operation: "install", requestId: input.requestId }, async () => {
+    await assertWorkspaceAdmin(input.workspaceId, input.userId);
+    const source = input.source ?? "uploaded";
+    const parsed = validatePluginManifest(input.manifest, {
+      flintAdapterVersion: DEFAULT_FLINT_ADAPTER_VERSION,
+      supportedRenderers: [DEFAULT_RENDERER]
+    }).parsed;
+    if (source === "builtin") {
+      const builtin = loadBuiltinManifests().find((candidate) => candidate.contentHash === parsed.contentHash);
+      if (!builtin) throw new PluginServiceError("PLUGIN_BUILTIN_NOT_FOUND", "只能安装平台内置目录中的精确插件版本", 400);
+    }
 
-  return db.transaction(async (tx) => {
+    return db.transaction(async (tx) => {
+    await tx.select({ id: workspaces.id }).from(workspaces)
+      .where(eq(workspaces.id, input.workspaceId)).for("update").limit(1);
     const [sameIdempotency] = await tx.select().from(pluginInstallations).where(and(
       eq(pluginInstallations.workspaceId, input.workspaceId),
       eq(pluginInstallations.idempotencyKey, input.idempotencyKey)
     )).limit(1);
     if (sameIdempotency) {
       if (sameIdempotency.contentHash !== parsed.contentHash) throw new PluginServiceError("IDEMPOTENCY_CONFLICT", "安装幂等键已经用于另一个插件版本", 409);
-      return { installation: sameIdempotency, reused: true, parsed };
+      return {
+        installation: sameIdempotency,
+        reused: true,
+        parsed,
+        auditEventId: await latestAuditEventId(tx, input.workspaceId, "plugin_installation", sameIdempotency.id, ["plugin.installed", "plugin.restored"])
+      };
     }
 
     const [existingManifest] = await tx.select().from(pluginManifests).where(and(
@@ -160,10 +172,15 @@ export async function installPlugin(input: {
           updatedAt: new Date(),
           idempotencyKey: input.idempotencyKey
         }).where(eq(pluginInstallations.id, existingInstallation.id)).returning();
-        await writeAudit(tx, input.workspaceId, undefined, input.userId, "plugin.restored", "plugin_installation", restored.id, { pluginId: parsed.pluginId, version: parsed.version, contentHash: parsed.contentHash });
-        return { installation: restored, reused: false, parsed };
+        const auditEventId = await writeAudit(tx, input.workspaceId, undefined, input.userId, "plugin.restored", "plugin_installation", restored.id, { pluginId: parsed.pluginId, version: parsed.version, contentHash: parsed.contentHash }, input.requestId);
+        return { installation: restored, reused: false, parsed, auditEventId };
       }
-      return { installation: existingInstallation, reused: true, parsed };
+      return {
+        installation: existingInstallation,
+        reused: true,
+        parsed,
+        auditEventId: await latestAuditEventId(tx, input.workspaceId, "plugin_installation", existingInstallation.id, ["plugin.installed", "plugin.restored"])
+      };
     }
 
     const [installation] = await tx.insert(pluginInstallations).values({
@@ -178,40 +195,49 @@ export async function installPlugin(input: {
       lastCompatibilityCheck: parsed.validationReport
     }).returning();
     if (!installation) throw new PluginServiceError("PLUGIN_INSTALL_FAILED", "插件安装记录保存失败", 500);
-    await writeAudit(tx, input.workspaceId, undefined, input.userId, "plugin.installed", "plugin_installation", installation.id, { manifestId: manifestRecord.id, pluginId: parsed.pluginId, version: parsed.version, contentHash: parsed.contentHash });
-    return { installation, reused: false, parsed };
+    const auditEventId = await writeAudit(tx, input.workspaceId, undefined, input.userId, "plugin.installed", "plugin_installation", installation.id, { manifestId: manifestRecord.id, pluginId: parsed.pluginId, version: parsed.version, contentHash: parsed.contentHash }, input.requestId);
+    return { installation, reused: false, parsed, auditEventId };
+    });
   });
 }
 
-export async function listWorkspacePlugins(workspaceId: string, userId: string) {
-  await assertWorkspaceMember(workspaceId, userId);
-  return db.select({ installation: pluginInstallations, manifest: pluginManifests })
-    .from(pluginInstallations)
-    .innerJoin(pluginManifests, eq(pluginManifests.id, pluginInstallations.manifestId))
-    .where(eq(pluginInstallations.workspaceId, workspaceId))
-    .orderBy(desc(pluginInstallations.updatedAt));
+export async function listWorkspacePlugins(workspaceId: string, userId: string, requestId?: string) {
+  return withPluginFailureAudit({ workspaceId, actorId: userId, operation: "list_workspace", entityId: workspaceId, requestId }, async () => {
+    await assertWorkspacePluginViewer(workspaceId, userId);
+    return db.select({ installation: pluginInstallations, manifest: pluginManifests })
+      .from(pluginInstallations)
+      .innerJoin(pluginManifests, eq(pluginManifests.id, pluginInstallations.manifestId))
+      .where(eq(pluginInstallations.workspaceId, workspaceId))
+      .orderBy(desc(pluginInstallations.updatedAt));
+  });
 }
 
-export async function getWorkspacePlugin(input: { workspaceId: string; installationId: string; userId: string }) {
-  await assertWorkspaceMember(input.workspaceId, input.userId);
-  const [record] = await db.select({ installation: pluginInstallations, manifest: pluginManifests })
-    .from(pluginInstallations)
-    .innerJoin(pluginManifests, eq(pluginManifests.id, pluginInstallations.manifestId))
-    .where(and(eq(pluginInstallations.workspaceId, input.workspaceId), eq(pluginInstallations.id, input.installationId)))
-    .limit(1);
-  if (!record) throw new PluginServiceError("PLUGIN_NOT_FOUND", "插件安装不存在", 404);
-  return record;
+export async function getWorkspacePlugin(input: { workspaceId: string; installationId: string; userId: string; requestId?: string }) {
+  return withPluginFailureAudit({ workspaceId: input.workspaceId, actorId: input.userId, operation: "read_workspace", entityId: input.installationId, requestId: input.requestId }, async () => {
+    await assertWorkspacePluginViewer(input.workspaceId, input.userId);
+    const [record] = await db.select({ installation: pluginInstallations, manifest: pluginManifests })
+      .from(pluginInstallations)
+      .innerJoin(pluginManifests, eq(pluginManifests.id, pluginInstallations.manifestId))
+      .where(and(eq(pluginInstallations.workspaceId, input.workspaceId), eq(pluginInstallations.id, input.installationId)))
+      .limit(1);
+    if (!record) throw new PluginServiceError("PLUGIN_NOT_FOUND", "插件安装不存在", 404);
+    return record;
+  });
 }
 
-export async function revokePluginInstallation(input: { workspaceId: string; installationId: string; userId: string; reason?: string }) {
-  await assertWorkspaceAdmin(input.workspaceId, input.userId);
-  return db.transaction(async (tx) => {
+export async function revokePluginInstallation(input: { workspaceId: string; installationId: string; userId: string; reason?: string; requestId?: string }) {
+  return withPluginFailureAudit({ workspaceId: input.workspaceId, actorId: input.userId, operation: "revoke", entityId: input.installationId, requestId: input.requestId }, async () => {
+    await assertWorkspaceAdmin(input.workspaceId, input.userId);
+    return db.transaction(async (tx) => {
     const [installation] = await tx.select().from(pluginInstallations).where(and(
       eq(pluginInstallations.id, input.installationId),
       eq(pluginInstallations.workspaceId, input.workspaceId)
-    )).limit(1);
+    )).for("update").limit(1);
     if (!installation) throw new PluginServiceError("PLUGIN_NOT_FOUND", "插件安装不存在", 404);
-    if (installation.status === "revoked") return installation;
+    if (installation.status === "revoked") return {
+      installation,
+      auditEventId: await latestAuditEventId(tx, input.workspaceId, "plugin_installation", installation.id, ["plugin.revoked"])
+    };
     const [revoked] = await tx.update(pluginInstallations).set({
       status: "revoked",
       revokedBy: input.userId,
@@ -219,6 +245,9 @@ export async function revokePluginInstallation(input: { workspaceId: string; ins
       revokeReason: input.reason ?? "管理员撤销",
       updatedAt: new Date()
     }).where(eq(pluginInstallations.id, installation.id)).returning();
+    const enabledBindings = await tx.select({ id: projectPluginBindings.id, projectId: projectPluginBindings.projectId })
+      .from(projectPluginBindings)
+      .where(and(eq(projectPluginBindings.installationId, installation.id), eq(projectPluginBindings.status, "enabled")));
     await tx.update(projectPluginBindings).set({
       status: "disabled",
       disabledBy: input.userId,
@@ -227,58 +256,80 @@ export async function revokePluginInstallation(input: { workspaceId: string; ins
       versionNumber: sql`${projectPluginBindings.versionNumber} + 1`,
       updatedAt: new Date()
     }).where(and(eq(projectPluginBindings.installationId, installation.id), eq(projectPluginBindings.status, "enabled")));
-    await writeAudit(tx, input.workspaceId, undefined, input.userId, "plugin.revoked", "plugin_installation", installation.id, { reason: input.reason ?? "管理员撤销" });
-    return revoked;
+    for (const binding of enabledBindings) {
+      await writeAudit(tx, input.workspaceId, binding.projectId, input.userId, "plugin.disabled", "project_plugin_binding", binding.id, {
+        installationId: installation.id,
+        pluginId: installation.pluginId,
+        version: installation.version,
+        contentHash: installation.contentHash,
+        reason: "插件安装已撤销"
+      }, input.requestId);
+    }
+    const auditEventId = await writeAudit(tx, input.workspaceId, undefined, input.userId, "plugin.revoked", "plugin_installation", installation.id, { reason: input.reason ?? "管理员撤销" }, input.requestId);
+    return { installation: revoked, auditEventId };
+    });
   });
 }
 
-export async function restorePluginInstallation(input: { workspaceId: string; installationId: string; userId: string }) {
-  await assertWorkspaceAdmin(input.workspaceId, input.userId);
-  const [record] = await db.select({ installation: pluginInstallations, manifest: pluginManifests })
-    .from(pluginInstallations)
-    .innerJoin(pluginManifests, eq(pluginManifests.id, pluginInstallations.manifestId))
-    .where(and(eq(pluginInstallations.id, input.installationId), eq(pluginInstallations.workspaceId, input.workspaceId)))
-    .limit(1);
-  if (!record) throw new PluginServiceError("PLUGIN_NOT_FOUND", "插件安装不存在", 404);
-  try {
-    const parsed = validatePluginManifest(record.manifest.manifest, {
-      flintAdapterVersion: DEFAULT_FLINT_ADAPTER_VERSION,
-      supportedRenderers: [DEFAULT_RENDERER]
-    }).parsed;
-    if (parsed.contentHash !== record.installation.contentHash) {
-      throw new PluginServiceError("PLUGIN_CONTEXT_INVALID", "插件 Manifest 内容哈希与安装记录不一致", 409, {
-        expectedHash: record.installation.contentHash,
-        actualHash: parsed.contentHash
-      });
+export async function restorePluginInstallation(input: { workspaceId: string; installationId: string; userId: string; requestId?: string }) {
+  return withPluginFailureAudit({ workspaceId: input.workspaceId, actorId: input.userId, operation: "restore", entityId: input.installationId, requestId: input.requestId }, async () => {
+    await assertWorkspaceAdmin(input.workspaceId, input.userId);
+    const result = await db.transaction(async (tx) => {
+    const [record] = await tx.select({ installation: pluginInstallations, manifest: pluginManifests })
+      .from(pluginInstallations)
+      .innerJoin(pluginManifests, eq(pluginManifests.id, pluginInstallations.manifestId))
+      .where(and(eq(pluginInstallations.id, input.installationId), eq(pluginInstallations.workspaceId, input.workspaceId)))
+      .for("update").limit(1);
+    if (!record) throw new PluginServiceError("PLUGIN_NOT_FOUND", "插件安装不存在", 404);
+    try {
+      const parsed = validatePluginManifest(record.manifest.manifest, {
+        flintAdapterVersion: DEFAULT_FLINT_ADAPTER_VERSION,
+        supportedRenderers: [DEFAULT_RENDERER]
+      }).parsed;
+      if (parsed.contentHash !== record.installation.contentHash) {
+        throw new PluginServiceError("PLUGIN_CONTEXT_INVALID", "插件 Manifest 内容哈希与安装记录不一致", 409, {
+          expectedHash: record.installation.contentHash,
+          actualHash: parsed.contentHash
+        });
+      }
+      const [restored] = await tx.update(pluginInstallations).set({
+        status: "installed",
+        installedBy: input.userId,
+        installedAt: new Date(),
+        lastCompatibilityCheck: parsed.validationReport,
+        revokedBy: null,
+        revokedAt: null,
+        revokeReason: null,
+        updatedAt: new Date()
+      }).where(eq(pluginInstallations.id, input.installationId)).returning();
+      if (!restored) throw new PluginServiceError("PLUGIN_INSTALL_FAILED", "插件恢复失败", 500);
+      const auditEventId = await writeAudit(tx, input.workspaceId, undefined, input.userId, "plugin.restored", "plugin_installation", input.installationId, { pluginId: restored.pluginId, version: restored.version }, input.requestId);
+      return { restored, error: undefined, auditEventId };
+    } catch (error) {
+      await tx.update(pluginInstallations).set({ status: "incompatible", updatedAt: new Date() }).where(eq(pluginInstallations.id, input.installationId));
+      return { restored: undefined, error, auditEventId: null };
     }
-    const [restored] = await db.update(pluginInstallations).set({
-      status: "installed",
-      installedBy: input.userId,
-      installedAt: new Date(),
-      lastCompatibilityCheck: parsed.validationReport,
-      revokedBy: null,
-      revokedAt: null,
-      revokeReason: null,
-      updatedAt: new Date()
-    }).where(eq(pluginInstallations.id, input.installationId)).returning();
-    await writeAudit(db, input.workspaceId, undefined, input.userId, "plugin.restored", "plugin_installation", input.installationId, { pluginId: restored.pluginId, version: restored.version });
-    return restored;
-  } catch (error) {
-    await db.update(pluginInstallations).set({ status: "incompatible", updatedAt: new Date() }).where(eq(pluginInstallations.id, input.installationId));
-    if (error instanceof PluginServiceError) throw error;
-    if (error instanceof Error) throw new PluginServiceError("PLUGIN_INCOMPATIBLE", error.message, 409);
-    throw error;
+  });
+  if (result.error !== undefined) {
+    if (result.error instanceof PluginServiceError) throw result.error;
+    if (result.error instanceof Error) throw new PluginServiceError("PLUGIN_INCOMPATIBLE", result.error.message, 409);
+    throw result.error;
   }
+  if (!result.restored) throw new PluginServiceError("PLUGIN_INSTALL_FAILED", "插件恢复失败", 500);
+    return { installation: result.restored, auditEventId: result.auditEventId };
+  });
 }
 
-export async function listProjectPlugins(projectId: string, userId: string) {
-  await getProjectAccess(projectId, userId);
-  return db.select({ binding: projectPluginBindings, installation: pluginInstallations, manifest: pluginManifests })
-    .from(projectPluginBindings)
-    .innerJoin(pluginInstallations, eq(pluginInstallations.id, projectPluginBindings.installationId))
-    .innerJoin(pluginManifests, eq(pluginManifests.id, pluginInstallations.manifestId))
-    .where(eq(projectPluginBindings.projectId, projectId))
-    .orderBy(desc(projectPluginBindings.updatedAt));
+export async function listProjectPlugins(projectId: string, userId: string, requestId?: string) {
+  return withPluginFailureAudit({ projectId, actorId: userId, operation: "list_project", entityId: projectId, requestId }, async () => {
+    await assertProjectPluginReader(projectId, userId);
+    return db.select({ binding: projectPluginBindings, installation: pluginInstallations, manifest: pluginManifests })
+      .from(projectPluginBindings)
+      .innerJoin(pluginInstallations, eq(pluginInstallations.id, projectPluginBindings.installationId))
+      .innerJoin(pluginManifests, eq(pluginManifests.id, pluginInstallations.manifestId))
+      .where(eq(projectPluginBindings.projectId, projectId))
+      .orderBy(desc(projectPluginBindings.updatedAt));
+  });
 }
 
 export async function setProjectPluginBinding(input: {
@@ -288,13 +339,17 @@ export async function setProjectPluginBinding(input: {
   enabled: boolean;
   expectedVersion?: number;
   idempotencyKey: string;
+  requestId?: string;
 }) {
-  const access = await getProjectAccess(input.projectId, input.userId);
-  if (!(access.effectiveRole === "owner" || access.effectiveRole === "admin" || access.effectiveRole === "editor")) {
-    throw new PluginServiceError("PLUGIN_SCOPE_FORBIDDEN", "当前角色不能修改 Project 插件", 403);
-  }
-  const request = pluginEnableRequestSchema.parse({ enabled: input.enabled, expectedVersion: input.expectedVersion, idempotencyKey: input.idempotencyKey });
-  return db.transaction(async (tx) => {
+  return withPluginFailureAudit({ projectId: input.projectId, actorId: input.userId, operation: input.enabled ? "enable" : "disable", entityId: input.installationId, requestId: input.requestId }, async () => {
+    const access = await getProjectAccess(input.projectId, input.userId);
+    if (!(access.effectiveRole === "owner" || access.effectiveRole === "admin" || access.effectiveRole === "editor")) {
+      throw new PluginServiceError("PLUGIN_SCOPE_FORBIDDEN", "当前角色不能修改 Project 插件", 403);
+    }
+    const request = pluginEnableRequestSchema.parse({ enabled: input.enabled, expectedVersion: input.expectedVersion, idempotencyKey: input.idempotencyKey });
+    return db.transaction(async (tx) => {
+    await tx.select({ id: projects.id }).from(projects)
+      .where(eq(projects.id, input.projectId)).for("update").limit(1);
     const [sameIdempotency] = await tx.select().from(projectPluginBindings).where(and(
       eq(projectPluginBindings.projectId, input.projectId),
       eq(projectPluginBindings.idempotencyKey, request.idempotencyKey)
@@ -303,7 +358,11 @@ export async function setProjectPluginBinding(input: {
       if (sameIdempotency.installationId !== input.installationId || sameIdempotency.status !== (request.enabled ? "enabled" : "disabled")) {
         throw new PluginServiceError("IDEMPOTENCY_CONFLICT", "启用/禁用幂等键已经用于另一种状态变更", 409);
       }
-      return { binding: sameIdempotency, reused: true };
+      return {
+        binding: sameIdempotency,
+        reused: true,
+        auditEventId: await latestAuditEventId(tx, access.workspaceId, "project_plugin_binding", sameIdempotency.id, ["plugin.enabled", "plugin.disabled"])
+      };
     }
     const [installation] = await tx.select({ installation: pluginInstallations, manifest: pluginManifests }).from(pluginInstallations)
       .innerJoin(pluginManifests, eq(pluginManifests.id, pluginInstallations.manifestId))
@@ -317,7 +376,11 @@ export async function setProjectPluginBinding(input: {
     if (existing && request.expectedVersion !== undefined && existing.versionNumber !== request.expectedVersion) {
       throw new PluginServiceError("PLUGIN_BINDING_CONFLICT", "Project 插件状态已经变化，请刷新后重试", 409);
     }
-    if (existing?.idempotencyKey === request.idempotencyKey && existing.status === (request.enabled ? "enabled" : "disabled")) return { binding: existing, reused: true };
+    if (existing?.idempotencyKey === request.idempotencyKey && existing.status === (request.enabled ? "enabled" : "disabled")) return {
+      binding: existing,
+      reused: true,
+      auditEventId: await latestAuditEventId(tx, access.workspaceId, "project_plugin_binding", existing.id, ["plugin.enabled", "plugin.disabled"])
+    };
 
     if (request.enabled) {
       const enabled = await tx.select({ binding: projectPluginBindings, manifest: pluginManifests, installation: pluginInstallations })
@@ -364,8 +427,9 @@ export async function setProjectPluginBinding(input: {
         contentHash: installation.installation.contentHash,
         ...values
       }).returning();
-    await writeAudit(tx, access.workspaceId, input.projectId, input.userId, request.enabled ? "plugin.enabled" : "plugin.disabled", "project_plugin_binding", binding.id, { installationId: input.installationId, pluginId: binding.pluginId, version: binding.version, contentHash: binding.contentHash });
-    return { binding, reused: false };
+    const auditEventId = await writeAudit(tx, access.workspaceId, input.projectId, input.userId, request.enabled ? "plugin.enabled" : "plugin.disabled", "project_plugin_binding", binding.id, { installationId: input.installationId, pluginId: binding.pluginId, version: binding.version, contentHash: binding.contentHash }, input.requestId);
+    return { binding, reused: false, auditEventId };
+    });
   });
 }
 
@@ -375,32 +439,50 @@ export async function resolveProjectPluginContext(input: {
   renderer?: string;
   flintAdapterVersion?: string;
   themeRef?: PluginThemeRef | null;
+  requestId?: string;
 }): Promise<{ context: PluginContext; manifests: ParsedPluginManifest[] }> {
-  const access = await getProjectAccess(input.projectId, input.userId);
-  const records = await enabledPluginRecords(input.projectId, access.workspaceId);
-  const parsed = records.map((record) => parseInstallationManifest(record.manifest.manifest, record.installation.contentHash, {
-    flintAdapterVersion: input.flintAdapterVersion ?? DEFAULT_FLINT_ADAPTER_VERSION,
-    supportedRenderers: [input.renderer ?? DEFAULT_RENDERER]
-  }));
-  validateThemeReference(input.themeRef ?? null, parsed);
-  const catalog = buildCapabilityCatalog(parsed);
-  if (catalog.conflicts.length > 0) throw new PluginServiceError("PLUGIN_CAPABILITY_CONFLICT", "Project 插件能力存在冲突", 409, catalog.conflicts);
-  const renderer = input.renderer ?? DEFAULT_RENDERER;
-  const context = pluginContextSchema.parse({
-    version: "v1",
-    flintAdapterVersion: input.flintAdapterVersion ?? DEFAULT_FLINT_ADAPTER_VERSION,
-    renderer,
-    enabledPlugins: records.map((record) => pluginInstallationReferenceSchema.parse({
-      installationId: record.installation.id,
-      pluginId: record.installation.pluginId,
-      version: record.installation.version,
-      contentHash: record.installation.contentHash
-    })),
-    capabilities: catalog.capabilities.map(({ kind, id, pluginId, version, contentHash }) => ({ kind, id, pluginId, version, contentHash })),
-    themeRef: input.themeRef ?? null,
-    conflicts: []
+  return withPluginFailureAudit({ projectId: input.projectId, actorId: input.userId, operation: "resolve", requestId: input.requestId }, async () => {
+    const access = await assertProjectPluginReader(input.projectId, input.userId);
+    const records = await enabledPluginRecords(input.projectId, access.workspaceId);
+    const parsed = records.map((record) => parseInstallationManifest(record.manifest.manifest, record.installation.contentHash, {
+      flintAdapterVersion: input.flintAdapterVersion ?? DEFAULT_FLINT_ADAPTER_VERSION,
+      supportedRenderers: [input.renderer ?? DEFAULT_RENDERER]
+    }));
+    validateThemeReference(input.themeRef ?? null, parsed);
+    const catalog = buildCapabilityCatalog(parsed);
+    if (catalog.conflicts.length > 0) throw new PluginServiceError("PLUGIN_CAPABILITY_CONFLICT", "Project 插件能力存在冲突", 409, catalog.conflicts);
+    const renderer = input.renderer ?? DEFAULT_RENDERER;
+    const context = pluginContextSchema.parse({
+      version: "v1",
+      flintAdapterVersion: input.flintAdapterVersion ?? DEFAULT_FLINT_ADAPTER_VERSION,
+      renderer,
+      enabledPlugins: records.map((record) => pluginInstallationReferenceSchema.parse({
+        installationId: record.installation.id,
+        pluginId: record.installation.pluginId,
+        version: record.installation.version,
+        contentHash: record.installation.contentHash
+      })),
+      capabilities: catalog.capabilities.map(({ kind, id, pluginId, version, contentHash }) => ({ kind, id, pluginId, version, contentHash })),
+      themeRef: input.themeRef ?? null,
+      conflicts: []
+    });
+    return { context, manifests: parsed };
   });
-  return { context, manifests: parsed };
+}
+
+export async function assertProjectThemeReference(input: {
+  projectId: string;
+  userId: string;
+  themeRef: PluginThemeRef | null;
+  requestId?: string;
+}): Promise<void> {
+  await withPluginFailureAudit({ projectId: input.projectId, actorId: input.userId, operation: "theme", requestId: input.requestId }, async () => {
+    const access = await assertProjectPluginReader(input.projectId, input.userId);
+    if (!input.themeRef) return;
+    const records = await enabledPluginRecords(input.projectId, access.workspaceId);
+    const parsed = records.map((record) => parseInstallationManifest(record.manifest.manifest, record.installation.contentHash));
+    validateThemeReference(input.themeRef, parsed);
+  });
 }
 
 export async function resolvePluginContextForWorkspace(workspaceId: string, contextInput: unknown) {
@@ -476,10 +558,29 @@ async function assertWorkspaceAdmin(workspaceId: string, userId: string): Promis
   if (!member || !(member.role === "owner" || member.role === "admin")) throw new PluginServiceError("PLUGIN_SCOPE_FORBIDDEN", "只有 Workspace Owner/Admin 可以管理插件", 403);
 }
 
-async function assertWorkspaceMember(workspaceId: string, userId: string): Promise<void> {
+async function assertWorkspacePluginViewer(workspaceId: string, userId: string): Promise<void> {
   const [member] = await db.select({ role: members.role }).from(members)
     .where(and(eq(members.workspaceId, workspaceId), eq(members.userId, userId))).limit(1);
   if (!member) throw new PluginServiceError("PLUGIN_SCOPE_FORBIDDEN", "无权访问当前 Workspace 插件", 404);
+  if (member.role === "owner" || member.role === "admin") return;
+  const [editorProject] = await db.select({ id: projects.id })
+    .from(projectMembers)
+    .innerJoin(projects, eq(projects.id, projectMembers.projectId))
+    .where(and(
+      eq(projects.workspaceId, workspaceId),
+      eq(projectMembers.userId, userId),
+      eq(projectMembers.role, "editor")
+    ))
+    .limit(1);
+  if (!editorProject) throw new PluginServiceError("PLUGIN_SCOPE_FORBIDDEN", "当前 Workspace 角色不能查看插件", 403);
+}
+
+async function assertProjectPluginReader(projectId: string, userId: string) {
+  const access = await getProjectAccess(projectId, userId);
+  if (access.effectiveRole === "viewer") {
+    throw new PluginServiceError("PLUGIN_SCOPE_FORBIDDEN", "Project Viewer 不能查看插件能力", 403);
+  }
+  return access;
 }
 
 function parseStoredManifest(input: unknown, options?: ParseManifestOptions): ParsedPluginManifest {
@@ -518,6 +619,81 @@ function validateThemeReference(themeRef: PluginThemeRef | null, manifests: Pars
   }
 }
 
-async function writeAudit(executor: any, workspaceId: string, projectId: string | undefined, actorId: string, action: string, entityType: string, entityId: string, metadata: Record<string, unknown>): Promise<void> {
-  await executor.insert(auditEvents).values({ workspaceId, projectId, actorId, action, entityType, entityId, metadata });
+type PluginFailureAuditContext = {
+  workspaceId?: string;
+  projectId?: string;
+  actorId: string;
+  operation: string;
+  entityId?: string;
+  requestId?: string;
+};
+
+async function withPluginFailureAudit<T>(context: PluginFailureAuditContext, action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    if (error instanceof PluginServiceError && (error.statusCode === 403 || error.statusCode === 409)) {
+      await writePluginFailureAudit(context, error).catch(() => undefined);
+    }
+    throw error;
+  }
+}
+
+async function writePluginFailureAudit(context: PluginFailureAuditContext, error: PluginServiceError): Promise<void> {
+  let workspaceId = context.workspaceId;
+  let projectId = context.projectId;
+  if (!workspaceId && projectId) {
+    const [project] = await db.select({ workspaceId: projects.workspaceId }).from(projects).where(eq(projects.id, projectId)).limit(1);
+    workspaceId = project?.workspaceId;
+  }
+  if (!workspaceId) return;
+  const [workspace] = await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
+  if (!workspace) return;
+  if (projectId) {
+    const [project] = await db.select({ id: projects.id }).from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, workspaceId))).limit(1);
+    projectId = project?.id;
+  }
+  await db.insert(auditEvents).values({
+    workspaceId,
+    projectId,
+    actorId: context.actorId,
+    action: error.statusCode === 403 ? "plugin.permission_denied" : "plugin.conflict",
+    entityType: "plugin_request",
+    entityId: context.entityId ?? context.projectId ?? context.workspaceId ?? "unknown",
+    metadata: { operation: context.operation, code: error.code, details: error.details ?? null },
+    requestId: context.requestId
+  });
+}
+
+async function latestAuditEventId(executor: any, workspaceId: string, entityType: string, entityId: string, actions: string[]): Promise<string | null> {
+  const actionFilter = actions.length === 1
+    ? eq(auditEvents.action, actions[0] as string)
+    : or(...actions.map((action) => eq(auditEvents.action, action)));
+  const [event] = await executor.select({ id: auditEvents.id }).from(auditEvents)
+    .where(and(
+      eq(auditEvents.workspaceId, workspaceId),
+      eq(auditEvents.entityType, entityType),
+      eq(auditEvents.entityId, entityId),
+      actionFilter
+    ))
+    .orderBy(desc(auditEvents.createdAt))
+    .limit(1);
+  return event?.id ?? null;
+}
+
+async function writeAudit(
+  executor: any,
+  workspaceId: string,
+  projectId: string | undefined,
+  actorId: string,
+  action: string,
+  entityType: string,
+  entityId: string,
+  metadata: Record<string, unknown>,
+  requestId?: string
+): Promise<string> {
+  const [event] = await executor.insert(auditEvents).values({ workspaceId, projectId, actorId, action, entityType, entityId, metadata, requestId }).returning({ id: auditEvents.id });
+  if (!event) throw new PluginServiceError("PLUGIN_AUDIT_FAILED", "插件审计事件保存失败", 500);
+  return event.id;
 }

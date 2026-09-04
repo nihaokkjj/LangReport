@@ -16,6 +16,7 @@ import {
   pluginEnableRequestSchema,
   pluginManifestSchema,
   pluginManifestValidationReportSchema,
+  pluginSnapshotSchema,
   projectThemeSchema,
   rejectMemoryCandidateRequestSchema,
   reviewNoteSchema,
@@ -128,6 +129,14 @@ const zodJson = (schema: ZodType): JsonSchema =>
 const commonHeaders: JsonSchema = {
   type: "object",
   properties: {
+    authorization: {
+      type: "string",
+      description: "生产环境可选的 Bearer HS256 JWT；用户身份以签名 Token 的 sub 为准"
+    },
+    cookie: {
+      type: "string",
+      description: "生产环境可选的 HttpOnly 会话 Cookie；名称由 AUTH_SESSION_COOKIE 配置"
+    },
     "x-user-id": {
       type: "string",
       minLength: 1,
@@ -309,6 +318,8 @@ const generationJobDto = dto({
   transformPlan: nullable(anyJson),
   fieldLineage: nullable(anyJson),
   flintSpec: nullable(anyJson),
+  pluginContext: anyJson,
+  pluginUsage: anyJson,
   validation: nullable(validationDto),
   vegaLiteSpec: nullable(anyJson),
   previewData: nullable(anyJson),
@@ -366,6 +377,7 @@ const revisionDto = dto({
   fieldLineage: anyJson,
   flintSpec: zodJson(flintSpecSchema),
   themeSnapshot: anyJson,
+  pluginSnapshot: zodJson(pluginSnapshotSchema),
   vegaLiteSpec: anyJson,
   validation: validationDto,
   outputObjects: anyJson,
@@ -447,18 +459,54 @@ const memoryCandidateDto = dto({
 }, ["id", "workspaceId", "projectId", "conversationId", "sourceMessageIds", "memoryKey", "memoryType", "statement", "value", "scopeHint", "confidence", "extractorVersion", "status", "version", "createdAt", "updatedAt"]);
 
 const pluginReportDto = zodJson(pluginManifestValidationReportSchema);
-const pluginRecordDto = dto({
+const pluginInstallationDto = dto({
   id: uuid(),
-  workspaceId: nullable(uuid()),
+  workspaceId: uuid(),
+  manifestId: uuid(),
   pluginId: string(),
   version: string(),
   contentHash: string(),
   status: string(),
-  name: string(),
-  description: nullable(string()),
+  installedBy: string(),
+  installedAt: dateTime(),
+  revokedBy: nullable(string()),
+  revokedAt: nullable(dateTime()),
+  revokeReason: nullable(string()),
+  idempotencyKey: string(),
+  lastCompatibilityCheck: anyJson,
   createdAt: dateTime(),
   updatedAt: nullable(dateTime())
 });
+const auditEventIdDto = nullable(uuid());
+const pluginManifestRowDto = dto({
+  id: uuid(),
+  workspaceId: nullable(uuid()),
+  source: string(),
+  pluginId: string(),
+  version: string(),
+  apiVersion: string(),
+  name: string(),
+  description: nullable(string()),
+  manifest: anyJson,
+  contentHash: string(),
+  validationStatus: string(),
+  validationReport: anyJson,
+  sourceObjectKey: nullable(string()),
+  createdBy: string(),
+  createdAt: dateTime()
+});
+const pluginRecordDto = dto({ installation: pluginInstallationDto, manifest: pluginManifestRowDto }, ["installation", "manifest"]);
+const pluginBindingResponseDto = dto({ binding: anyJson, reused: boolean(), auditEventId: auditEventIdDto }, ["binding", "reused", "auditEventId"]);
+const pluginCatalogDto = dto({
+  pluginId: string(),
+  version: string(),
+  name: string(),
+  description: nullable(string()),
+  contentHash: string(),
+  manifest: anyJson,
+  compatibility: anyJson,
+  capabilities: array(anyJson)
+}, ["pluginId", "version", "name", "description", "contentHash", "manifest", "compatibility", "capabilities"]);
 
 const themeDto = dto({
   projectId: uuid(),
@@ -554,15 +602,15 @@ export const routeContracts: RouteContract[] = [
   contract("GET", "/docs", "getSwaggerUi", ["Internal"], "打开标准 Swagger UI 调试页面", { 200: textResponse }, { internal: true, exposeInOpenApi: false, responseContentTypes: { 200: "text/html" } }),
   contract("GET", "/api/v1/projects", "listProjects", ["Projects"], "查询当前用户可访问的 Project", { 200: dto({ workspace: nullable(workspaceDto), projects: array(projectDto) }, ["workspace", "projects"]) }),
   contract("POST", "/api/v1/projects", "createProject", ["Projects"], "创建一个 Project", { 201: dto({ project: projectDto, workspaceId: uuid() }, ["project", "workspaceId"]) }, { request: { body: zodJson(createProjectRequestSchema) } }),
-  contract("GET", "/api/v1/workspaces/:workspaceId/plugin-catalog", "listPluginCatalog", ["Plugins"], "查询内置 Plugin Manifest 目录", { 200: dto({ plugins: array(pluginRecordDto) }, ["plugins"]) }),
+  contract("GET", "/api/v1/workspaces/:workspaceId/plugin-catalog", "listPluginCatalog", ["Plugins"], "查询内置 Plugin Manifest 目录", { 200: dto({ plugins: array(pluginCatalogDto) }, ["plugins"]) }),
   contract("POST", "/api/v1/workspaces/:workspaceId/plugins/validate", "validatePluginManifest", ["Plugins"], "校验 Plugin Manifest", { 200: dto({ summary: objectResponse, validationReport: pluginReportDto }, ["summary", "validationReport"]) }, { request: pathRequest("/api/v1/workspaces/:workspaceId/plugins/validate", { body: zodJson(pluginManifestSchema) }) }),
-  contract("POST", "/api/v1/workspaces/:workspaceId/plugins", "installPlugin", ["Plugins"], "安装一个 Plugin Manifest", { 201: dto({ installation: pluginRecordDto, summary: pluginReportDto, reused: boolean() }, ["installation", "summary", "reused"]), 200: dto({ installation: pluginRecordDto, summary: pluginReportDto, reused: boolean() }, ["installation", "summary", "reused"]) }, { request: pathRequest("/api/v1/workspaces/:workspaceId/plugins", { body: json({ manifest: objectResponse, source: { type: "string", enum: ["builtin", "uploaded"] }, idempotencyKey: string() }, ["manifest", "idempotencyKey"]) }) }),
+  contract("POST", "/api/v1/workspaces/:workspaceId/plugins", "installPlugin", ["Plugins"], "安装一个 Plugin Manifest", { 201: dto({ installation: pluginInstallationDto, summary: pluginReportDto, reused: boolean(), auditEventId: auditEventIdDto }, ["installation", "summary", "reused", "auditEventId"]), 200: dto({ installation: pluginInstallationDto, summary: pluginReportDto, reused: boolean(), auditEventId: auditEventIdDto }, ["installation", "summary", "reused", "auditEventId"]) }, { request: pathRequest("/api/v1/workspaces/:workspaceId/plugins", { body: json({ manifest: objectResponse, source: { type: "string", enum: ["builtin", "uploaded"] }, idempotencyKey: string() }, ["manifest", "idempotencyKey"]) }) }),
   contract("GET", "/api/v1/workspaces/:workspaceId/plugins", "listWorkspacePlugins", ["Plugins"], "查询 Workspace 已安装 Plugin", { 200: dto({ plugins: array(pluginRecordDto) }, ["plugins"]) }),
   contract("GET", "/api/v1/workspaces/:workspaceId/plugins/:installationId", "getWorkspacePlugin", ["Plugins"], "查询一个 Workspace Plugin", { 200: dto({ plugin: pluginRecordDto }, ["plugin"]) }),
-  contract("POST", "/api/v1/workspaces/:workspaceId/plugins/:installationId/revoke", "revokePluginInstallation", ["Plugins"], "撤销 Plugin 安装", { 200: dto({ installation: pluginRecordDto }, ["installation"]) }, { request: pathRequest("/api/v1/workspaces/:workspaceId/plugins/:installationId/revoke", { body: json({ reason: string() }) }) }),
-  contract("POST", "/api/v1/workspaces/:workspaceId/plugins/:installationId/restore", "restorePluginInstallation", ["Plugins"], "恢复 Plugin 安装", { 200: dto({ installation: pluginRecordDto }, ["installation"]) }),
+  contract("POST", "/api/v1/workspaces/:workspaceId/plugins/:installationId/revoke", "revokePluginInstallation", ["Plugins"], "撤销 Plugin 安装", { 200: dto({ installation: pluginInstallationDto, auditEventId: auditEventIdDto }, ["installation", "auditEventId"]) }, { request: pathRequest("/api/v1/workspaces/:workspaceId/plugins/:installationId/revoke", { body: json({ reason: string() }) }) }),
+  contract("POST", "/api/v1/workspaces/:workspaceId/plugins/:installationId/restore", "restorePluginInstallation", ["Plugins"], "恢复 Plugin 安装", { 200: dto({ installation: pluginInstallationDto, auditEventId: auditEventIdDto }, ["installation", "auditEventId"]) }),
   contract("GET", "/api/v1/projects/:projectId/plugins", "listProjectPlugins", ["Plugins"], "查询 Project 已安装 Plugin", { 200: dto({ plugins: array(pluginRecordDto) }, ["plugins"]) }),
-  contract("PUT", "/api/v1/projects/:projectId/plugins/:installationId", "setProjectPluginBinding", ["Plugins"], "启用或停用 Project Plugin", { 200: objectResponse }, { request: pathRequest("/api/v1/projects/:projectId/plugins/:installationId", { body: zodJson(pluginEnableRequestSchema) }) }),
+  contract("PUT", "/api/v1/projects/:projectId/plugins/:installationId", "setProjectPluginBinding", ["Plugins"], "启用或停用 Project Plugin", { 200: pluginBindingResponseDto }, { request: pathRequest("/api/v1/projects/:projectId/plugins/:installationId", { body: zodJson(pluginEnableRequestSchema) }) }),
   contract("GET", "/api/v1/projects/:projectId/capabilities", "getProjectCapabilities", ["Plugins"], "查询 Project 可用 Plugin 能力", { 200: dto({ context: objectResponse, manifests: array(objectResponse) }, ["context", "manifests"]) }),
   contract("GET", "/api/v1/chart-revisions/:revisionId/plugin-context", "getRevisionPluginContext", ["Plugins"], "查询 Chart Revision 的 Plugin 快照", { 200: dto({ pluginSnapshot: objectResponse }, ["pluginSnapshot"]) }),
   contract("GET", "/api/v1/projects/:projectId/data-assets", "listDataAssets", ["Data Assets"], "查询 Project 数据资产", { 200: dto({ assets: array(assetDto) }, ["assets"]) }),
@@ -588,6 +636,7 @@ export const routeContracts: RouteContract[] = [
   contract("DELETE", "/api/v1/memories/:memoryId", "deleteMemory", ["Memory"], "删除一个 Memory", { 200: dto({ memory: memoryDto }, ["memory"]) }, { request: pathRequest("/api/v1/memories/:memoryId", { body: zodJson(memoryDeleteRequestSchema) }) }),
   contract("GET", "/api/v1/chart-revisions/:revisionId/memory-context", "getRevisionMemoryContext", ["Memory"], "查询 Chart Revision 使用的 Memory 快照", { 200: dto({ memorySnapshot: array(objectResponse) }, ["memorySnapshot"]) }),
   contract("GET", "/api/v1/generation-jobs/:jobId", "getGenerationJob", ["Generation Jobs"], "查询 Generation Job 状态和产物", { 200: dto({ job: generationJobDto, revision: nullable(revisionSummaryDto), result: objectResponse }, ["job", "revision", "result"]) }),
+  contract("POST", "/api/v1/generation-jobs/:jobId/retry", "retryGenerationJob", ["Generation Jobs"], "重试一个可恢复失败的 Generation Job", { 202: dto({ job: generationJobDto, reused: boolean() }, ["job", "reused"]), 200: dto({ job: generationJobDto, reused: boolean() }, ["job", "reused"]) }),
   contract("GET", "/api/v1/generation-jobs/:jobId/outputs/:format", "getGenerationJobOutput", ["Generation Jobs"], "下载 Generation Job 输出", { 200: binaryResponse }, { request: pathRequest("/api/v1/generation-jobs/:jobId/outputs/:format", {}), extraResponses: { 404: errorResponseSchema } }),
   contract("GET", "/api/v1/projects/:projectId/chart-artifacts", "listChartArtifacts", ["Chart Artifacts"], "查询 Project Chart Artifact", { 200: dto({ artifacts: array(artifactDto) }, ["artifacts"]) }),
   contract("GET", "/api/v1/projects/:projectId/chart-artifacts/:artifactId", "getChartArtifact", ["Chart Artifacts"], "查询 Chart Artifact", { 200: dto({ artifact: artifactDto }, ["artifact"]) }),
