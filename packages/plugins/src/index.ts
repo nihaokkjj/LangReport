@@ -2,9 +2,11 @@ import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import {
   pluginContextSchema,
   pluginEnableRequestSchema,
+  pluginCapabilityReferenceSchema,
   pluginInstallationReferenceSchema,
   pluginSnapshotSchema,
   type PluginContext,
+  type PluginCapabilityReference,
   type PluginManifestSource,
   type PluginSnapshot,
   type PluginThemeRef
@@ -487,7 +489,13 @@ export async function assertProjectThemeReference(input: {
 
 export async function resolvePluginContextForWorkspace(workspaceId: string, contextInput: unknown) {
   const context = pluginContextSchema.parse(contextInput);
-  if (context.enabledPlugins.length === 0) return [] as ParsedPluginManifest[];
+  if (context.enabledPlugins.length === 0) {
+    if (context.capabilities.length > 0 || context.conflicts.length > 0 || context.themeRef?.source === "plugin") {
+      throw new PluginServiceError("PLUGIN_CONTEXT_INVALID", "无启用插件的 Generation Job 不能引用插件能力或插件 Theme", 409);
+    }
+    validateThemeReference(context.themeRef, []);
+    return [] as ParsedPluginManifest[];
+  }
   const records = await db.select({ manifest: pluginManifests, installation: pluginInstallations })
     .from(pluginInstallations)
     .innerJoin(pluginManifests, eq(pluginManifests.id, pluginInstallations.manifestId))
@@ -499,25 +507,45 @@ export async function resolvePluginContextForWorkspace(workspaceId: string, cont
     const expected = context.enabledPlugins.find((plugin) => plugin.installationId === record.installation.id);
     return !expected || expected.pluginId !== record.installation.pluginId || expected.version !== record.installation.version || expected.contentHash !== record.installation.contentHash;
   })) throw new PluginServiceError("PLUGIN_CONTEXT_INVALID", "Generation Job 引用的插件版本已无法解析", 409);
-  return records.map((record) => parseInstallationManifest(record.manifest.manifest, record.installation.contentHash, { flintAdapterVersion: context.flintAdapterVersion, supportedRenderers: [context.renderer] }));
+  const manifests = records.map((record) => parseInstallationManifest(record.manifest.manifest, record.installation.contentHash, { flintAdapterVersion: context.flintAdapterVersion, supportedRenderers: [context.renderer] }));
+  const catalog = buildCapabilityCatalog(manifests);
+  if (catalog.conflicts.length > 0 || context.conflicts.length > 0) {
+    throw new PluginServiceError("PLUGIN_CONTEXT_INVALID", "Generation Job 的插件上下文包含未解决的能力冲突", 409, catalog.conflicts);
+  }
+  validateThemeReference(context.themeRef, manifests);
+  const expectedCapabilities = catalog.capabilities.map(({ kind, id, pluginId, version, contentHash }) => pluginCapabilityReferenceSchema.parse({ kind, id, pluginId, version, contentHash }));
+  const referenceKey = (reference: { kind: string; id: string; pluginId: string; version: string; contentHash: string }) => `${reference.kind}:${reference.id}:${reference.pluginId}@${reference.version}#${reference.contentHash}`;
+  const expectedKeys = expectedCapabilities.map(referenceKey).sort();
+  const actualKeys = context.capabilities.map(referenceKey).sort();
+  if (expectedKeys.length !== actualKeys.length || expectedKeys.some((key, index) => key !== actualKeys[index])) {
+    throw new PluginServiceError("PLUGIN_CONTEXT_INVALID", "Generation Job 的插件能力快照与 Manifest 不一致", 409);
+  }
+  return manifests;
 }
 
 export async function buildPluginSnapshot(input: {
   workspaceId: string;
   context: unknown;
   rendererVersion: string;
-  usedCapabilities?: Array<{ kind: string; id: string }>;
+  usedCapabilities?: PluginCapabilityReference[];
 }): Promise<PluginSnapshot> {
   const context = pluginContextSchema.parse(input.context);
   const manifests = await resolvePluginContextForWorkspace(input.workspaceId, context);
-  const used = input.usedCapabilities ? new Set(input.usedCapabilities.map((item) => `${item.kind}:${item.id}`)) : null;
+  const usedReferences = input.usedCapabilities?.map((reference) => pluginCapabilityReferenceSchema.parse(reference));
+  const referenceKey = (reference: PluginCapabilityReference) => `${reference.kind}:${reference.id}:${reference.pluginId}@${reference.version}#${reference.contentHash}`;
+  const contextReferences = new Set(context.capabilities.map(referenceKey));
+  const invalidReference = usedReferences?.find((reference) => !contextReferences.has(referenceKey(reference)));
+  if (invalidReference) {
+    throw new PluginServiceError("PLUGIN_CONTEXT_INVALID", "pluginUsage 引用了不属于当前 Generation Job 的能力", 409, invalidReference);
+  }
+  const used = usedReferences ? new Set(usedReferences.map(referenceKey)) : null;
   const pluginThemeRef = context.themeRef?.source === "plugin" ? context.themeRef : null;
   const themeManifest = pluginThemeRef
     ? manifests.find((manifest) => manifest.pluginId === pluginThemeRef.pluginId && manifest.version === pluginThemeRef.version && manifest.contentHash === pluginThemeRef.contentHash)
     : undefined;
   const plugins = manifests.map((manifest) => {
     const capabilities = manifest.capabilities
-      .filter((capability) => !used || used.has(capability.capabilityKey))
+      .filter((capability) => !used || used.has(referenceKey(capability)))
       .reduce<Record<string, unknown[]>>((groups, capability) => {
         const key = capability.kind === "semantic-type" ? "semanticTypes" : capability.kind === "renderer" ? "renderers" : `${capability.kind}s`;
         (groups[key] ??= []).push(capability.payload);
@@ -606,7 +634,7 @@ function parseInstallationManifest(input: unknown, expectedHash: string, options
 function validateThemeReference(themeRef: PluginThemeRef | null, manifests: ParsedPluginManifest[]): void {
   if (!themeRef) return;
   if (themeRef.source === "builtin") {
-    if (!["default", "economist", "swiss", "nature", "nyt", "mckinsey"].includes(themeRef.id)) {
+    if (!["default", "economist", "swiss", "nature", "nyt", "mckinsey", "powerbi-light", "pop", "cartoon", "datawrapper"].includes(themeRef.id)) {
       throw new PluginServiceError("PLUGIN_THEME_INVALID", `内置 Theme 不存在：${themeRef.id}`, 409);
     }
     return;

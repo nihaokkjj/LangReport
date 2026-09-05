@@ -340,6 +340,9 @@ importers:
       '@langreport/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@langreport/flint-adapter':
+        specifier: workspace:*
+        version: link:../flint-adapter
     devDependencies:
       '@types/node':
         specifier: 26.4.0

@@ -9,12 +9,17 @@ import {
   type PluginManifestValidationReport,
   type PluginThemeRef
 } from "@langreport/contracts";
+import { FLINT_ADAPTER_VERSION, validateFlintTemplatePayload, validateFlintThemePayload } from "@langreport/flint-adapter/validation";
 
 export const PLUGIN_MANIFEST_SCHEMA_URL = "https://langreport.example/schemas/plugin-manifest/v1.json";
-export const DEFAULT_FLINT_ADAPTER_VERSION = "0.1.0";
+export const DEFAULT_FLINT_ADAPTER_VERSION = FLINT_ADAPTER_VERSION;
 export const DEFAULT_SUPPORTED_RENDERERS = ["vega-lite"] as const;
 const BUILTIN_THEME_IDS = new Set(["default", "economist", "swiss", "nature", "nyt", "mckinsey", "powerbi-light", "pop", "cartoon", "datawrapper"]);
 const MAX_THEME_INHERITANCE_DEPTH = 8;
+const MAX_MANIFEST_BYTES = 1024 * 1024;
+const MAX_MANIFEST_DEPTH = 32;
+const MAX_MANIFEST_NODES = 25_000;
+const MAX_MANIFEST_STRING_LENGTH = 16_384;
 const FORBIDDEN_KEYS = new Set(["entrypoint", "runtime", "script", "code", "eval", "function", "command", "sql", "wasm", "url"]);
 
 export type PluginManifestErrorIssue = PluginManifestValidationIssue;
@@ -128,6 +133,7 @@ export function parseManifest(input: unknown, options: ParseManifestOptions = {}
   validateUniqueIds(manifest.validators.map((item) => item.id), "validators", addIssue);
   validateTemplatePayloads(manifest, supportedRenderers, addIssue);
   validateThemeInheritance(manifest, addIssue);
+  validateThemePayloads(manifest, addIssue);
   validateValidatorReferences(manifest, supportedRenderers, addIssue);
   validateExampleReferences(manifest, addIssue);
 
@@ -165,7 +171,7 @@ export function buildCapabilityCatalog(manifests: readonly ParsedPluginManifest[
     grouped.set(capability.capabilityKey, group);
   }
   const conflicts = [...grouped.entries()]
-    .filter(([capabilityKey, records]) => !capabilityKey.startsWith("renderer:") && new Set(records.map((record) => `${record.pluginId}@${record.version}`)).size > 1)
+    .filter(([capabilityKey, records]) => !capabilityKey.startsWith("renderer:") && new Set(records.map((record) => `${record.pluginId}@${record.version}#${record.contentHash}`)).size > 1)
     .map(([capabilityKey, records]) => ({
       capabilityKey,
       sources: records.map(({ kind, id, pluginId, version, contentHash }) => ({ kind, id, pluginId, version, contentHash }))
@@ -261,9 +267,21 @@ function validateTemplatePayloads(
         addIssue("PLUGIN_RENDERER_UNSUPPORTED", `templates[${index}].allowedRenderers`, `模板 Renderer 未被插件和平台同时允许：${renderer}`);
       }
     }
-    const chartType = template.payload.chartType;
-    if (chartType !== undefined && !["Line Chart", "Bar Chart", "Area Chart"].includes(String(chartType))) {
-      addIssue("PLUGIN_FLINT_PAYLOAD_INVALID", `templates[${index}].payload.chartType`, "模板 chartType 不是平台支持的 Flint 图表类型");
+    for (const issue of validateFlintTemplatePayload(template.payload)) {
+      addIssue("PLUGIN_FLINT_PAYLOAD_INVALID", `templates[${index}].payload${issue.path ? `.${issue.path}` : ""}`, issue.message);
+    }
+  });
+}
+
+function validateThemePayloads(manifest: PluginManifest, addIssue: (code: string, path: string, message: string) => void): void {
+  manifest.themes.forEach((theme, index) => {
+    try {
+      const resolved = resolveThemeNode(manifest, theme.id, new Set());
+      for (const issue of validateFlintThemePayload(resolved)) {
+        addIssue("PLUGIN_FLINT_PAYLOAD_INVALID", `themes[${index}].payload${issue.path ? `.${issue.path}` : ""}`, issue.message);
+      }
+    } catch {
+      // Theme graph errors are reported by validateThemeInheritance with their stable code.
     }
   });
 }
@@ -298,6 +316,9 @@ function validateValidatorReferences(manifest: PluginManifest, supportedRenderer
       if (rule.kind === "allowed-renderer" && !supportedRenderers.includes(rule.renderer)) {
         addIssue("PLUGIN_RENDERER_UNSUPPORTED", `validators[${index}].rules[${ruleIndex}].renderer`, `Validator Renderer 未被平台允许：${rule.renderer}`);
       }
+      if (rule.kind === "allowed-renderer" && !manifest.compatibility.renderers.includes(rule.renderer)) {
+        addIssue("PLUGIN_RENDERER_UNSUPPORTED", `validators[${index}].rules[${ruleIndex}].renderer`, `Validator Renderer 未被插件声明支持：${rule.renderer}`);
+      }
       if (rule.kind === "numeric-range" && rule.min === undefined && rule.max === undefined) {
         addIssue("PLUGIN_VALIDATOR_RULE_INVALID", `validators[${index}].rules[${ruleIndex}]`, "numeric-range 至少需要 min 或 max");
       }
@@ -328,32 +349,69 @@ function resolveThemeNode(manifest: PluginManifest, themeId: string, visiting: S
 
 function findSecurityIssues(input: unknown): PluginManifestValidationIssue[] {
   const issues: PluginManifestValidationIssue[] = [];
-  const visit = (value: unknown, path: string) => {
+  const stack: Array<{ value: unknown; path: string; depth: number }> = [{ value: input, path: "", depth: 0 }];
+  const seen = new WeakSet<object>();
+  let nodes = 0;
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) continue;
+    const { value, path, depth } = current;
+    nodes += 1;
+    if (nodes > MAX_MANIFEST_NODES) {
+      issues.push({ code: "PLUGIN_MANIFEST_TOO_MANY_NODES", path: path || "$", message: `Manifest 节点数量不能超过 ${MAX_MANIFEST_NODES}`, severity: "error" });
+      break;
+    }
     if (typeof value === "string") {
-      if (path !== "$schema" && /^(?:https?:|data:|file:|javascript:|wss?:)/i.test(value.trim())) {
-        issues.push({ code: "PLUGIN_REMOTE_ADDRESS", path, message: "Manifest 不能包含远程地址或可执行协议", severity: "error" });
+      if (value.length > MAX_MANIFEST_STRING_LENGTH) {
+        issues.push({ code: "PLUGIN_MANIFEST_STRING_TOO_LONG", path: path || "$", message: `Manifest 字符串不能超过 ${MAX_MANIFEST_STRING_LENGTH} 个字符`, severity: "error" });
       }
-      return;
+      if (path !== "$schema" && /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(value.trim())) {
+        issues.push({ code: "PLUGIN_REMOTE_ADDRESS", path: path || "$", message: "Manifest 不能包含远程地址或可执行协议", severity: "error" });
+      }
+      continue;
     }
-    if (!value || typeof value !== "object") return;
+    if (!value || typeof value !== "object") continue;
+    if (seen.has(value)) {
+      issues.push({ code: "PLUGIN_MANIFEST_CYCLE", path: path || "$", message: "Manifest 不能包含循环引用", severity: "error" });
+      continue;
+    }
+    seen.add(value);
+    if (depth >= MAX_MANIFEST_DEPTH) {
+      issues.push({ code: "PLUGIN_MANIFEST_TOO_DEEP", path: path || "$", message: `Manifest 嵌套深度不能超过 ${MAX_MANIFEST_DEPTH}`, severity: "error" });
+      continue;
+    }
     if (Array.isArray(value)) {
-      value.forEach((item, index) => visit(item, `${path}[${index}]`));
-      return;
+      for (let index = value.length - 1; index >= 0; index -= 1) {
+        stack.push({ value: value[index], path: `${path}[${index}]`, depth: depth + 1 });
+      }
+      continue;
     }
-    for (const [key, nestedValue] of Object.entries(value)) {
+    const entries = Object.entries(value);
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const [key, nestedValue] = entries[index];
       const nestedPath = path ? `${path}.${key}` : key;
-      if (FORBIDDEN_KEYS.has(key.toLocaleLowerCase())) {
+      const normalizedKey = key.toLocaleLowerCase();
+      if (FORBIDDEN_KEYS.has(normalizedKey)) {
         issues.push({
-          code: ["entrypoint", "runtime", "script", "code", "eval", "function", "command", "sql", "wasm"].includes(key.toLocaleLowerCase()) ? "PLUGIN_FORBIDDEN_CODE" : "PLUGIN_REMOTE_ADDRESS",
+          code: ["entrypoint", "runtime", "script", "code", "eval", "function", "command", "sql", "wasm"].includes(normalizedKey) ? "PLUGIN_FORBIDDEN_CODE" : "PLUGIN_REMOTE_ADDRESS",
           path: nestedPath,
           message: `Manifest 字段被平台禁止：${key}`,
           severity: "error"
         });
       }
-      visit(nestedValue, nestedPath);
+      stack.push({ value: nestedValue, path: nestedPath, depth: depth + 1 });
     }
-  };
-  visit(input, "");
+  }
+  if (issues.length === 0) {
+    try {
+      const serialized = JSON.stringify(input);
+      if (serialized && Buffer.byteLength(serialized, "utf8") > MAX_MANIFEST_BYTES) {
+        issues.push({ code: "PLUGIN_MANIFEST_TOO_LARGE", path: "$", message: `Manifest 不能超过 ${MAX_MANIFEST_BYTES} 字节`, severity: "error" });
+      }
+    } catch {
+      issues.push({ code: "PLUGIN_MANIFEST_INVALID", path: "$", message: "Manifest 不是可序列化的 JSON 数据", severity: "error" });
+    }
+  }
   return issues;
 }
 

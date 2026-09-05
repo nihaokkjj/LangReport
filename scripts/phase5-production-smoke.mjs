@@ -1,10 +1,11 @@
 const apiOrigin = process.env.PHASE5_API_ORIGIN?.trim().replace(/\/+$/, "");
 const jwt = process.env.PHASE5_JWT?.trim();
+const sessionCookie = process.env.PHASE5_SESSION_COOKIE?.trim();
 const workspaceId = process.env.PHASE5_WORKSPACE_ID?.trim();
 const projectId = process.env.PHASE5_PROJECT_ID?.trim();
 
-if (!apiOrigin || !jwt || !workspaceId) {
-  throw new Error("需要设置 PHASE5_API_ORIGIN、PHASE5_JWT 和 PHASE5_WORKSPACE_ID；脚本不会输出 JWT。");
+if (!apiOrigin || (!jwt && !sessionCookie) || !workspaceId) {
+  throw new Error("需要设置 PHASE5_API_ORIGIN、PHASE5_JWT 或 PHASE5_SESSION_COOKIE，以及 PHASE5_WORKSPACE_ID；脚本不会输出认证凭据。");
 }
 
 async function request(path, init = {}) {
@@ -38,26 +39,34 @@ async function expectStatus(label, path, expectedStatus, init = {}) {
 }
 
 await expectStatus("健康检查", "/health", 200);
+await expectStatus("数据库就绪检查", "/ready", 200);
 
-const authenticatedHeaders = {
-  authorization: `Bearer ${jwt}`
-};
+const authenticatedHeaders = jwt
+  ? { authorization: `Bearer ${jwt}` }
+  : { cookie: sessionCookie };
+const authenticatedLabel = jwt ? "JWT" : "Session Cookie";
 
-await expectStatus("JWT 访问项目列表", "/api/v1/projects", 200, { headers: authenticatedHeaders });
+await expectStatus(`${authenticatedLabel} 访问项目列表`, "/api/v1/projects", 200, { headers: authenticatedHeaders });
 await expectStatus(
   "生产环境拒绝伪造 x-user-id",
   "/api/v1/projects",
   401,
   { headers: { "x-user-id": "phase5-smoke-spoof" } }
 );
+await expectStatus("无认证访问被拒绝", "/api/v1/projects", 401);
+
+if (jwt && sessionCookie) {
+  await expectStatus("Session Cookie 访问项目列表", "/api/v1/projects", 200, { headers: { cookie: sessionCookie } });
+}
+
 await expectStatus(
-  "JWT 访问插件目录",
+  `${authenticatedLabel} 访问插件目录`,
   `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/plugin-catalog`,
   200,
   { headers: authenticatedHeaders }
 );
 await expectStatus(
-  "JWT 访问 Workspace 插件安装列表",
+  `${authenticatedLabel} 访问 Workspace 插件安装列表`,
   `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/plugins`,
   200,
   { headers: authenticatedHeaders }
@@ -65,13 +74,13 @@ await expectStatus(
 
 if (projectId) {
   await expectStatus(
-    "JWT 访问 Project 插件 Binding",
+    `${authenticatedLabel} 访问 Project 插件 Binding`,
     `/api/v1/projects/${encodeURIComponent(projectId)}/plugins`,
     200,
     { headers: authenticatedHeaders }
   );
   await expectStatus(
-    "JWT 访问 Project 能力目录",
+    `${authenticatedLabel} 访问 Project 能力目录`,
     `/api/v1/projects/${encodeURIComponent(projectId)}/capabilities`,
     200,
     { headers: authenticatedHeaders }

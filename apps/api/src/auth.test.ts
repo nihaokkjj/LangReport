@@ -59,7 +59,8 @@ test("production JWT provider accepts a signed bearer or session cookie and reje
   assert.deepEqual(await provider({ headers: { authorization: `Bearer ${token}` } } as never), { id: "jwt-user" });
   assert.deepEqual(await provider({ headers: { cookie: `langreport_session=${encodeURIComponent(token)}` } } as never), { id: "jwt-user" });
   assert.equal(await provider({ headers: { cookie: "langreport_session=%E0%A4%A" } } as never), null);
-  assert.equal(await provider({ headers: { authorization: `Bearer ${token.slice(0, -1)}x` } } as never), null);
+  const tamperedToken = `${token.slice(0, -1)}${token.endsWith("a") ? "b" : "a"}`;
+  assert.equal(await provider({ headers: { authorization: `Bearer ${tamperedToken}` } } as never), null);
   assert.equal(await provider({ headers: { authorization: `Bearer ${signedToken({ sub: "expired", exp: Math.floor(Date.now() / 1000) - 1 }, secret)}` } } as never), null);
 });
 
@@ -76,6 +77,27 @@ test("production app wires the signed JWT provider when configured", async () =>
       headers: { authorization: `Bearer ${signedToken({ sub: "configured-user" }, secret)}` }
     });
     assert.equal(response.statusCode, 200);
+  } finally {
+    await app.close();
+  }
+});
+
+test("API CORS explicitly supports the HttpOnly session cookie flow", async () => {
+  const app = await buildApp({
+    logger: false,
+    environment: { NODE_ENV: "production", APP_ENV: "production", WEB_ORIGIN: "https://app.example" },
+    authProvider: () => ({ id: "cors-user" })
+  });
+  try {
+    const response = await app.inject({
+      method: "OPTIONS",
+      url: "/api/v1/projects",
+      headers: {
+        origin: "https://app.example",
+        "access-control-request-method": "GET"
+      }
+    });
+    assert.equal(response.headers["access-control-allow-credentials"], "true");
   } finally {
     await app.close();
   }

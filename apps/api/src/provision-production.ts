@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 import { resolve } from "node:path";
 import { and, eq } from "drizzle-orm";
-import { closeDatabase, db, members, projectMembers, projects, workspaces } from "@langreport/db";
+import { closeDatabase, db, members, projectMembers, projects, withAdvisoryLock, workspaces } from "@langreport/db";
 
 config({ path: resolve(process.cwd(), "../../.env") });
 
@@ -24,7 +24,7 @@ try {
   if (dryRun) {
     console.log(JSON.stringify({ dryRun: true, userId, workspaceId: workspaceId ?? null, workspaceName, projectName, projectSlug }));
   } else {
-    const result = await db.transaction(async (tx) => {
+    const result = await withAdvisoryLock(`production-provision:${workspaceId ?? workspaceName}`, () => db.transaction(async (tx) => {
       const workspace = workspaceId
         ? (await tx.select().from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1))[0]
         : (await tx.select().from(workspaces).where(eq(workspaces.name, workspaceName)).limit(1))[0]
@@ -47,7 +47,8 @@ try {
         await tx.insert(projectMembers).values({ projectId: project.id, userId, role: "editor" });
       }
       return { workspace, project, workspaceMemberCreated: !existingMember, projectMemberCreated: !existingProjectMember };
-    });
+    }));
+    if (!result) throw new Error("另一个生产初始化正在进行，请稍后重试");
     console.log(JSON.stringify({
       workspaceId: result.workspace.id,
       projectId: result.project.id,

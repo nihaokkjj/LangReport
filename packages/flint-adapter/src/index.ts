@@ -8,6 +8,7 @@ export const DESIGN_FONT_FAMILIES = {
   sans: 'Inter, "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
   mono: '"JetBrains Mono", "SF Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace'
 } as const;
+export const DESIGN_CHART_COLORS = ["#2457C5", "#5B6875", "#18794E"] as const;
 
 export type RenderedChart = {
   vegaLiteSpec: Record<string, unknown>;
@@ -17,6 +18,14 @@ export type RenderedChart = {
 
 /** Convert the platform-owned Flint Spec into Flint's native input shape. */
 export function toFlintAssemblyInput(spec: FlintSpec): Record<string, unknown> {
+  const themeConfig = { ...spec.themeConfig };
+  const configuredParent = typeof themeConfig.extends === "string" ? themeConfig.extends : spec.theme;
+  delete themeConfig.extends;
+  const themeSpec = configuredParent === "default" && Object.keys(themeConfig).length === 0
+    ? undefined
+    : configuredParent === "default"
+      ? themeConfig
+      : { extends: configuredParent, ...themeConfig };
   return {
     data: spec.data,
     semantic_types: spec.semanticTypes,
@@ -27,7 +36,7 @@ export function toFlintAssemblyInput(spec: FlintSpec): Record<string, unknown> {
       encodings: spec.chartSpec.encodings,
       baseSize: spec.chartSpec.baseSize
     },
-    ...(spec.theme === "default" && Object.keys(spec.themeConfig).length === 0 ? {} : { theme_spec: { extends: spec.theme, ...spec.themeConfig } }),
+    ...(themeSpec ? { theme_spec: themeSpec } : {}),
     options: { addTooltips: true }
   };
 }
@@ -69,25 +78,23 @@ function renderDeterministicSvg(spec: FlintSpec): string {
   const minValue = Math.min(...numericValues, 0);
   const range = maxValue - minValue || 1;
   const configuredSingle = readNestedString(spec.themeConfig, ["ink", "series", "single"]);
-  const colors = configuredSingle
-    ? [configuredSingle, "#ff3d8b", "#1ea64a", "#1f1d3d"]
-    : spec.theme === "swiss" ? ["#ff3d8b", "#1f1d3d", "#1ea64a", "#c5b0f4"] : ["#000000", "#ff3d8b", "#1ea64a", "#1f1d3d"];
+  const colors = configuredSingle ? [configuredSingle, ...DESIGN_CHART_COLORS.slice(1)] : DESIGN_CHART_COLORS;
   const xPosition = (value: string) => xValues.length <= 1 ? plotWidth / 2 : xValues.indexOf(value) * plotWidth / (xValues.length - 1);
   const yPosition = (value: number) => plotHeight - ((value - minValue) / range) * plotHeight;
   const parts: string[] = [];
   const sansFont = escapeXml(DESIGN_FONT_FAMILIES.sans);
   const monoFont = escapeXml(DESIGN_FONT_FAMILIES.mono);
-  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(spec.chartSpec.title)}">`);
+  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-kerning="normal" role="img" aria-label="${escapeXml(spec.chartSpec.title)}">`);
   parts.push(`<rect width="${width}" height="${height}" fill="#ffffff"/>`);
-  parts.push(`<text x="${left}" y="32" font-family="${sansFont}" font-size="22" font-weight="540" fill="#000000">${escapeXml(spec.chartSpec.title)}</text>`);
-  if (spec.chartSpec.subtitle) parts.push(`<text x="${left}" y="54" font-family="${sansFont}" font-size="12" fill="#000000">${escapeXml(spec.chartSpec.subtitle)}</text>`);
-  parts.push(`<line x1="${left}" y1="${top + plotHeight}" x2="${left + plotWidth}" y2="${top + plotHeight}" stroke="#000000" stroke-width="1"/>`);
-  parts.push(`<line x1="${left}" y1="${top}" x2="${left}" y2="${top + plotHeight}" stroke="#000000" stroke-width="1"/>`);
-  parts.push(`<text x="${left - 12}" y="${top + 4}" text-anchor="end" font-family="${monoFont}" font-size="11" fill="#000000">${formatNumber(maxValue)}</text>`);
-  parts.push(`<text x="${left - 12}" y="${top + plotHeight}" text-anchor="end" font-family="${monoFont}" font-size="11" fill="#000000">${formatNumber(minValue)}</text>`);
+  parts.push(`<text x="${left}" y="32" font-family="${sansFont}" font-size="22" font-weight="600" fill="#17212b">${escapeXml(spec.chartSpec.title)}</text>`);
+  if (spec.chartSpec.subtitle) parts.push(`<text x="${left}" y="54" font-family="${sansFont}" font-size="12" fill="#17212b">${escapeXml(spec.chartSpec.subtitle)}</text>`);
+  parts.push(`<line x1="${left}" y1="${top + plotHeight}" x2="${left + plotWidth}" y2="${top + plotHeight}" stroke="#17212b" stroke-width="1"/>`);
+  parts.push(`<line x1="${left}" y1="${top}" x2="${left}" y2="${top + plotHeight}" stroke="#17212b" stroke-width="1"/>`);
+  parts.push(`<text x="${left - 12}" y="${top + 4}" text-anchor="end" font-family="${monoFont}" font-size="11" fill="#17212b">${formatNumber(maxValue)}</text>`);
+  parts.push(`<text x="${left - 12}" y="${top + plotHeight}" text-anchor="end" font-family="${monoFont}" font-size="11" fill="#17212b">${formatNumber(minValue)}</text>`);
   for (const [index, value] of xValues.entries()) {
     const x = left + (xValues.length <= 1 ? plotWidth / 2 : index * plotWidth / (xValues.length - 1));
-    parts.push(`<text x="${x}" y="${top + plotHeight + 24}" text-anchor="middle" font-family="${monoFont}" font-size="10" fill="#000000">${escapeXml(value)}</text>`);
+    parts.push(`<text x="${x}" y="${top + plotHeight + 24}" text-anchor="middle" font-family="${monoFont}" font-size="11" fill="#17212b">${escapeXml(value)}</text>`);
   }
   for (const [seriesIndex, seriesValue] of series.entries()) {
     const points = rows.filter((row) => !colorField || String(row[colorField] ?? "") === seriesValue);
@@ -121,7 +128,7 @@ function renderDeterministicSvg(spec: FlintSpec): string {
     if (colorField && seriesValue) {
       const legendX = left + seriesIndex * 120;
       parts.push(`<circle cx="${legendX}" cy="${height - 18}" r="4" fill="${colors[seriesIndex % colors.length]}"/>`);
-      parts.push(`<text x="${legendX + 10}" y="${height - 14}" font-family="${monoFont}" font-size="10" fill="#000000">${escapeXml(seriesValue)}</text>`);
+      parts.push(`<text x="${legendX + 10}" y="${height - 14}" font-family="${monoFont}" font-size="11" fill="#17212b">${escapeXml(seriesValue)}</text>`);
     }
   }
   parts.push("</svg>");

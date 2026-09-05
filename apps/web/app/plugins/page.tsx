@@ -15,7 +15,7 @@ function apiEndpoint(path: string): string {
 }
 
 async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(apiEndpoint(path), { ...init, cache: "no-store" });
+  const response = await fetch(apiEndpoint(path), { ...init, credentials: "include", cache: "no-store" });
   const payload = await response.json().catch(() => ({})) as T & { error?: string; code?: string };
   if (!response.ok) throw new Error(`${payload.error ?? "请求失败"}${payload.code ? ` · ${payload.code}` : ""}`);
   return payload;
@@ -101,7 +101,7 @@ export default function PluginsPage() {
       try {
         setIsLoading(true);
         let payload = await apiFetch<{ workspace: Workspace | null; projects: Project[] }>("/api/v1/projects", { headers: devHeaders });
-        if (!payload.workspace || payload.projects.length === 0) {
+        if (process.env.NODE_ENV !== "production" && (!payload.workspace || payload.projects.length === 0)) {
           await apiFetch("/api/v1/dev/bootstrap", { method: "POST", headers: jsonHeaders, body: "{}" });
           payload = await apiFetch<{ workspace: Workspace | null; projects: Project[] }>("/api/v1/projects", { headers: devHeaders });
         }

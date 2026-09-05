@@ -32,6 +32,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
 
   await app.register(cors, {
     origin: environment.WEB_ORIGIN ?? "http://localhost:3000",
+    credentials: true,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
   });
 

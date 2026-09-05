@@ -11,7 +11,8 @@
     "test": "tsx --test src/index.test.ts"
   },
   "dependencies": {
-    "@langreport/contracts": "workspace:*"
+    "@langreport/contracts": "workspace:*",
+    "@langreport/flint-adapter": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "26.4.0",

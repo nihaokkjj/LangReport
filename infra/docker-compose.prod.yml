@@ -38,6 +38,20 @@ services:
     command:
       - 'until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"; do sleep 1; done; mc mb --ignore-existing "local/$${S3_BUCKET}"'
 
+  migrate:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: langreport-migrate:deploy
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["pnpm", "--filter", "@langreport/db", "db:migrate"]
+
   api:
     build:
       context: ..
@@ -61,6 +75,8 @@ services:
       postgres:
         condition: service_healthy
       minio-init:
+        condition: service_completed_successfully
+      migrate:
         condition: service_completed_successfully
     expose:
       - "4000"
@@ -106,6 +122,8 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
 
   render-worker:
     build:
@@ -125,6 +143,8 @@ services:
       postgres:
         condition: service_healthy
       minio-init:
+        condition: service_completed_successfully
+      migrate:
         condition: service_completed_successfully
 
 volumes:

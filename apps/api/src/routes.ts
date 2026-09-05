@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { acceptMemoryCandidateRequestSchema, chartGenerationRequestSchema, createConversationMessageRequestSchema, createConversationRequestSchema, createMetricDefinitionRequestSchema, createProjectRequestSchema, memoryDeleteRequestSchema, pasteDataRequestSchema, pluginEnableRequestSchema, rejectMemoryCandidateRequestSchema } from "@langreport/contracts";
 import { assertChartAction, ChartServiceError, getProjectAccess, getProjectTheme, getRevision } from "@langreport/chart";
@@ -622,6 +622,7 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
         .where(eq(chartRevisions.generationJobId, job.id)).limit(1);
       const [requeued] = await db.update(generationJobs).set({
         status: existingRevision ? "rendering" : "queued",
+        ...(existingRevision ? { attemptCount: sql`${generationJobs.attemptCount} + 1` } : {}),
         errorCode: null,
         errorMessage: null,
         updatedAt: new Date()

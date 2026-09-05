@@ -87,6 +87,41 @@ test("manifest parser rejects unknown and executable fields", () => {
     () => parseManifest({ ...manifest, examples: [{ prompt: "https://evil.example/run.js", templateId: "monthly-regional-sales" }] }),
     (error: unknown) => error instanceof PluginManifestError && error.code === "PLUGIN_REMOTE_ADDRESS"
   );
+  assert.throws(
+    () => parseManifest({ ...manifest, themes: [{ ...manifest.themes[0], payload: { style: { nested: { code: "return rows" } } } }] }),
+    (error: unknown) => error instanceof PluginManifestError && error.code === "PLUGIN_FORBIDDEN_CODE"
+  );
+  assert.throws(
+    () => parseManifest({ ...manifest, themes: [{ ...manifest.themes[0], payload: { href: "//evil.example/theme.json" } }] }),
+    (error: unknown) => error instanceof PluginManifestError && error.code === "PLUGIN_REMOTE_ADDRESS"
+  );
+  assert.throws(
+    () => parseManifest({ ...manifest, templates: [{ ...manifest.templates[0], payload: { chartType: "Line Chart", unsupported: true } }] }),
+    (error: unknown) => error instanceof PluginManifestError && error.code === "PLUGIN_FLINT_PAYLOAD_INVALID"
+  );
+  assert.throws(
+    () => parseManifest({ ...manifest, themes: [{ ...manifest.themes[0], payload: { ...manifest.themes[0].payload, unsupported: true } }] }),
+    (error: unknown) => error instanceof PluginManifestError && error.code === "PLUGIN_FLINT_PAYLOAD_INVALID"
+  );
+});
+
+test("manifest parser applies depth, string, and cycle limits before schema execution", () => {
+  let nested: Record<string, unknown> = { leaf: true };
+  for (let index = 0; index < 40; index += 1) nested = { child: nested };
+  assert.throws(
+    () => parseManifest({ ...manifest, themes: [{ ...manifest.themes[0], payload: nested }] }),
+    (error: unknown) => error instanceof PluginManifestError && error.code === "PLUGIN_MANIFEST_TOO_DEEP"
+  );
+  assert.throws(
+    () => parseManifest({ ...manifest, themes: [{ ...manifest.themes[0], payload: { note: "x".repeat(16_385) } }] }),
+    (error: unknown) => error instanceof PluginManifestError && error.code === "PLUGIN_MANIFEST_STRING_TOO_LONG"
+  );
+  const cyclic = { ...manifest } as Record<string, unknown>;
+  cyclic.self = cyclic;
+  assert.throws(
+    () => parseManifest(cyclic),
+    (error: unknown) => error instanceof PluginManifestError && error.code === "PLUGIN_MANIFEST_CYCLE"
+  );
 });
 
 test("manifest parser rejects theme cycles and unsupported renderers", () => {
@@ -107,6 +142,14 @@ test("manifest parser rejects theme cycles and unsupported renderers", () => {
   );
 });
 
+test("manifest parser validates a plugin theme extending Flint default", () => {
+  const parsed = parseManifest({
+    ...manifest,
+    themes: [{ ...manifest.themes[0], payload: { extends: "default", ink: { series: { single: "#2563EB" } } } }]
+  });
+  assert.equal(parsed.manifest.themes[0]?.payload.extends, "default");
+});
+
 test("capability catalog reports duplicate capability keys with all sources", () => {
   const first = parseManifest(manifest);
   const second = parseManifest({ ...manifest, metadata: { ...manifest.metadata, id: "sales-ops" } });
@@ -122,6 +165,27 @@ test("shared renderer compatibility does not create a capability conflict", () =
   const first = parseManifest(manifest);
   const second = parseManifest({ ...manifest, metadata: { ...manifest.metadata, id: "sales-ops" } });
   assert.equal(buildCapabilityCatalog([first, second]).conflicts.some((item) => item.capabilityKey === "renderer:vega-lite"), false);
+});
+
+test("capability conflicts include different content hashes from the same plugin version", () => {
+  const first = parseManifest(manifest);
+  const second = parseManifest({ ...manifest, metadata: { ...manifest.metadata, description: "changed content" } });
+  const conflict = buildCapabilityCatalog([first, second]).conflicts.find((item) => item.capabilityKey === "template:monthly-regional-sales");
+  assert.ok(conflict);
+  assert.deepEqual(conflict?.sources.map((source) => source.contentHash), [first.contentHash, second.contentHash]);
+});
+
+test("validator renderer must be declared by the plugin", () => {
+  assert.throws(
+    () => parseManifest({
+      ...manifest,
+      validators: [{
+        id: "renderer-check",
+        rules: [{ kind: "allowed-renderer", renderer: "plotly", severity: "error", message: "不允许" }]
+      }]
+    }, { supportedRenderers: ["vega-lite", "plotly"] }),
+    (error: unknown) => error instanceof PluginManifestError && error.code === "PLUGIN_RENDERER_UNSUPPORTED"
+  );
 });
 
 test("validator DSL reports structured issues without executing code", () => {

@@ -3,8 +3,9 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { and, eq } from "drizzle-orm";
 import { closeDatabase, db, auditEvents, chartArtifacts, chartRevisions, conversations, dataAssets, dataSnapshots, generationJobs, members, metricDefinitions, projectMembers, projects, workspaces } from "@langreport/db";
+import { pluginContextSchema } from "@langreport/contracts";
 import { buildApp } from "./app.js";
-import { buildPluginSnapshot } from "@langreport/plugins";
+import { buildPluginSnapshot, PluginServiceError } from "@langreport/plugins";
 
 const enabled = process.env.RUN_INTEGRATION === "1";
 type JsonObject = Record<string, unknown>;
@@ -321,20 +322,33 @@ test("plugin API completes install, binding, theme, revoke, restore and audit fl
     result = await request("GET", `/api/v1/projects/${project.id}/capabilities`, viewerId);
     assert.equal(result.status, 403);
 
+    const historicalContext = pluginContextSchema.parse(generationJob.pluginContext);
+    const historicalUsedCapabilities = historicalContext.capabilities.filter((capability) =>
+      (capability.kind === "template" && capability.id === "monthly-regional-sales")
+      || (capability.kind === "theme" && capability.id === "sales-brand")
+    );
     const historicalSnapshot = await buildPluginSnapshot({
       workspaceId: workspace.id,
       context: generationJob.pluginContext,
       rendererVersion: "vega-lite-svg-v1",
-      usedCapabilities: [
-        { kind: "template", id: "monthly-regional-sales" },
-        { kind: "theme", id: "sales-brand" }
-      ]
+      usedCapabilities: historicalUsedCapabilities
     });
     const historicalPlugin = asObject(asArray(historicalSnapshot.plugins)[0]);
     assert.equal(historicalPlugin.pluginId, pluginId);
     assert.equal(asArray(asObject(historicalPlugin.capabilities).templates).length, 1);
     assert.equal(asObject(historicalSnapshot.resolvedTheme).ref !== undefined, true);
     assert.equal(asObject(asObject(historicalSnapshot.resolvedTheme).payload).ink !== undefined, true);
+    await assert.rejects(
+      () => buildPluginSnapshot({
+        workspaceId: workspace.id,
+        context: generationJob.pluginContext,
+        rendererVersion: "vega-lite-svg-v1",
+        usedCapabilities: historicalUsedCapabilities.map((capability) => capability.kind === "template"
+          ? { ...capability, contentHash: `sha256:${"0".repeat(64)}` }
+          : capability)
+      }),
+      (error: unknown) => error instanceof PluginServiceError && error.code === "PLUGIN_CONTEXT_INVALID"
+    );
     const [artifact] = await db.insert(chartArtifacts).values({
       projectId: project.id,
       name: "Phase 5 historical chart",
@@ -378,6 +392,20 @@ test("plugin API completes install, binding, theme, revoke, restore and audit fl
     result = await request("GET", `/api/v1/chart-revisions/${revision.id}/plugin-context`, reviewerId);
     assert.equal(result.status, 200);
     assert.equal(asObject(asArray(asObject(result.body.pluginSnapshot).plugins)[0]).pluginId, pluginId);
+
+    await db.update(generationJobs).set({ status: "failed", attemptCount: 1, errorCode: "RENDER_FAILED", errorMessage: "existing revision retry" }).where(eq(generationJobs.id, generationJobId));
+    result = await request("POST", `/api/v1/generation-jobs/${generationJobId}/retry`, editorId);
+    assert.equal(result.status, 202, JSON.stringify(result.body));
+    assert.equal(asObject(result.body.job).status, "rendering");
+    assert.equal(asObject(result.body.job).attemptCount, 2);
+    await db.update(generationJobs).set({ status: "failed", errorCode: "RENDER_FAILED" }).where(eq(generationJobs.id, generationJobId));
+    result = await request("POST", `/api/v1/generation-jobs/${generationJobId}/retry`, editorId);
+    assert.equal(result.status, 202);
+    assert.equal(asObject(result.body.job).attemptCount, 3);
+    await db.update(generationJobs).set({ status: "failed", errorCode: "RENDER_FAILED" }).where(eq(generationJobs.id, generationJobId));
+    result = await request("POST", `/api/v1/generation-jobs/${generationJobId}/retry`, editorId);
+    assert.equal(result.status, 409);
+    assert.equal(result.body.code, "GENERATION_RETRY_LIMIT");
 
     result = await request("GET", `/api/v1/workspaces/${workspace.id}/plugin-catalog`, crossWorkspaceUserId);
     assert.equal(result.status, 404);

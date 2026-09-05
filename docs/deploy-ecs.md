@@ -28,15 +28,14 @@ docker compose --env-file .env.production -f infra/docker-compose.prod.yml ps
 docker compose --env-file .env.production -f infra/docker-compose.prod.yml logs -f nginx api generation-worker render-worker
 ```
 
-生产 Compose 已包含 Nginx。由于 ECS 宿主机已有 Nginx 占用 80 端口，项目 Nginx 对外监听 ECS 的 8080 端口，并在 Compose 内部将请求代理到 `api:4000`；API、PostgreSQL、MinIO 和 Workers 不直接映射到公网。Generation Worker 负责处理 `queued` Generation Job，Render Worker 负责处理 `rendering` Generation Job。
+生产 Compose 已包含一次性 `migrate` 服务：PostgreSQL 健康且迁移成功后，API、Generation Worker 和 Render Worker 才会启动。这样不会在新库上先轮询不存在的业务表。Compose 还包含 Nginx；由于 ECS 宿主机已有 Nginx 占用 80 端口，项目 Nginx 对外监听 ECS 的 8080 端口，并在 Compose 内部将请求代理到 `api:4000`；API、PostgreSQL、MinIO 和 Workers 不直接映射到公网。Generation Worker 负责处理 `queued` Generation Job，Render Worker 负责处理 `rendering` Generation Job。
 
 ## 3. 初始化数据库
 
-首次部署或发布迁移时，先执行版本化迁移：
+首次部署或发布迁移时，Compose 会通过 `migrate` 服务执行版本化迁移；需要单独重跑时使用：
 
 ```sh
-docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm api \
-  pnpm --filter @langreport/db db:migrate
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm migrate
 ```
 
 不要在生产环境使用 `db:push` 替代迁移。发布前应在备份或 staging 数据库执行一次兼容性校验：
@@ -68,12 +67,13 @@ docker compose --env-file .env.production -f infra/docker-compose.prod.yml run -
 ```sh
 PHASE5_API_ORIGIN=https://<public-api-origin> \\
 PHASE5_JWT='<short-lived-user-token>' \\
+PHASE5_SESSION_COOKIE='langreport_session=<short-lived-session-value>' \\
 PHASE5_WORKSPACE_ID='<workspace-id>' \\
 PHASE5_PROJECT_ID='<optional-project-id>' \\
 pnpm phase5:smoke
 ```
 
-该命令只输出每个检查的 HTTP 状态，不输出 Token；它会验证健康检查、JWT 访问项目列表和插件管理接口，并确认仅携带伪造 `x-user-id` 的请求返回 `401`。提供 `PHASE5_PROJECT_ID` 时还会检查 Project 插件 Binding 和能力目录。Smoke 通过后仍需由运维确认 HTTPS、Cookie 属性、网关密钥轮换和 ECS 安全组。
+该命令只输出每个检查的 HTTP 状态，不输出认证凭据；`PHASE5_JWT` 和 `PHASE5_SESSION_COOKIE` 至少提供一个，两个都提供时会分别回归 Bearer 和 HttpOnly Cookie。它会验证健康检查、数据库就绪、无认证拒绝、生产环境伪造 `x-user-id` 拒绝和插件管理接口。提供 `PHASE5_PROJECT_ID` 时还会检查 Project 插件 Binding 和能力目录。Smoke 通过后仍需由运维确认 HTTPS、Cookie 属性、网关密钥轮换和 ECS 安全组。
 
 ## 5. Vercel 环境变量
 
@@ -84,7 +84,7 @@ API_PROXY_ORIGIN=http://<ECS_PUBLIC_IP>:8080
 NEXT_PUBLIC_API_URL=/api
 ```
 
-前端请求 `/api/...`，由 Vercel Rewrite 转发到 ECS 的 8080 端口，再由项目 Nginx 转发到 API。这样无独立域名时也不会发生浏览器的 HTTPS 页面访问 HTTP API 的混合内容问题。不要把数据库或 MinIO 地址填入 Vercel。
+前端请求 `/api/...`，由 Vercel Rewrite 转发到 ECS 的 8080 端口，再由项目 Nginx 转发到 API。生产前端会通过登录网关携带的认证 Cookie 读取已初始化的 Workspace/Project，不调用仅限开发环境的 Bootstrap；本地开发才会自动 Bootstrap。这样无独立域名时也不会发生浏览器的 HTTPS 页面访问 HTTP API 的混合内容问题。不要把数据库或 MinIO 地址填入 Vercel。
 
 ## 注意事项
 
