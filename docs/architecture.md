@@ -74,7 +74,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ### Generation
 
-负责将 Analysis Brief 和自然语言意图编译为 TransformPlan 和 Flint Spec，调用 Model Gateway，协调数据执行、指标口径、Visual Template 和校验修复。一次 Cycle 最多执行两轮自动修复。
+负责将 Analysis Brief 和自然语言意图编译为 TransformPlan，调用 Model Gateway，协调数据执行、指标口径、Visual Template 和校验修复。首期使用 `canonical_text_context`；模型计划校验和渲染产物校验分开记录。Flint Spec 由经过校验的计划和固定模板确定性编译，不要求模型直接生成可执行图表规范。一次 Cycle 最多执行两轮自动修复。
 
 ### Chart
 
@@ -92,10 +92,10 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 1. API 创建 Generation Job，并记录用户原始意图、Project、Conversation、Analysis Brief、Data Snapshot 和 Visual Template 版本。
 2. Data Worker 读取指定 Data Asset，生成 Data Snapshot 和字段画像。
-3. Generation Worker 将字段摘要、统计信息、脱敏样本、已确认 Metric Definition、相关 Project Memory 和用户意图交给 Model Gateway。
+3. Generation Worker 将确认后的 Brief、字段摘要、统计信息、脱敏文本、已确认 Metric Definition、允许的相关 Project Memory 和用户意图按 `canonical_text_context` 交给 Model Gateway；不直接回放供应商私有历史字段。
 4. 模型生成 TransformPlan；受限执行器执行并记录每一步输入、输出、空值处理和字段血缘。
-5. 模型生成 Flint Spec，系统执行结构校验、语义校验、数据字段校验和 Visual Template 规则校验。
-6. 校验失败时最多执行两轮受控修复；仍失败则返回可解释的失败结果或请求用户澄清。
+5. 系统根据通过计划校验的 TransformPlan 和固定 Visual Template 确定性编译 Flint Spec，并执行结构校验、语义校验、数据字段校验和模板规则校验；渲染完成后再执行独立的渲染产物校验。
+6. 计划或渲染校验失败时最多执行两轮受控修复；模型能力降级、工具调用失败或协议不兼容时，结束当前 Cycle 并提示用户选择模型。用户补充澄清或选择新模型后创建新的 Generation Cycle，不在原 Job 上覆盖输入。
 7. Render Worker 使用固定版本的 `flint-chart` 编译 Flint Spec，生成 Vega-Lite 规范和浏览器/PNG/SVG/HTML 输出。
 8. 系统创建不可变 Chart Revision 和 Evidence Block，保存输入、口径、计划、规范、字段血缘、Visual Template 快照、输出对象地址、校验结果和生成版本。
 

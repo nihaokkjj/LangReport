@@ -28,6 +28,8 @@ Consulting Project
 - [Agent 启动与 Loop 规范](./docs/agent-loop-spec.md)
 - [领域模型](./docs/domain-model.md)
 - [系统架构](./docs/architecture.md)
+- [多供应商模型接入实施计划（待实施）](./docs/model-gateway-implementation-plan.md)
+- [LangChain / LangGraph 选型研究（待实施）](./docs/langchain-langgraph-selection.md)
 - [插件 Manifest](./docs/plugin-manifest.md)
 - [MVP 路线](./docs/mvp-roadmap.md)
 - [市场研究](./docs/market-research.md)

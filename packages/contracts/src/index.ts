@@ -500,3 +500,181 @@ export type CreateMetricDefinitionRequest = z.infer<typeof createMetricDefinitio
 export type CreateWorkspaceRequest = z.infer<typeof createWorkspaceRequestSchema>;
 export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
 export type PasteDataRequest = z.infer<typeof pasteDataRequestSchema>;
+
+/** The only model task exposed by the first model-gateway contract. */
+export const modelTaskSchema = z.literal("chart-plan");
+
+export const modelProtocolSchema = z.enum(["chat-completions", "responses"]);
+export const structuredOutputMethodSchema = z.enum(["jsonSchema", "jsonMode", "functionCalling"]);
+
+export const historyPolicySchema = z.object({
+  strategy: z.literal("canonical_text_context"),
+  adapterVersion: z.string().trim().min(1).max(80)
+}).strict();
+
+export const clarificationOptionSchema = z.object({
+  value: z.string().trim().min(1).max(200),
+  label: z.string().trim().min(1).max(200)
+}).strict();
+
+export const clarificationQuestionSchema = z.object({
+  code: z.string().trim().min(1).max(120),
+  question: z.string().trim().min(1).max(1000),
+  reason: z.string().trim().min(1).max(1000).optional(),
+  field: z.string().trim().min(1).max(160).optional(),
+  options: z.array(clarificationOptionSchema).min(2).max(8).optional()
+}).strict();
+
+export const chartSelectionSchema = z.object({
+  chartType: z.enum(["line", "bar", "area"]),
+  xField: z.string().trim().min(1).max(160),
+  yField: z.string().trim().min(1).max(160),
+  seriesField: z.string().trim().min(1).max(160).nullable().default(null),
+  tooltipFields: z.array(z.string().trim().min(1).max(160)).max(16).default([])
+}).strict();
+
+const readyChartPlanDecisionSchema = z.object({
+  decision: z.literal("ready"),
+  intent: conversationIntentSchema,
+  plan: transformPlanSchema,
+  chartSelection: chartSelectionSchema,
+  questions: z.array(clarificationQuestionSchema).length(0).default([])
+}).strict();
+
+const needsClarificationChartPlanDecisionSchema = z.object({
+  decision: z.literal("needs_clarification"),
+  intent: conversationIntentSchema.nullable().default(null),
+  plan: z.null().default(null),
+  chartSelection: z.null().default(null),
+  questions: z.array(clarificationQuestionSchema).min(1).max(8)
+}).strict();
+
+/** A model may either return an executable candidate or ask for clarification, never both. */
+export const chartPlanDecisionSchema = z.discriminatedUnion("decision", [
+  readyChartPlanDecisionSchema,
+  needsClarificationChartPlanDecisionSchema
+]);
+
+export const structuredOutputCapabilitySchema = z.object({
+  methods: z.array(structuredOutputMethodSchema).min(1).max(3),
+  schemaVersion: z.string().trim().min(1).max(80)
+}).strict();
+
+export const modelCapabilitiesSchema = z.object({
+  streaming: z.boolean(),
+  cancellation: z.boolean(),
+  usageMetadata: z.boolean(),
+  toolCalling: z.boolean(),
+  maxContextTokens: z.number().int().positive().optional(),
+  maxOutputTokens: z.number().int().positive().optional()
+}).strict();
+
+export const modelProfileSchema = z.object({
+  version: z.literal("v1"),
+  profileId: z.string().trim().min(1).max(160),
+  connectionId: z.string().trim().min(1).max(160),
+  provider: z.string().trim().min(1).max(80),
+  protocol: modelProtocolSchema,
+  modelId: z.string().trim().min(1).max(200),
+  profileVersion: z.string().trim().min(1).max(80),
+  adapterVersion: z.string().trim().min(1).max(80),
+  enabled: z.boolean(),
+  tasks: z.array(modelTaskSchema).min(1).max(8),
+  structuredOutput: structuredOutputCapabilitySchema,
+  capabilities: modelCapabilitiesSchema,
+  historyPolicy: historyPolicySchema,
+  verifiedAt: z.string().datetime().optional(),
+  verificationReportRef: z.string().trim().min(1).max(300).optional()
+}).strict();
+
+export const modelOptionsSchema = z.record(z.string().trim().min(1).max(120), z.unknown());
+
+export const modelRunSnapshotSchema = z.object({
+  version: z.literal("v1"),
+  task: modelTaskSchema,
+  routeSnapshotId: z.string().trim().min(1).max(200),
+  requestedProfile: z.string().trim().min(1).max(160),
+  effectiveProfile: z.string().trim().min(1).max(160),
+  requestedOptions: modelOptionsSchema,
+  effectiveOptions: modelOptionsSchema,
+  historyPolicy: historyPolicySchema,
+  contextProjectionHash: z.string().trim().min(1).max(200),
+  capturedAt: z.string().datetime()
+}).strict();
+
+export const modelValidationErrorSchema = z.object({
+  code: z.string().trim().min(1).max(120),
+  path: z.string().trim().min(1).max(300).optional(),
+  message: z.string().trim().min(1).max(2000),
+  severity: z.enum(["error", "warning"])
+}).strict();
+
+export const validationRecordSchema = z.object({
+  status: z.enum(["pending", "passed", "failed"]),
+  errors: z.array(modelValidationErrorSchema).max(128),
+  validatorVersion: z.string().trim().min(1).max(80),
+  checkedAt: z.string().datetime().optional()
+}).strict().superRefine((record, context) => {
+  const hasBlockingError = record.errors.some((error) => error.severity === "error");
+  if (record.status === "passed" && hasBlockingError) {
+    context.addIssue({
+      code: "custom",
+      path: ["errors"],
+      message: "passed 校验记录不能包含 error 级别错误"
+    });
+  }
+  if (record.status === "failed" && !hasBlockingError) {
+    context.addIssue({
+      code: "custom",
+      path: ["errors"],
+      message: "failed 校验记录必须包含至少一个 error 级别错误"
+    });
+  }
+});
+
+export const generationValidationSchema = z.object({
+  plan: validationRecordSchema,
+  render: validationRecordSchema
+}).strict();
+
+export const modelErrorCodeSchema = z.enum([
+  "MODEL_AUTH_FAILED",
+  "MODEL_RATE_LIMITED",
+  "MODEL_TIMEOUT",
+  "MODEL_REFUSED",
+  "MODEL_CAPABILITY_UNSUPPORTED",
+  "MODEL_TOOL_FAILED",
+  "MODEL_OUTPUT_INVALID",
+  "MODEL_OUTPUT_EMPTY",
+  "MODEL_OUTPUT_TRUNCATED",
+  "MODEL_BUDGET_EXCEEDED",
+  "MODEL_POLICY_DENIED",
+  "MODEL_REQUEST_INVALID",
+  "MODEL_PROVIDER_UNAVAILABLE"
+]);
+
+export const modelErrorSchema = z.object({
+  code: modelErrorCodeSchema,
+  message: z.string().trim().min(1).max(2000),
+  retryable: z.boolean(),
+  invocationId: z.string().trim().min(1).max(200)
+}).strict();
+
+export type ModelTask = z.infer<typeof modelTaskSchema>;
+export type ModelProtocol = z.infer<typeof modelProtocolSchema>;
+export type StructuredOutputMethod = z.infer<typeof structuredOutputMethodSchema>;
+export type HistoryPolicy = z.infer<typeof historyPolicySchema>;
+export type ClarificationOption = z.infer<typeof clarificationOptionSchema>;
+export type ClarificationQuestion = z.infer<typeof clarificationQuestionSchema>;
+export type ChartSelection = z.infer<typeof chartSelectionSchema>;
+export type ChartPlanDecision = z.infer<typeof chartPlanDecisionSchema>;
+export type StructuredOutputCapability = z.infer<typeof structuredOutputCapabilitySchema>;
+export type ModelCapabilities = z.infer<typeof modelCapabilitiesSchema>;
+export type ModelProfile = z.infer<typeof modelProfileSchema>;
+export type ModelOptions = z.infer<typeof modelOptionsSchema>;
+export type ModelRunSnapshot = z.infer<typeof modelRunSnapshotSchema>;
+export type ModelValidationError = z.infer<typeof modelValidationErrorSchema>;
+export type ValidationRecord = z.infer<typeof validationRecordSchema>;
+export type GenerationValidation = z.infer<typeof generationValidationSchema>;
+export type ModelErrorCode = z.infer<typeof modelErrorCodeSchema>;
+export type ModelError = z.infer<typeof modelErrorSchema>;

@@ -196,6 +196,8 @@ Planning / Validating
 
 `Needs Clarification` 由用户补充信息后创建新的 Generation Cycle；它不通过静默修改原始请求继续运行。`Failed` 必须带错误类别、用户可理解的原因和建议动作。
 
+模型能力降级、工具调用失败或协议不兼容时，当前 Cycle 不得在后台切换模型。系统保存 `requested/effective` 配置和失败原因，并在用户界面提供可操作的模型选择；用户选择后创建新的 Generation Cycle。前端保存的模型偏好不能替代服务端对 Profile、Project 授权和当前 run 状态的检查。
+
 ## 5. 不变量和安全护栏
 
 ### 数据不变量

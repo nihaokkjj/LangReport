@@ -9,7 +9,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc --noEmit -p tsconfig.json",
-    "test": "tsx --test src/http.test.ts"
+    "test": "tsx --test src/http.test.ts src/model.test.ts"
   },
   "dependencies": {
     "zod": "4.5.4"

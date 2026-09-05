@@ -75,6 +75,18 @@ pnpm phase5:smoke
 
 该命令只输出每个检查的 HTTP 状态，不输出认证凭据；`PHASE5_JWT` 和 `PHASE5_SESSION_COOKIE` 至少提供一个，两个都提供时会分别回归 Bearer 和 HttpOnly Cookie。它会验证健康检查、数据库就绪、无认证拒绝、生产环境伪造 `x-user-id` 拒绝和插件管理接口。提供 `PHASE5_PROJECT_ID` 时还会检查 Project 插件 Binding 和能力目录。Smoke 通过后仍需由运维确认 HTTPS、Cookie 属性、网关密钥轮换和 ECS 安全组。
 
+如需验证完整垂直链路，可在 Smoke 通过后执行下面的验收脚本。它会写入一条带随机后缀的数据快照、对话和 Generation Job，并默认执行“撤销插件 → 读取历史 Revision → 导出 → 恢复插件”；不要在需要保持生产数据完全不变的环境执行，或设置 `PHASE5_E2E_REVOCATION=false` 跳过撤销段：
+
+```sh
+PHASE5_API_ORIGIN=https://<public-api-origin> \
+PHASE5_JWT='<short-lived-user-token>' \
+PHASE5_WORKSPACE_ID='<workspace-id>' \
+PHASE5_PROJECT_ID='<project-id>' \
+pnpm phase5:e2e
+```
+
+脚本会验证精确插件上下文、插件 Theme、Generation Worker → Render Worker → Revision、SVG 导出以及撤销后的历史快照保留；认证凭据不会打印。
+
 ## 5. Vercel 环境变量
 
 在 Vercel 的 Production 环境设置：

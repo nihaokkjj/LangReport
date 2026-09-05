@@ -68,6 +68,7 @@ Project 1 ── * Visual Template
 Project 1 ── * Chart Artifact
 Project 1 ── * Evidence Block
 Analysis Brief 1 ── * Generation Cycle
+Conversation 1 ── * Generation Cycle
 Generation Cycle 1 ── 1 Evidence Block
 Evidence Block 1 ── 1 Chart Revision
 Chart Artifact 1 ── * Chart Revision
@@ -91,6 +92,8 @@ Chart Revision 1 ── * Review Comment
 10. 一次第一阶段 Generation Cycle 只使用一个 Data Snapshot、一个 Visual Template 版本，并生成一个主 Evidence Block。
 11. Evidence Block 中的发现/结论不能超出其 Chart Revision、Metric Definition 和数据质量信息支持的范围。
 12. 用户可见的“生成成功”必须意味着 Flint Spec 和输出产物通过必要校验；成功不等于已审核。
+13. Generation Cycle 固化一个 Model Profile、路由、提示词、Schema、数据策略和上下文投影版本；切换模型或补充澄清必须创建新的 Cycle。
+14. 模型计划校验和渲染产物校验分别保存状态、错误和校验器版本，任一失败都不能标记生成成功。
 
 ## 4. 状态机
 
@@ -105,16 +108,14 @@ Ready → Archived → Deleted
 ### Generation Job
 
 ```text
-Queued → Profiling → Planning → Transforming → Compiling
-                                      ↓              ↓
-                                  Failed         Rendering
-                                                     ↓
-                                                 Validating
-                                              ┌──────┴──────┐
-                                           Succeeded      Failed
+Queued → Profiling → Planning → Transforming → Compiling → Rendering → Validating → Succeeded
+Planning / Validating → Needs Clarification
+Any running state      → Failed
 ```
 
 修复循环只能发生在 Validating 之后，最多两次；每次修复都必须保留模型输出和校验错误。
+
+上图的 `Validating` 是 Generation Job 的阶段状态；计划校验发生在 Transforming 之前，渲染产物校验发生在 Rendering 之后，二者通过独立的校验记录区分。模型能力降级、工具调用失败或协议不兼容时，当前 Job 结束并保存用户可操作的失败原因；用户选择模型或补充信息后创建新的 Generation Cycle。
 
 ### Generation Cycle
 

@@ -75,7 +75,7 @@ Phase 5 只增加声明式能力，不改变 Phase 2 的受限 TransformPlan 执
 | Web 主工作台 | 已落地 | `/plugins` 提供 Workspace 安装管理、Project 启用/禁用、能力目录和 Theme 选择；主工作台右上角提供入口并显示 Revision 插件快照条；追溯卡片通过独立 API 读取并覆盖 loading、无插件和损坏态；生产前端不依赖开发 Bootstrap | 补齐真实 ECS/Vercel 验收 |
 | Web API Console | 已落地但仅用于调试 | `apps/web/app/api-console/page.tsx` 从 OpenAPI 动态展示 `Plugins` 标签并手动发送请求 | 不把 API Console 作为产品管理入口 |
 | 正式身份认证 | 已接入签名 JWT Provider，待部署登录网关验收 | 非生产仍兼容 `x-user-id`；生产可自动校验 HS256 JWT（Bearer 或 HttpOnly Cookie），也保留 `buildApp` 的 `authProvider` 接入点；无有效认证时拒绝请求 | 配置部署环境的 JWT 签发网关、密钥和 Claim 校验，并执行真实登录回归 |
-| 验收测试 | 不完整 | SDK、Generation、API、真实 PostgreSQL/MinIO Worker/Render 集成测试已增加；`pnpm db:verify` 和签名 JWT 回归已通过；2026-09-04 已用本地 Chrome 验证 `/plugins` 安装 → 启用 → Theme/Manifest 校验、主工作台上传 → 生成 → Revision 快照、撤销后历史 Revision 读取、插件上下文 API、损坏/无插件状态，并检查 390px 移动宽度无溢出；`provision:production` 已提供显式确认的首次 Workspace 初始化；隔离生产 Compose 已通过版本化迁移、迁移后 Worker 启动、Bearer JWT/Session Cookie、无认证和伪造身份头拒绝、插件 API 及完整生成导出链路；`pnpm phase5:smoke` 已提供部署后验收 | 补齐真实登录网关、ECS 部署数据库和 Vercel/ECS 生产验收 |
+| 验收测试 | 不完整 | SDK、Generation、API、真实 PostgreSQL/MinIO Worker/Render 集成测试已增加；`pnpm db:verify` 和签名 JWT 回归已通过；2026-09-04 已用本地 Chrome 验证 `/plugins` 安装 → 启用 → Theme/Manifest 校验、主工作台上传 → 生成 → Revision 快照、撤销后历史 Revision 读取、插件上下文 API、损坏/无插件状态，并检查 390px 移动宽度无溢出；`provision:production` 已提供显式确认的首次 Workspace 初始化；隔离生产 Compose 已通过版本化迁移、迁移后 Worker 启动、Bearer JWT/Session Cookie、无认证和伪造身份头拒绝、插件 API 及完整生成导出链路；`pnpm phase5:smoke` 和 `pnpm phase5:e2e` 已提供部署后验收 | 补齐真实登录网关、ECS 部署数据库和 Vercel/ECS 生产验收 |
 
 当前实现与设计目标的关键差异：
 
@@ -506,7 +506,7 @@ Render Worker 不执行插件代码。它可以根据 Job 已固化的精确引�
 - `PLUGIN_CONTEXT_INVALID`
 - `PLUGIN_SCOPE_FORBIDDEN`
 
-生产前端请求统一使用 `credentials: include` 以携带登录网关的 HttpOnly Session Cookie；API CORS 同时显式返回 `Access-Control-Allow-Credentials: true`。部署 Smoke 支持用短期 Bearer JWT 或 `PHASE5_SESSION_COOKIE` 回归真实 Session Cookie，并验证 `/ready` 数据库就绪和无认证拒绝。同源 Vercel Rewrite 仍是推荐部署方式，开发环境的 `x-user-id` 只在非生产配置下启用。
+生产前端请求统一使用 `credentials: include` 以携带登录网关的 HttpOnly Session Cookie；API CORS 同时显式返回 `Access-Control-Allow-Credentials: true`。部署 Smoke 和完整 E2E 支持用短期 Bearer JWT 或 `PHASE5_SESSION_COOKIE` 回归真实 Session Cookie，并验证 `/ready` 数据库就绪和无认证拒绝。同源 Vercel Rewrite 仍是推荐部署方式，开发环境的 `x-user-id` 只在非生产配置下启用。
 
 ## 11. Web 体验
 
@@ -640,7 +640,7 @@ API 路由已覆盖 Workspace 插件目录、Manifest 校验/安装/撤销/恢�
 
 ### Step 8：补齐迁移、兼容性和端到端验证（本地及隔离生产 Compose 已完成，待真实部署验收）
 
-使用内置销售插件完成一条垂直验收：安装 → Project 启用 → 模板/语义发现 → Theme 选择 → Validator → 生成 → Revision 快照 → 撤销插件 → 历史 Revision 读取。该链路已在本地 Chrome、真实 PostgreSQL/MinIO Worker/Render 和隔离生产 Compose 中通过；上传 Manifest 的读取 → 校验 → 安装 → 启用 → 撤销路径、追溯卡片的损坏态和无插件态也已通过浏览器验收。失败重试已覆盖可恢复的 `RENDER_FAILED` 重新入队、并发幂等、不可重试错误和次数上限；本地及隔离生产迁移兼容、签名 JWT、Session Cookie 和 `/ready` 回归已通过，仍需在 ECS 部署数据库、真实登录网关和 Vercel/ECS 生产环境执行验收。
+使用内置销售插件完成一条垂直验收：安装 → Project 启用 → 模板/语义发现 → Theme 选择 → Validator → 生成 → Revision 快照 → 撤销插件 → 历史 Revision 读取。该链路已在本地 Chrome、真实 PostgreSQL/MinIO Worker/Render 和隔离生产 Compose 中通过；可重复的 `pnpm phase5:e2e` 已覆盖隔离 Compose 的同一链路。上传 Manifest 的读取 → 校验 → 安装 → 启用 → 撤销路径、追溯卡片的损坏态和无插件态也已通过浏览器验收。失败重试已覆盖可恢复的 `RENDER_FAILED` 重新入队、并发幂等、不可重试错误和次数上限；本地及隔离生产迁移兼容、签名 JWT、Session Cookie 和 `/ready` 回归已通过，仍需在 ECS 部署数据库、真实登录网关和 Vercel/ECS 生产环境执行验收。
 
 完成标准：所有路线图验收、权限、越权、幂等、并发、删除保留、版本漂移、Theme 实际渲染和错误分类测试通过；文档中的字段、状态、API 和前端入口与最终实现一致。
 
