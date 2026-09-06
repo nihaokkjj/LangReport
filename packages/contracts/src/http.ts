@@ -313,7 +313,7 @@ const generationJobDto = dto({
   operation: { type: "string", enum: ["generate", "edit", "rollback", "copy"] },
   artifactId: nullable(uuid()),
   baseRevisionId: nullable(uuid()),
-  status: { type: "string", enum: ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "succeeded", "failed"] },
+  status: { type: "string", enum: ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "needs_clarification", "succeeded", "failed"] },
   intent: nullable(anyJson),
   transformPlan: nullable(anyJson),
   fieldLineage: nullable(anyJson),
@@ -323,6 +323,7 @@ const generationJobDto = dto({
   validation: nullable(validationDto),
   vegaLiteSpec: nullable(anyJson),
   previewData: nullable(anyJson),
+  generationAudit: nullable(anyJson),
   outputs: nullable(anyJson),
   repairCount: integer(),
   attemptCount: integer(),
@@ -335,7 +336,7 @@ const generationJobDto = dto({
 
 const generationJobSummaryDto = dto({
   id: uuid(),
-  status: { type: "string", enum: ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "succeeded", "failed"] },
+  status: { type: "string", enum: ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "needs_clarification", "succeeded", "failed"] },
   prompt: string(),
   snapshotId: uuid(),
   intent: nullable(anyJson),
@@ -344,6 +345,7 @@ const generationJobSummaryDto = dto({
   flintSpec: nullable(anyJson),
   validation: nullable(validationDto),
   previewData: nullable(anyJson),
+  generationAudit: nullable(anyJson),
   repairCount: integer(),
   errorCode: nullable(string()),
   errorMessage: nullable(string())

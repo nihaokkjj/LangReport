@@ -2,10 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   chartPlanDecisionSchema,
+  createChartPlanOutputDescriptor,
   historyPolicySchema,
   modelErrorCodeSchema,
   modelProfileSchema,
+  modelResultSchema,
   modelRunSnapshotSchema,
+  persistedModelRequestSchema,
+  preparedModelContextSchema,
+  type ModelGateway,
+  type RuntimeModelRequest,
   validationRecordSchema
 } from "./index.js";
 
@@ -40,6 +46,62 @@ const validChartSelection = {
   yField: "销售额_sum",
   seriesField: "区域",
   tooltipFields: ["销售额_sum"]
+};
+
+const validPreparedModelContext = {
+  version: "v1" as const,
+  historyPolicy: {
+    strategy: "canonical_text_context" as const,
+    adapterVersion: "v1"
+  },
+  brief: {
+    businessQuestion: "按月份展示各区域销售额和同比变化",
+    audience: "客户汇报",
+    timeRange: "2025-01 至 2026-03",
+    timeGrain: "month",
+    outputFormat: "evidence_block"
+  },
+  metricDefinition: {
+    name: "销售额同比",
+    meaning: "按区域汇总每个自然月销售额，并与上年同月比较",
+    formula: "(本月销售额 - 上年同月销售额) / ABS(上年同月销售额)",
+    unit: "%",
+    timeRule: "按自然月分组；同比匹配前 12 个月；缺少基期时返回空值",
+    filterRule: null
+  },
+  memories: [{
+    scope: "project" as const,
+    statement: "客户汇报优先使用中文标题和直接标注单位"
+  }],
+  fieldProfiles: [{
+    name: "月份",
+    inferredType: "date" as const,
+    nullCount: 0,
+    distinctCount: 6,
+    sampleValues: ["2025-01", "2025-02"]
+  }, {
+    name: "销售额",
+    inferredType: "number" as const,
+    nullCount: 0,
+    distinctCount: 15,
+    sampleValues: [60, 40]
+  }],
+  statistics: [{
+    name: "row_count",
+    value: 24,
+    unit: "rows"
+  }],
+  samples: [{
+    label: "2026-01 / 华东",
+    text: "月份=2026-01；区域=华东；销售额=125"
+  }],
+  allowedOperations: ["aggregate" as const, "derive" as const, "sort" as const],
+  allowedChartTypes: ["line" as const, "bar" as const, "area" as const],
+  templateConstraints: {
+    templateId: "consulting-evidence-v1",
+    templateVersion: "v1",
+    requirements: ["必须展示单位", "必须保留数据限制说明"]
+  }
 };
 
 test("chart-plan ready decision contains a plan and chart selection", () => {
@@ -106,6 +168,131 @@ test("chart-plan decisions cannot contain both a plan and clarification question
     chartSelection: null,
     questions: []
   }));
+});
+
+test("prepared model context is a strict canonical text projection", () => {
+  const context = preparedModelContextSchema.parse(validPreparedModelContext);
+
+  assert.equal(context.historyPolicy.strategy, "canonical_text_context");
+  assert.equal(context.fieldProfiles[0]?.name, "月份");
+  assert.equal(context.samples[0]?.text, "月份=2026-01；区域=华东；销售额=125");
+
+  assert.throws(() => preparedModelContextSchema.parse({
+    ...validPreparedModelContext,
+    reasoning: "不得把隐藏推理放入首期上下文"
+  }));
+  assert.throws(() => preparedModelContextSchema.parse({
+    ...validPreparedModelContext,
+    historyPolicy: { strategy: "full_conversation", adapterVersion: "v1" }
+  }));
+});
+
+test("chart-plan output descriptor is generated from the local decision contract", () => {
+  const descriptor = createChartPlanOutputDescriptor();
+  const jsonSchema = descriptor.jsonSchema as {
+    $schema?: string;
+    oneOf?: Array<{ properties?: Record<string, unknown> }>;
+  };
+
+  assert.equal(descriptor.schemaId, "chart-plan");
+  assert.equal(descriptor.schemaVersion, "v1");
+  assert.equal(jsonSchema.$schema, "http://json-schema.org/draft-07/schema#");
+  assert.ok(jsonSchema.oneOf?.some((branch) => branch.properties?.decision !== undefined));
+  assert.match(JSON.stringify(jsonSchema), /needs_clarification/);
+});
+
+test("persisted request excludes runtime parser and cancellation objects", () => {
+  const persistedRequest = persistedModelRequestSchema.parse({
+    version: "v1",
+    workspaceId: "workspace-001",
+    projectId: "project-001",
+    generationJobId: "job-001",
+    invocationId: "invocation-001",
+    task: "chart-plan",
+    routeSnapshotId: "route-001",
+    context: validPreparedModelContext,
+    output: createChartPlanOutputDescriptor(),
+    budget: {
+      deadlineAt: 1799011200000,
+      maxOutputTokens: 2048
+    }
+  });
+
+  assert.equal(persistedRequest.output.schemaId, "chart-plan");
+  assert.throws(() => persistedModelRequestSchema.parse({
+    ...persistedRequest,
+    output: {
+      ...persistedRequest.output,
+      parse: () => validIntent
+    }
+  }));
+});
+
+test("model result has mutually exclusive success and error envelopes", () => {
+  const success = modelResultSchema.parse({
+    status: "ok",
+    data: { decision: "needs_clarification" },
+    invocationId: "invocation-001"
+  });
+  const failure = modelResultSchema.parse({
+    status: "error",
+    code: "MODEL_TIMEOUT",
+    message: "模型调用超过截止时间",
+    retryable: true,
+    invocationId: "invocation-001"
+  });
+
+  assert.equal(success.status, "ok");
+  assert.equal(failure.status, "error");
+  assert.throws(() => modelResultSchema.parse({
+    status: "ok",
+    data: validIntent,
+    code: "MODEL_TIMEOUT",
+    invocationId: "invocation-001"
+  }));
+  assert.throws(() => modelResultSchema.parse({
+    status: "error",
+    data: validIntent,
+    code: "MODEL_TIMEOUT",
+    message: "非法混合结果",
+    retryable: true,
+    invocationId: "invocation-001"
+  }));
+});
+
+test("model gateway interface keeps parsing and cancellation runtime-only", async () => {
+  const gateway: ModelGateway = {
+    async generateStructured<T>(request: RuntimeModelRequest<T>) {
+      return {
+        status: "ok" as const,
+        data: request.output.parse({}),
+        invocationId: request.invocationId
+      };
+    }
+  };
+
+  const result = await gateway.generateStructured({
+    version: "v1",
+    workspaceId: "workspace-001",
+    projectId: "project-001",
+    generationJobId: "job-001",
+    invocationId: "invocation-001",
+    task: "chart-plan",
+    routeSnapshotId: "route-001",
+    context: validPreparedModelContext,
+    output: {
+      ...createChartPlanOutputDescriptor(),
+      parse: () => validIntent
+    },
+    budget: {
+      deadlineAt: 1799011200000,
+      maxOutputTokens: 2048
+    },
+    signal: new AbortController().signal
+  });
+
+  assert.equal(result.status, "ok");
+  assert.equal(result.invocationId, "invocation-001");
 });
 
 test("history policy fixes the first context strategy", () => {

@@ -46,18 +46,18 @@ Compose 会通过一次性 `minio-init` 服务自动创建 `langreport` bucket�
 ```text
 apps/web                 Next.js 前端
 apps/api                 Fastify 模块化单体 API
-apps/generation-worker   TransformPlan / Model Gateway 的进程边界
+apps/generation-worker   Generation Job 调度、Generation Cycle 输入快照和结果持久化边界
 apps/render-worker       flint-chart / Vega-Lite 的进程边界
 packages/contracts       Zod API、任务和 TransformPlan Schema
 packages/db              Drizzle Schema、数据库客户端和迁移入口
 packages/data-engine     CSV/XLSX/JSON 解析、字段画像和预览
-packages/generation      Conversation Intent、计划生成、Flint Spec 和校验
+packages/generation      Generation Cycle seam、确定性 adapter、计划生成、Flint Spec 和校验
 packages/flint-adapter    Flint 编译、确定性 SVG/PNG 输出边界
 packages/storage         S3/MinIO 对象存储适配
 infra                    PostgreSQL、MinIO 等本地依赖
 ```
 
-Generation Worker 和 Render Worker 通过 PostgreSQL-backed Generation Job 状态轮询协作：前者负责意图、TransformPlan、变换、血缘和校验，后者负责固定版本 Flint 编译以及 SVG/PNG 输出。
+Generation Worker 和 Render Worker 通过 PostgreSQL-backed Generation Job 状态轮询协作：前者只组装固化输入并消费 `GenerationCycle` 的 `drafted / needs_clarification / failed` 结果，Cycle 内部负责意图、TransformPlan、变换、血缘和计划校验，后者负责固定版本 Flint 编译以及 SVG/PNG 输出。
 
 ## 4. 数据输入 API
 
@@ -142,8 +142,8 @@ pnpm db:verify
 ## 7. 阶段 2 实现顺序
 
 1. Conversation 保存用户自然语言意图，按 Project 固定 Data Snapshot。
-2. Generation Worker 生成并执行受限 TransformPlan，保存每一步的行数和字段血缘。
-3. 生成 Flint Spec，执行 Schema、语义、数据字段和视觉校验，最多自动修复两轮。
+2. Generation Cycle 通过确定性 adapter 生成并执行受限 TransformPlan，保存每一步的行数和字段血缘。
+3. Generation Cycle 生成 Flint Spec，执行 Schema、语义、数据字段和视觉校验，最多自动修复两轮。
 4. Render Worker 使用固定版本的 `flint-chart`，写入 Vega-Lite、SVG 和 PNG 私有对象。
 5. 通过 Chart Revision 保存 Snapshot、计划、规范、主题快照、校验结果和输出地址。
 

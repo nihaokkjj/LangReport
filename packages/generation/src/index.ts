@@ -1,14 +1,29 @@
+import { createHash } from "node:crypto";
 import {
+  chartPlanDecisionSchema,
   conversationIntentSchema,
+  createChartPlanOutputDescriptor,
   flintSpecSchema,
+  modelResultSchema,
+  preparedModelContextSchema,
   transformPlanSchema,
+  type ChartPlanDecision,
+  type ClarificationQuestion,
   type ConversationIntent,
   type FlintSpec,
+  type ModelBudget,
+  type ModelErrorCode,
   type MemoryContext,
+  type ModelGateway,
+  type ModelResult,
+  type ModelRunSnapshot,
+  type PreparedModelContext,
   type PluginThemeRef,
   type PluginUsage,
+  type RuntimeModelRequest,
   type TransformPlan,
   type ValidationIssue,
+  type ValidationRecord,
   type ValidationReport
 } from "@langreport/contracts";
 import { executeTransformPlan, type ColumnProfile, type DataRow, type TransformResult } from "@langreport/data-engine";
@@ -40,7 +55,7 @@ const DATE_NAME_HINTS = ["日期", "时间", "月份", "月", "季度", "年份"
 const DIMENSION_NAME_HINTS = ["区域", "地区", "城市", "省", "国家", "渠道", "产品", "类别", "类型", "region", "area", "city", "category", "product"];
 const MEASURE_NAME_HINTS = ["销售", "收入", "金额", "数量", "利润", "成本", "营收", "revenue", "sales", "amount", "quantity", "profit", "cost"];
 
-export function parseConversationIntent(prompt: string, profiles: ColumnProfile[]): ConversationIntent {
+function parseConversationIntent(prompt: string, profiles: ColumnProfile[]): ConversationIntent {
   const normalizedPrompt = prompt.trim();
   const timeProfile = findProfile(profiles, DATE_NAME_HINTS, (profile) => profile.inferredType === "date");
   const numericProfiles = profiles.filter((profile) => profile.inferredType === "number");
@@ -84,7 +99,7 @@ export function parseConversationIntent(prompt: string, profiles: ColumnProfile[
   });
 }
 
-export function generateTransformPlan(intentInput: ConversationIntent, profiles: ColumnProfile[]): TransformPlan {
+function generateTransformPlan(intentInput: ConversationIntent, profiles: ColumnProfile[]): TransformPlan {
   const intent = conversationIntentSchema.parse(intentInput);
   const availableColumns = new Set(profiles.map((profile) => profile.name));
   const measure = intent.measureColumns[0];
@@ -131,7 +146,7 @@ export function generateTransformPlan(intentInput: ConversationIntent, profiles:
   });
 }
 
-export function generateFlintSpec(input: {
+function generateFlintSpec(input: {
   intent: ConversationIntent;
   transform: TransformResult;
   theme?: FlintSpec["theme"];
@@ -178,7 +193,7 @@ export function generateFlintSpec(input: {
   });
 }
 
-export function validateFlintSpec(specInput: unknown): ValidationReport {
+function validateFlintSpec(specInput: unknown): ValidationReport {
   const issues: ValidationIssue[] = [];
   const parsed = flintSpecSchema.safeParse(specInput);
   const schemaValid = parsed.success;
@@ -210,15 +225,15 @@ export function validateFlintSpec(specInput: unknown): ValidationReport {
   return report(issues, { schema: schemaValid, semantics: semanticsValid, dataFields: dataFieldsValid, visual: visualValid });
 }
 
-/** Run the deterministic generation path and retain a bounded repair count. */
-export function generateArtifacts(input: GenerationInput & { plan?: TransformPlan }): GenerationArtifacts {
-  const intent = parseConversationIntent(input.prompt, input.profiles);
+/** Materialize a validated Chart Plan decision through the internal deterministic modules. */
+function materializeArtifacts(input: GenerationInput & { plan?: TransformPlan }, decision: Extract<ChartPlanDecision, { decision: "ready" }>): GenerationArtifacts {
+  const intent = decision.intent;
   const pluginManifests = input.pluginManifests ?? [];
   const pluginTemplate = selectPluginTemplate(input.prompt, pluginManifests, "vega-lite");
   const pluginTemplateId = pluginTemplate?.id;
   const pluginChartType = pluginTemplate?.payload.chartType;
   const chartTypeOverride = pluginChartType === "Line Chart" || pluginChartType === "Bar Chart" || pluginChartType === "Area Chart" ? pluginChartType : undefined;
-  let plan = input.plan ? transformPlanSchema.parse(input.plan) : generateTransformPlan(intent, input.profiles);
+  let plan = input.plan ? transformPlanSchema.parse(input.plan) : decision.plan;
   let repairCount = 0;
   let transform = executeTransformPlan(plan, input.rows);
   const themeConfig = input.themeConfig ?? {};
@@ -410,4 +425,402 @@ function includesHint(value: string, hints: string[]): boolean {
 function titleForPrompt(prompt: string): string {
   const compact = prompt.replace(/[\r\n]+/g, " ").trim();
   return compact.length > 80 ? `${compact.slice(0, 77)}…` : compact;
+}
+
+export type GenerationCycleInput = GenerationInput & {
+  plan?: TransformPlan;
+  cycle: {
+    workspaceId: string;
+    projectId: string;
+    generationJobId: string;
+    invocationId: string;
+    routeSnapshotId: string;
+    budget: ModelBudget;
+  };
+  analysisBriefSnapshot?: Record<string, unknown>;
+  metricDefinitionSnapshot?: Record<string, unknown>;
+  requestedProfile?: string;
+  effectiveProfile?: string;
+  requestedOptions?: Record<string, unknown>;
+  effectiveOptions?: Record<string, unknown>;
+};
+
+type GenerationCycleStageName = "planning" | "transforming" | "compiling" | "validating";
+type GenerationCycleStageStatus = "pending" | "succeeded" | "failed" | "skipped";
+
+export type GenerationCycleAudit = {
+  version: "v1";
+  invocationId: string;
+  contextPolicy: "canonical_text_context";
+  modelRun: ModelRunSnapshot;
+  stages: Array<{
+    name: GenerationCycleStageName;
+    status: GenerationCycleStageStatus;
+    errorCode?: string;
+  }>;
+  planValidation: ValidationRecord;
+  renderValidation: ValidationRecord;
+  repairCount: number;
+  contextFallbacks: string[];
+};
+
+type GenerationCycleFailureCode = ModelErrorCode
+  | "GENERATION_CONTEXT_INVALID"
+  | "GENERATION_TRANSFORM_FAILED"
+  | "GENERATION_COMPILATION_FAILED"
+  | "GENERATION_VALIDATION_FAILED"
+  | "GENERATION_UNEXPECTED";
+
+export type GenerationCycleResult =
+  | { status: "drafted"; artifacts: GenerationArtifacts; audit: GenerationCycleAudit }
+  | { status: "needs_clarification"; questions: ClarificationQuestion[]; audit: GenerationCycleAudit }
+  | {
+    status: "failed";
+    error: { code: GenerationCycleFailureCode; message: string; retryable: boolean; invocationId: string };
+    audit: GenerationCycleAudit;
+  };
+
+const deterministicAdapterVersion = "deterministic-chart-plan-v1";
+const contextAdapterVersion = "canonical-text-context-v1";
+
+/**
+ * Generation Cycle is the public seam for generation. Data execution, Flint
+ * compilation, plugin validation, and repair remain private to this module.
+ */
+export class GenerationCycle {
+  constructor(private readonly gateway: ModelGateway = new DeterministicModelGateway()) {}
+
+  async run(input: GenerationCycleInput): Promise<GenerationCycleResult> {
+    let context: PreparedModelContext;
+    let audit: GenerationCycleAudit;
+    try {
+      context = buildPreparedModelContext(input);
+      audit = createAudit(input, context);
+    } catch (error) {
+      audit = createAudit(input);
+      return failedResult(audit, input, "GENERATION_CONTEXT_INVALID", errorMessage(error, "模型上下文无效"), false, "planning");
+    }
+
+    if (input.memoryContext?.conflicts.some((conflict) => conflict.requiresDecision)) {
+      const questions = input.memoryContext.conflicts
+        .filter((conflict) => conflict.requiresDecision)
+        .slice(0, 8)
+        .map((conflict) => ({
+          code: "memory_conflict",
+          question: `请确认 Memory「${conflict.memoryKey}」应采用哪一条规则`,
+          reason: "项目级与 Workspace 级记忆存在冲突，Cycle 不能静默选择",
+          field: conflict.memoryKey
+        }));
+      audit = setStage(audit, "planning", "succeeded");
+      return { status: "needs_clarification", questions, audit };
+    }
+
+    if (Date.now() >= input.cycle.budget.deadlineAt) {
+      return failedResult(audit, input, "MODEL_BUDGET_EXCEEDED", "Generation Cycle 在模型调用前已超过截止时间预算", false, "planning");
+    }
+
+    const request: RuntimeModelRequest<ChartPlanDecision> = {
+      version: "v1",
+      workspaceId: input.cycle.workspaceId,
+      projectId: input.cycle.projectId,
+      generationJobId: input.cycle.generationJobId,
+      invocationId: input.cycle.invocationId,
+      task: "chart-plan",
+      routeSnapshotId: input.cycle.routeSnapshotId,
+      context,
+      output: {
+        ...createChartPlanOutputDescriptor(),
+        parse: (value: unknown) => chartPlanDecisionSchema.parse(value)
+      },
+      budget: input.cycle.budget,
+      signal: new AbortController().signal
+    };
+
+    let modelResult: ModelResult<ChartPlanDecision>;
+    try {
+      modelResult = await this.gateway.generateStructured(request);
+    } catch (error) {
+      return failedResult(audit, input, "GENERATION_UNEXPECTED", errorMessage(error, "Model Gateway 调用失败"), false, "planning");
+    }
+    audit = setStage(audit, "planning", "succeeded");
+
+    const resultEnvelope = modelResultSchema.safeParse(modelResult);
+    if (!resultEnvelope.success) {
+      return failedResult(audit, input, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的结果 envelope 不符合版本化合同", false, "planning");
+    }
+
+    if (modelResult.status === "error") {
+      return failedResult(audit, input, modelResult.code, modelResult.message, modelResult.retryable, "planning");
+    }
+
+    const decision = chartPlanDecisionSchema.safeParse(modelResult.data);
+    if (!decision.success) {
+      return failedResult(audit, input, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的 chart-plan 不符合版本化合同", false, "planning");
+    }
+    if (decision.data.decision === "needs_clarification") {
+      return { status: "needs_clarification", questions: decision.data.questions, audit };
+    }
+
+    let artifacts: GenerationArtifacts;
+    try {
+      audit = setStage(audit, "transforming", "succeeded");
+      artifacts = materializeArtifacts(input, decision.data);
+      audit = setStage(audit, "compiling", "succeeded");
+      audit = setStage(audit, "validating", "succeeded");
+    } catch (error) {
+      const message = errorMessage(error, "生成阶段失败");
+      const stage = message.includes("Flint") || message.includes("图表") ? "compiling" : "transforming";
+      return failedResult(audit, input, stage === "compiling" ? "GENERATION_COMPILATION_FAILED" : "GENERATION_TRANSFORM_FAILED", message, false, stage);
+    }
+
+    audit = {
+      ...audit,
+      planValidation: validationRecordFromReport(artifacts.validation),
+      repairCount: artifacts.repairCount
+    };
+    if (!artifacts.validation.valid) {
+      return failedResult(
+        audit,
+        input,
+        artifacts.repairCount >= 2 ? "MODEL_BUDGET_EXCEEDED" : "GENERATION_VALIDATION_FAILED",
+        artifacts.repairCount >= 2 ? "生成修复预算已耗尽，Flint Spec 仍未通过校验" : "生成结果未通过必要校验",
+        false,
+        "validating"
+      );
+    }
+    return { status: "drafted", artifacts, audit };
+  }
+}
+
+/** Keep revision validation behind the Generation public seam for edit jobs. */
+export function validateGenerationRevision(specInput: unknown): ValidationReport {
+  return validateFlintSpec(specInput);
+}
+
+class DeterministicModelGateway implements ModelGateway {
+  async generateStructured<T>(request: RuntimeModelRequest<T>): Promise<ModelResult<T>> {
+    try {
+      const context = preparedModelContextSchema.parse(request.context);
+      const profiles = context.fieldProfiles;
+      const numeric = profiles.filter((profile) => profile.inferredType === "number");
+      if (numeric.length === 0) {
+        return {
+          status: "ok",
+          data: request.output.parse({
+            decision: "needs_clarification",
+            intent: null,
+            plan: null,
+            chartSelection: null,
+            questions: [{
+              code: "measure_missing",
+              question: "请确认需要分析的数值指标",
+              reason: "当前 Data Snapshot 没有可聚合的数值字段"
+            }]
+          }),
+          invocationId: request.invocationId
+        };
+      }
+      const intent = parseConversationIntent(context.brief.businessQuestion, profiles);
+      const plan = generateTransformPlan(intent, profiles);
+      const measure = intent.measureColumns[0];
+      const xField = intent.timeColumn ?? intent.dimensionColumns[0] ?? plan.steps.find((step) => step.kind === "aggregate")?.groupBy[0];
+      if (!measure || !xField) {
+        return {
+          status: "ok",
+          data: request.output.parse({
+            decision: "needs_clarification",
+            intent,
+            plan: null,
+            chartSelection: null,
+            questions: [{
+              code: "grouping_field_missing",
+              question: "请确认图表的横轴或分组字段",
+              reason: "当前 Data Snapshot 无法确定图表分组方式"
+            }]
+          }),
+          invocationId: request.invocationId
+        };
+      }
+      const comparisonField = intent.comparison === "none" ? undefined : `${measure}_${intent.comparison}`;
+      return {
+        status: "ok",
+        data: request.output.parse({
+          decision: "ready",
+          intent,
+          plan,
+          chartSelection: {
+            chartType: intent.chartType,
+            xField,
+            yField: `${measure}_sum`,
+            seriesField: intent.timeColumn && intent.dimensionColumns[0] ? intent.dimensionColumns[0] : null,
+            tooltipFields: comparisonField ? [comparisonField] : []
+          },
+          questions: []
+        }),
+        invocationId: request.invocationId
+      };
+    } catch (error) {
+      return {
+        status: "error",
+        code: "MODEL_OUTPUT_INVALID",
+        message: errorMessage(error, "确定性 chart-plan adapter 无法产出合法结果"),
+        retryable: false,
+        invocationId: request.invocationId
+      };
+    }
+  }
+}
+
+function buildPreparedModelContext(input: GenerationCycleInput): PreparedModelContext {
+  const brief = asRecord(input.analysisBriefSnapshot);
+  const metric = asRecord(input.metricDefinitionSnapshot);
+  const numericProfile = input.profiles.find((profile) => profile.inferredType === "number");
+  const selectedTemplate = selectPluginTemplate(input.prompt, input.pluginManifests ?? [], "vega-lite");
+  const samples = input.rows.slice(0, 5).map((row, index) => ({
+    label: `row-${index + 1}`,
+    text: JSON.stringify(row) || "{}"
+  }));
+  return preparedModelContextSchema.parse({
+    version: "v1",
+    historyPolicy: { strategy: "canonical_text_context", adapterVersion: contextAdapterVersion },
+    brief: {
+      businessQuestion: contextText(brief.businessQuestion, input.prompt),
+      audience: contextText(brief.audience, "客户汇报"),
+      timeRange: nullableContextText(brief.timeRange),
+      timeGrain: nullableContextText(brief.timeGrain),
+      outputFormat: contextText(brief.outputFormat, "evidence_block")
+    },
+    metricDefinition: {
+      name: contextText(metric.name, numericProfile?.name ?? "待确认指标"),
+      meaning: contextText(metric.meaning, "按 Data Snapshot 中的数值字段聚合"),
+      formula: contextText(metric.formula, `sum(${numericProfile?.name ?? "待确认字段"})`),
+      unit: contextText(metric.unit, "未指定"),
+      timeRule: contextText(metric.timeRule, "按请求指定的时间粒度统计"),
+      filterRule: nullableContextText(metric.filterRule)
+    },
+    memories: [...(input.memoryContext?.project ?? []), ...(input.memoryContext?.workspace ?? [])]
+      .slice(0, 32)
+      .map((record) => ({ scope: record.scope, statement: contextText(record.statement, record.memoryKey) })),
+    fieldProfiles: input.profiles.map((profile) => ({
+      name: profile.name,
+      inferredType: profile.inferredType,
+      nullCount: profile.nullCount,
+      distinctCount: profile.distinctCount,
+      sampleValues: profile.sampleValues.slice(0, 16)
+    })),
+    statistics: input.profiles.flatMap((profile) => [
+      { name: `${profile.name}.nullRate`, value: input.rows.length ? profile.nullCount / input.rows.length : 0, unit: "ratio" },
+      { name: `${profile.name}.distinctCount`, value: profile.distinctCount, unit: "count" }
+    ]).slice(0, 128),
+    samples,
+    allowedOperations: ["filter", "derive", "aggregate", "sort", "limit"],
+    allowedChartTypes: ["line", "bar", "area"],
+    templateConstraints: {
+      templateId: selectedTemplate?.id ?? "builtin-default",
+      templateVersion: input.themeVersion ?? "v1",
+      requirements: selectedTemplate?.requiredFields.map((field) => `${field.role}:${field.semanticTypes.join("|")}`) ?? []
+    }
+  });
+}
+
+function createAudit(input: GenerationCycleInput, context?: PreparedModelContext): GenerationCycleAudit {
+  const contextProjectionHash = context
+    ? createHash("sha256").update(JSON.stringify(context)).digest("hex")
+    : "unavailable";
+  const requestedProfile = input.requestedProfile ?? "deterministic-offline";
+  const effectiveProfile = input.effectiveProfile ?? requestedProfile;
+  return {
+    version: "v1",
+    invocationId: input.cycle.invocationId,
+    contextPolicy: "canonical_text_context",
+    modelRun: {
+      version: "v1",
+      task: "chart-plan",
+      routeSnapshotId: input.cycle.routeSnapshotId,
+      requestedProfile,
+      effectiveProfile,
+      requestedOptions: input.requestedOptions ?? {},
+      effectiveOptions: input.effectiveOptions ?? input.requestedOptions ?? {},
+      historyPolicy: { strategy: "canonical_text_context", adapterVersion: contextAdapterVersion },
+      contextProjectionHash,
+      capturedAt: new Date().toISOString()
+    },
+    stages: [
+      { name: "planning", status: "pending" },
+      { name: "transforming", status: "pending" },
+      { name: "compiling", status: "pending" },
+      { name: "validating", status: "pending" }
+    ],
+    planValidation: pendingValidationRecord(),
+    renderValidation: pendingValidationRecord(),
+    repairCount: 0,
+    contextFallbacks: [deterministicAdapterVersion]
+  };
+}
+
+function failedResult(
+  audit: GenerationCycleAudit,
+  input: GenerationCycleInput,
+  code: GenerationCycleFailureCode,
+  message: string,
+  retryable: boolean,
+  stage: GenerationCycleStageName
+): Extract<GenerationCycleResult, { status: "failed" }> {
+  const nextAudit = setStage(audit, stage, "failed", code);
+  return {
+    status: "failed",
+    error: { code, message, retryable, invocationId: input.cycle.invocationId },
+    audit: {
+      ...nextAudit,
+      planValidation: nextAudit.planValidation.status === "pending"
+        ? validationRecordFromError(code, message)
+        : nextAudit.planValidation
+    }
+  };
+}
+
+function setStage(audit: GenerationCycleAudit, name: GenerationCycleStageName, status: GenerationCycleStageStatus, errorCode?: string): GenerationCycleAudit {
+  return {
+    ...audit,
+    stages: audit.stages.map((stage) => stage.name === name ? { ...stage, status, ...(errorCode ? { errorCode } : {}) } : stage)
+  };
+}
+
+function pendingValidationRecord(): ValidationRecord {
+  return { status: "pending", errors: [], validatorVersion: "generation-cycle-v1" };
+}
+
+function validationRecordFromReport(validation: ValidationReport): ValidationRecord {
+  return {
+    status: validation.valid ? "passed" : "failed",
+    errors: validation.issues.map((issue) => ({ code: issue.code, path: issue.field, message: issue.message, severity: issue.severity })),
+    validatorVersion: "generation-cycle-v1",
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function validationRecordFromError(code: string, message: string): ValidationRecord {
+  return {
+    status: "failed",
+    errors: [{ code, message, severity: "error" }],
+    validatorVersion: "generation-cycle-v1",
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function contextText(value: unknown, fallback: string): string {
+  const text = typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return text.slice(0, 8000);
+}
+
+function nullableContextText(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim().slice(0, 8000) : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message.trim() ? error.message : fallback;
 }

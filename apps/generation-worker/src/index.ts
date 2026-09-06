@@ -1,10 +1,10 @@
 import { and, asc, eq, lt, or, sql } from "drizzle-orm";
-import { generateArtifacts, validateFlintSpec } from "@langreport/generation";
+import { GenerationCycle, validateGenerationRevision } from "@langreport/generation";
 import { db, chartRevisions, dataAssets, dataSnapshots, generationJobs, memoryExtractionJobs, projects } from "@langreport/db";
 import { getObject } from "@langreport/storage";
 import type { ColumnProfile, DataRow } from "@langreport/data-engine";
 import { applyRevisionPatch } from "@langreport/chart";
-import { chartEditPatchSchema, flintSpecSchema, pluginUsageSchema, themePresetSchema, type TransformPlan } from "@langreport/contracts";
+import { chartEditPatchSchema, flintSpecSchema, memoryContextSchema, pluginUsageSchema, themePresetSchema, type TransformPlan } from "@langreport/contracts";
 import { getMemoryContextForGeneration, processMemoryExtractionJob } from "@langreport/memory";
 import { pluginContextSchema } from "@langreport/contracts";
 import { PluginServiceError, resolvePluginContextForWorkspace } from "@langreport/plugins";
@@ -12,6 +12,7 @@ import { resolveThemePayload } from "@langreport/plugin-sdk";
 
 const workerName = "generation-worker";
 const pollIntervalMs = Number(process.env.GENERATION_POLL_INTERVAL_MS ?? 1000);
+const generationCycle = new GenerationCycle();
 let polling = false;
 
 export async function processGenerationJob(jobId: string): Promise<void> {
@@ -41,12 +42,15 @@ export async function processGenerationJob(jobId: string): Promise<void> {
     const profiles = job.snapshot.schema as unknown as ColumnProfile[];
     if (!Array.isArray(snapshotPayload.rows) || !Array.isArray(profiles)) throw new Error("Data Snapshot 内容无效");
 
-    const memoryContext = await getMemoryContextForGeneration({
-      projectId: job.job.projectId,
-      conversationId: job.job.conversationId,
-      userId: job.job.createdBy,
-      prompt: job.job.prompt
-    });
+    const storedMemoryContext = memoryContextSchema.safeParse(job.job.memoryContext);
+    const memoryContext = storedMemoryContext.success
+      ? storedMemoryContext.data
+      : await getMemoryContextForGeneration({
+        projectId: job.job.projectId,
+        conversationId: job.job.conversationId,
+        userId: job.job.createdBy,
+        prompt: job.job.prompt
+      });
     let pluginManifests = [] as Awaited<ReturnType<typeof resolvePluginContextForWorkspace>>;
     const pluginContext = pluginContextSchema.safeParse(job.job.pluginContext);
     if (!pluginContext.success && hasPluginContext(job.job.pluginContext)) {
@@ -63,10 +67,20 @@ export async function processGenerationJob(jobId: string): Promise<void> {
       : asRecord(job.job.themeConfig);
     await setStatus(jobId, "planning", { memoryContext });
     const theme = themePresetSchema.parse(job.job.theme);
-    const artifacts = generateArtifacts({
+    const cycleResult = await generationCycle.run({
+      cycle: {
+        workspaceId: job.workspaceId,
+        projectId: job.job.projectId,
+        generationJobId: job.job.id,
+        invocationId: `${job.job.id}:${job.job.attemptCount + 1}`,
+        routeSnapshotId: `${job.job.id}:${job.job.inputFingerprint}`,
+        budget: { deadlineAt: Date.now() + 30_000, maxOutputTokens: 2_000 }
+      },
       prompt: job.job.prompt,
       profiles,
       rows: snapshotPayload.rows,
+      analysisBriefSnapshot: asRecord(job.job.analysisBriefSnapshot),
+      metricDefinitionSnapshot: asRecord(job.job.metricDefinitionSnapshot),
       theme,
       themeVersion: job.job.themeVersion,
       themeConfig,
@@ -75,7 +89,21 @@ export async function processGenerationJob(jobId: string): Promise<void> {
       pluginManifests,
       plan: isTransformPlan(job.job.transformPlan) ? job.job.transformPlan : undefined
     });
+    if (cycleResult.status === "needs_clarification") {
+      await setStatus(jobId, "needs_clarification", {
+        generationAudit: cycleResult.audit,
+        errorCode: "GENERATION_NEEDS_CLARIFICATION",
+        errorMessage: cycleResult.questions.map((question) => question.question).join("；")
+      });
+      return;
+    }
+    if (cycleResult.status === "failed") {
+      await failJob(jobId, cycleResult.error.code, cycleResult.error.message, undefined, cycleResult.audit);
+      return;
+    }
+    const artifacts = cycleResult.artifacts;
     await setStatus(jobId, "transforming", {
+      generationAudit: cycleResult.audit,
       intent: artifacts.intent,
       transformPlan: artifacts.plan,
       fieldLineage: artifacts.transform.lineage,
@@ -91,7 +119,7 @@ export async function processGenerationJob(jobId: string): Promise<void> {
 
     await setStatus(jobId, "compiling", { flintSpec: artifacts.flintSpec });
     if (!artifacts.validation.valid) {
-      await failJob(jobId, "VALIDATION_FAILED", "Flint Spec 未通过必要校验", artifacts.validation);
+      await failJob(jobId, "VALIDATION_FAILED", "Flint Spec 未通过必要校验", artifacts.validation, cycleResult.audit);
       return;
     }
 
@@ -125,7 +153,7 @@ async function processEditJob(jobId: string, job: typeof generationJobs.$inferSe
     const spec = flintSpecSchema.parse(source.flintSpec);
     const patch = chartEditPatchSchema.parse(job.editPatch);
     const editedSpec = applyRevisionPatch(spec, patch);
-    const validation = validateFlintSpec(editedSpec);
+    const validation = validateGenerationRevision(editedSpec);
     const [sourceJob] = source.generationJobId
       ? await db.select({ previewData: generationJobs.previewData }).from(generationJobs).where(eq(generationJobs.id, source.generationJobId)).limit(1)
       : [];
@@ -194,12 +222,13 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-async function failJob(jobId: string, errorCode: string, errorMessage: string, validation?: unknown): Promise<void> {
+async function failJob(jobId: string, errorCode: string, errorMessage: string, validation?: unknown, generationAudit?: unknown): Promise<void> {
   await db.update(generationJobs).set({
     status: "failed",
     errorCode,
     errorMessage,
     ...(validation ? { validation } : {}),
+    ...(generationAudit ? { generationAudit } : {}),
     updatedAt: new Date()
   } as never).where(eq(generationJobs.id, jobId));
 }

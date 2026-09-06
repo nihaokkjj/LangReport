@@ -507,9 +507,78 @@ export const modelTaskSchema = z.literal("chart-plan");
 export const modelProtocolSchema = z.enum(["chat-completions", "responses"]);
 export const structuredOutputMethodSchema = z.enum(["jsonSchema", "jsonMode", "functionCalling"]);
 
+const modelContextTextSchema = z.string().trim().min(1).max(8000);
+const modelContextNullableTextSchema = modelContextTextSchema.nullable();
+
+const preparedBriefContextSchema = z.object({
+  businessQuestion: modelContextTextSchema,
+  audience: modelContextTextSchema,
+  timeRange: modelContextNullableTextSchema,
+  timeGrain: modelContextNullableTextSchema,
+  outputFormat: modelContextTextSchema
+}).strict();
+
+const preparedMetricDefinitionContextSchema = z.object({
+  name: modelContextTextSchema,
+  meaning: modelContextTextSchema,
+  formula: modelContextTextSchema,
+  unit: modelContextTextSchema,
+  timeRule: modelContextTextSchema,
+  filterRule: modelContextNullableTextSchema
+}).strict();
+
+const preparedMemoryContextSchema = z.object({
+  scope: z.enum(["project", "workspace"]),
+  statement: modelContextTextSchema
+}).strict();
+
+const preparedFieldProfileSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  inferredType: z.enum(["string", "number", "boolean", "date", "null"]),
+  nullCount: z.number().int().nonnegative(),
+  distinctCount: z.number().int().nonnegative(),
+  sampleValues: z.array(scalarSchema).max(16)
+}).strict();
+
+const preparedStatisticSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  value: scalarSchema,
+  unit: z.string().trim().min(1).max(80).nullable().optional()
+}).strict();
+
+const preparedSampleSchema = z.object({
+  label: z.string().trim().min(1).max(200),
+  text: modelContextTextSchema
+}).strict();
+
+const preparedTemplateConstraintsSchema = z.object({
+  templateId: z.string().trim().min(1).max(160),
+  templateVersion: z.string().trim().min(1).max(80),
+  requirements: z.array(modelContextTextSchema).max(32).default([])
+}).strict();
+
 export const historyPolicySchema = z.object({
   strategy: z.literal("canonical_text_context"),
   adapterVersion: z.string().trim().min(1).max(80)
+}).strict();
+
+/**
+ * The only context shape that may cross the model boundary in the first cycle.
+ * It deliberately contains canonical snapshots and text samples, not raw history,
+ * provider-private messages, reasoning, tool calls, or executable content.
+ */
+export const preparedModelContextSchema = z.object({
+  version: z.literal("v1"),
+  historyPolicy: historyPolicySchema,
+  brief: preparedBriefContextSchema,
+  metricDefinition: preparedMetricDefinitionContextSchema,
+  memories: z.array(preparedMemoryContextSchema).max(32),
+  fieldProfiles: z.array(preparedFieldProfileSchema).min(1).max(200),
+  statistics: z.array(preparedStatisticSchema).max(128),
+  samples: z.array(preparedSampleSchema).max(25),
+  allowedOperations: z.array(z.enum(["filter", "derive", "aggregate", "sort", "limit"])).min(1).max(5),
+  allowedChartTypes: z.array(z.enum(["line", "bar", "area"])).min(1).max(3),
+  templateConstraints: preparedTemplateConstraintsSchema
 }).strict();
 
 export const clarificationOptionSchema = z.object({
@@ -660,6 +729,65 @@ export const modelErrorSchema = z.object({
   invocationId: z.string().trim().min(1).max(200)
 }).strict();
 
+export const modelOutputDescriptorSchema = z.object({
+  schemaId: z.string().trim().min(1).max(160),
+  schemaVersion: z.string().trim().min(1).max(80),
+  jsonSchema: z.record(z.string(), z.unknown())
+}).strict();
+
+export const chartPlanOutputDescriptorSchema = modelOutputDescriptorSchema.extend({
+  schemaId: z.literal("chart-plan"),
+  schemaVersion: z.literal("v1")
+});
+
+/** Generate the vendor-neutral transport Schema from the local Zod contract. */
+export function createChartPlanOutputDescriptor(): ChartPlanOutputDescriptor {
+  return chartPlanOutputDescriptorSchema.parse({
+    schemaId: "chart-plan",
+    schemaVersion: "v1",
+    jsonSchema: z.toJSONSchema(chartPlanDecisionSchema, {
+      target: "draft-07",
+      io: "input",
+      unrepresentable: "any"
+    })
+  });
+}
+
+export const modelBudgetSchema = z.object({
+  deadlineAt: z.number().int().positive(),
+  maxOutputTokens: z.number().int().positive()
+}).strict();
+
+/** Persisted request data is serializable and contains no parser or AbortSignal. */
+export const persistedModelRequestSchema = z.object({
+  version: z.literal("v1"),
+  workspaceId: z.string().trim().min(1).max(200),
+  projectId: z.string().trim().min(1).max(200),
+  generationJobId: z.string().trim().min(1).max(200),
+  invocationId: z.string().trim().min(1).max(200),
+  task: modelTaskSchema,
+  routeSnapshotId: z.string().trim().min(1).max(200),
+  context: preparedModelContextSchema,
+  output: chartPlanOutputDescriptorSchema,
+  budget: modelBudgetSchema
+}).strict();
+
+const modelSuccessResultSchema = z.object({
+  status: z.literal("ok"),
+  data: z.unknown(),
+  invocationId: z.string().trim().min(1).max(200)
+}).strict();
+
+const modelErrorResultSchema = modelErrorSchema.extend({
+  status: z.literal("error")
+});
+
+/** A gateway call either returns parsed data or one explicit normalized error. */
+export const modelResultSchema = z.discriminatedUnion("status", [
+  modelSuccessResultSchema,
+  modelErrorResultSchema
+]);
+
 export type ModelTask = z.infer<typeof modelTaskSchema>;
 export type ModelProtocol = z.infer<typeof modelProtocolSchema>;
 export type StructuredOutputMethod = z.infer<typeof structuredOutputMethodSchema>;
@@ -678,3 +806,20 @@ export type ValidationRecord = z.infer<typeof validationRecordSchema>;
 export type GenerationValidation = z.infer<typeof generationValidationSchema>;
 export type ModelErrorCode = z.infer<typeof modelErrorCodeSchema>;
 export type ModelError = z.infer<typeof modelErrorSchema>;
+export type PreparedModelContext = z.infer<typeof preparedModelContextSchema>;
+export type ModelOutputDescriptor = z.infer<typeof modelOutputDescriptorSchema>;
+export type ChartPlanOutputDescriptor = z.infer<typeof chartPlanOutputDescriptorSchema>;
+export type ModelBudget = z.infer<typeof modelBudgetSchema>;
+export type PersistedModelRequest = z.infer<typeof persistedModelRequestSchema>;
+export type RuntimeModelRequest<T> = Omit<PersistedModelRequest, "output"> & {
+  output: ChartPlanOutputDescriptor & { parse: (value: unknown) => T };
+  signal: AbortSignal;
+};
+export type ModelResult<T> =
+  | { status: "ok"; data: T; invocationId: string }
+  | ({ status: "error" } & ModelError);
+
+/** Business code depends on this contract, not on a provider SDK or framework. */
+export interface ModelGateway {
+  generateStructured<T>(request: RuntimeModelRequest<T>): Promise<ModelResult<T>>;
+}

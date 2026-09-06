@@ -6,7 +6,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "tsx --test src/index.test.ts",
+    "test": "tsx --test src/index.test.ts src/model-baseline.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc --noEmit -p tsconfig.json"
   },

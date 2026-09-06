@@ -472,6 +472,7 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
             pluginUsage: job.pluginUsage,
             validation: job.validation,
             previewData: job.previewData,
+            generationAudit: job.generationAudit,
             repairCount: job.repairCount,
             errorCode: job.errorCode,
             errorMessage: job.errorMessage
@@ -730,6 +731,7 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
         flintSpec: job.flintSpec,
         validation: job.validation,
         previewData: job.previewData,
+        generationAudit: job.generationAudit,
         vegaLiteSpec: job.vegaLiteSpec,
         outputs: job.outputs
       } });

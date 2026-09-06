@@ -71,6 +71,13 @@
       "when": 1788256081737,
       "tag": "0010_plugin_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788690000000,
+      "tag": "0011_generation_cycle_audit",
+      "breakpoints": true
     }
   ]
 }

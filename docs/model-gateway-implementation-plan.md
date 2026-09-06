@@ -1,10 +1,10 @@
 # 多供应商模型接入实施计划
 
-状态：待实施。用户已确认首批供应商为百炼千问、DeepSeek、OpenAI。本文中的新增接口、配置、数据字段和验收门槛均为方案，不表示已实现或已通过真实模型验证。核对日期：2026-09-05。
+状态：M0-A/B/C 与确定性 Generation Cycle seam 已实施；M1 及后续里程碑待实施。用户已确认首批供应商为百炼千问、DeepSeek、OpenAI。本文中的真实供应商接口、配置、数据字段和验收门槛仍是方案，尚未表示已通过真实模型验证。核对日期：2026-09-06。
 
 目标：顾问在一个 Project 内使用一个 Data Snapshot 和已确认的 Analysis Brief、Metric Definition，经任一已启用模型生成一个可追溯的 Draft Evidence Block。切换模型不改变数据计算、字段血缘、图表校验和审核规则。
 
-主要领域边界为 Generation Cycle / Generation Job。范围遵循 [第一阶段产品规格](./phase1-consulting-report.md)；术语遵循 [CONTEXT](../CONTEXT.md)；执行限制遵循 [Agent Loop 规范](./agent-loop-spec.md)。统一网关及数据最小化沿用 [ADR 0006](./adr/0006-data-minimization-and-model-gateway.md)。本轮只交付计划和文档入口。
+主要领域边界为 Generation Cycle / Generation Job。范围遵循 [第一阶段产品规格](./phase1-consulting-report.md)；术语遵循 [CONTEXT](../CONTEXT.md)；执行限制遵循 [Agent Loop 规范](./agent-loop-spec.md)。统一网关及数据最小化沿用 [ADR 0006](./adr/0006-data-minimization-and-model-gateway.md)。本轮只把确定性路径收口到 `GenerationCycle` seam，并保存判别结果与审计；不调用真实供应商、不安装 LangGraph、不自动故障切换。
 
 已确认的首期策略：模型切换由用户发起，不自动故障切换；能力降级或工具调用失败时向用户展示原因和可选模型，用户选择后创建新的 Generation Cycle。首期上下文策略固定为 `canonical_text_context`，只向目标模型发送规范化的 Brief、指标和必要的脱敏文本，不直接回放供应商私有历史字段。用户补充澄清信息后也创建新的 Generation Cycle；原 Cycle 的输入、模型和失败原因保持不变。
 
@@ -14,14 +14,14 @@
 | --- | --- | --- |
 | [Web](../apps/web/app/page.tsx) `generateEvidence` | 创建 Generation Job 并轮询 | 澄清状态、允许选择的模型配置、实际使用模型与失败原因 |
 | [API](../apps/api/src/routes.ts) `createGenerationJob` | 固定 Snapshot、指标、Brief、主题等输入 | 模型路由快照、明确的指标选择与 Brief 确认；当前自动创建的 Brief 缺少时间信息却被标记 confirmed |
-| [Generation Worker](../apps/generation-worker/src/index.ts) | 读取原始数据并同步调用生成函数 | 异步调用网关、使用任务固化上下文、阶段状态与调用记录 |
-| [Generation](../packages/generation/src/index.ts) `generateArtifacts` | 关键词意图、规则计划、计算、Flint Spec、最多两轮规则修复 | 模型计划接口、明确的输出字段映射、统一修复预算 |
+| [Generation Worker](../apps/generation-worker/src/index.ts) | 读取 Snapshot 并持久化 Cycle 结果 | 继续补齐真实网关调用、Worker 租约和调用记录 |
+| [Generation](../packages/generation/src/index.ts) `GenerationCycle` | 通过确定性 adapter 包装关键词意图、规则计划、计算、Flint Spec、最多两轮规则修复 | 替换 adapter 为真实 Model Gateway，并保留明确的输出字段映射和统一修复预算 |
 | [Contracts](../packages/contracts/src/index.ts) | Zod 定义 TransformPlan / Flint Spec | 模型决策 Schema、模型选择请求与可展示状态 |
-| [DB](../packages/db/src/schema.ts) | 保存业务输入和生成结果 | 调用审计、路由版本、澄清、执行租约；当前状态枚举缺少 needs_clarification |
+| [DB](../packages/db/src/schema.ts) | 保存业务输入、生成结果、Cycle 审计和 `needs_clarification` 状态 | 真实调用记录、执行租约和 fencing token |
 
 还需处理四个会影响生成正确性的事实：
 
-- `analysisBriefSnapshot`、`metricDefinitionSnapshot` 已入库，但尚未传入生成函数；`memoryContext` 已传入却未用于生成。Worker 又重新检索记忆，因此应改为消费固化的版本，防止排队期间项目记忆变化影响同一次任务。
+- `analysisBriefSnapshot`、`metricDefinitionSnapshot`、`memoryContext` 现在由 Worker 传入 `GenerationCycle`；Worker 优先消费 Job 已固化的 Memory，缺失时只为历史 Job 做兼容性检索，防止正常排队任务受项目记忆变化影响。
 - 当前 API 选取项目最新 confirmed 指标。接入后需要解析用户明确选择的指标；有多个候选且无法唯一对应时澄清，不能以“最新”代替业务相关性。
 - `generateFlintSpec` 偏向第一项指标和 `${measure}_sum` 字段。模型返回不同输出名或要求把同比作为纵轴时，需要显式传入经校验的图表字段映射，避免重新猜测。
 - [Render Worker](../apps/render-worker/src/index.ts) 的 `buildFinding` 使用预览数据。截断预览不能用于断言全量最大值或总数据点数；首批接入应由完整变换结果计算事实摘要，再生成确定性发现文本。
@@ -303,7 +303,7 @@ Worker 需要原子领取、租约/心跳、超期恢复和条件写入。使用
 
 ## 9. 实施顺序与验收
 
-所有里程碑当前均为待实施。每一轮围绕同一咨询项目场景推进；上一轮验收未通过时不扩大供应商覆盖。
+M0-A/B/C 已完成，M1 及后续里程碑仍待实施。每一轮围绕同一咨询项目场景推进；上一轮验收未通过时不扩大供应商覆盖。
 
 | 里程碑 | 具体工作与主要文件 | 完成条件 |
 | --- | --- | --- |
@@ -313,6 +313,16 @@ Worker 需要原子领取、租约/心跳、超期恢复和条件写入。使用
 | M3：OpenAI 使用同一条业务链路 | 增加 Responses Adapter，映射 Schema、拒绝、incomplete、用量与存储参数；发布 Profile | 同场景通过；业务模块不出现供应商分支；账户、地域和数据目的地满足使用条件 |
 | M4：用户驱动切换与故障恢复 | 允许模型列表、服务端切换校验、跨进程配额、熔断、租约恢复、故障注入、调用和业务幂等检查 | 429/超时/Worker 重启可解释地恢复；能力降级和工具失败会提示用户；未授权目的地零调用；不重复创建 Revision；预算与修复次数不超上限 |
 | M5：灰度和上线 | 小范围启用，记录质量/成本/时延；完成审计入口、运维文档和回滚演练 | 首批三个已启用 Profile 达到共同门槛；错误与澄清可操作；旧数据可读、Approved 不变；回滚后新任务路由正确 |
+
+### M0-B：离线评测基线
+
+M0-B 固定“区域销售月度同比”样例，包含原始行、字段画像、已确认 Analysis Brief、已确认 Metric Definition、TransformPlan、预期聚合/同比结果和字段血缘。`evaluateChartPlanDecision` 只使用本地 `chartPlanDecision` 合同和受限 TransformPlan 执行器，将模型候选判定为 `correct`、`invalid` 或 `needs_clarification`；非法输出在执行前结束，澄清结果不执行计划。月度语义测试覆盖跨年度同比和缺失月份不补零。M0-B 不调用真实供应商、不新增 Model Gateway 服务、不引入 LangGraph。
+
+### M0-C：上下文投影与网关运行时合同
+
+M0-C 在 `packages/contracts` 内补齐首期网关边界，但不实现网关服务或供应商适配器。`preparedModelContextSchema` 固定只允许确认后的 Brief、Metric Definition、有限 Memory、字段画像、必要统计、脱敏文本样本、允许的 Transform 操作、允许的图表类型和模板约束；上下文策略固定为 `canonical_text_context`，未知的 reasoning、tool call 和供应商私有字段会被严格拒绝。`createChartPlanOutputDescriptor` 从本地 `chartPlanDecisionSchema` 生成 draft-07 JSON Schema，供后续适配器映射到供应商协议。
+
+`persistedModelRequestSchema` 只描述可持久化的 `chart-plan` 请求，`RuntimeModelRequest<T>` 才增加本地解析函数和 `AbortSignal`；`modelResultSchema` 固定成功与归一化错误二选一，`ModelGateway` 只作为业务层依赖的 TypeScript 接口。M0-C 不调用真实模型、不安装 LangGraph、不自动切换供应商；实际 Schema 子集转换、供应商完成状态映射、Schema 哈希持久化和重试策略留到 M1。
 
 具体改动入口以第 1 节的代码链接为准。新增文件建议按 `gateway`、`registry`、`adapters/chat-completions`、`adapters/responses`、`schema`、`errors`、`policy`、`usage` 组织在网关包内部，达到真实复杂度后再拆分，避免空壳文件。供应商参数差异由适配器和能力配置管理，不散布到 API、Web 或 TransformPlan 执行器。
 

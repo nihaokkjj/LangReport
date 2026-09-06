@@ -22,7 +22,7 @@ export const conversationMessageRole = pgEnum("conversation_message_role", ["use
 export const analysisBriefStatus = pgEnum("analysis_brief_status", ["draft", "confirmed"]);
 export const metricDefinitionStatus = pgEnum("metric_definition_status", ["inferred", "confirmed"]);
 export const evidenceBlockStatus = pgEnum("evidence_block_status", ["draft", "in_review", "approved", "changes_requested"]);
-export const generationJobStatus = pgEnum("generation_job_status", ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "succeeded", "failed"]);
+export const generationJobStatus = pgEnum("generation_job_status", ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "needs_clarification", "succeeded", "failed"]);
 export const generationJobOperation = pgEnum("generation_job_operation", ["generate", "edit", "rollback", "copy"]);
 export const chartArtifactStatus = pgEnum("chart_artifact_status", ["active", "archived"]);
 export const chartRevisionStatus = pgEnum("chart_revision_status", ["draft", "in_review", "approved", "changes_requested", "archived"]);
@@ -206,6 +206,7 @@ export const generationJobs = pgTable("generation_jobs", {
   outputs: jsonb("outputs"),
   repairCount: integer("repair_count").notNull().default(0),
   attemptCount: integer("attempt_count").notNull().default(0),
+  generationAudit: jsonb("generation_audit"),
   errorCode: text("error_code"),
   errorMessage: text("error_message"),
   createdBy: text("created_by").notNull(),
