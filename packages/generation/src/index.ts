@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   chartPlanDecisionSchema,
   conversationIntentSchema,
@@ -7,6 +6,7 @@ import {
   modelResultSchema,
   preparedModelContextSchema,
   transformPlanSchema,
+  type CanonicalTextContextProjection,
   type ChartPlanDecision,
   type ClarificationQuestion,
   type ConversationIntent,
@@ -15,6 +15,7 @@ import {
   type ModelErrorCode,
   type MemoryContext,
   type ModelGateway,
+  type ModelInvocation,
   type ModelResult,
   type ModelRunSnapshot,
   type PreparedModelContext,
@@ -28,6 +29,16 @@ import {
 } from "@langreport/contracts";
 import { executeTransformPlan, type ColumnProfile, type DataRow, type TransformResult } from "@langreport/data-engine";
 import { evaluatePluginValidators, type ParsedPluginManifest, type ResolvedCapability } from "@langreport/plugin-sdk";
+import { CANONICAL_TEXT_CONTEXT_VERSION, projectConversationToCanonicalTextContext, validateCanonicalTextContextProjection } from "./context-projection.js";
+
+export {
+  CANONICAL_TEXT_CONTEXT_VERSION,
+  MAX_CANONICAL_TEXT_MESSAGES,
+  MAX_CANONICAL_TEXT_MESSAGE_LENGTH,
+  projectConversationToCanonicalTextContext,
+  validateCanonicalTextContextProjection,
+  type ConversationMessageForProjection
+} from "./context-projection.js";
 
 export type GenerationInput = {
   prompt: string;
@@ -439,6 +450,7 @@ export type GenerationCycleInput = GenerationInput & {
   };
   analysisBriefSnapshot?: Record<string, unknown>;
   metricDefinitionSnapshot?: Record<string, unknown>;
+  conversationProjection?: CanonicalTextContextProjection;
   requestedProfile?: string;
   effectiveProfile?: string;
   requestedOptions?: Record<string, unknown>;
@@ -453,6 +465,7 @@ export type GenerationCycleAudit = {
   invocationId: string;
   contextPolicy: "canonical_text_context";
   modelRun: ModelRunSnapshot;
+  modelInvocation: ModelInvocation | null;
   stages: Array<{
     name: GenerationCycleStageName;
     status: GenerationCycleStageStatus;
@@ -480,8 +493,11 @@ export type GenerationCycleResult =
     audit: GenerationCycleAudit;
   };
 
-const deterministicAdapterVersion = "deterministic-chart-plan-v1";
-const contextAdapterVersion = "canonical-text-context-v1";
+type PreparedGenerationModelContext = {
+  context: PreparedModelContext;
+  conversationProjection: CanonicalTextContextProjection;
+  contextFallbacks: string[];
+};
 
 /**
  * Generation Cycle is the public seam for generation. Data execution, Flint
@@ -492,10 +508,12 @@ export class GenerationCycle {
 
   async run(input: GenerationCycleInput): Promise<GenerationCycleResult> {
     let context: PreparedModelContext;
+    let preparedContext: PreparedGenerationModelContext;
     let audit: GenerationCycleAudit;
     try {
-      context = buildPreparedModelContext(input);
-      audit = createAudit(input, context);
+      preparedContext = buildPreparedModelContext(input);
+      context = preparedContext.context;
+      audit = createAudit(input, preparedContext);
     } catch (error) {
       audit = createAudit(input);
       return failedResult(audit, input, "GENERATION_CONTEXT_INVALID", errorMessage(error, "模型上下文无效"), false, "planning");
@@ -519,6 +537,7 @@ export class GenerationCycle {
       return failedResult(audit, input, "MODEL_BUDGET_EXCEEDED", "Generation Cycle 在模型调用前已超过截止时间预算", false, "planning");
     }
 
+    const deadline = createDeadlineAbortController(input.cycle.budget.deadlineAt);
     const request: RuntimeModelRequest<ChartPlanDecision> = {
       version: "v1",
       workspaceId: input.cycle.workspaceId,
@@ -533,14 +552,24 @@ export class GenerationCycle {
         parse: (value: unknown) => chartPlanDecisionSchema.parse(value)
       },
       budget: input.cycle.budget,
-      signal: new AbortController().signal
+      signal: deadline.signal
     };
 
     let modelResult: ModelResult<ChartPlanDecision>;
     try {
       modelResult = await this.gateway.generateStructured(request);
     } catch (error) {
-      return failedResult(audit, input, "GENERATION_UNEXPECTED", errorMessage(error, "Model Gateway 调用失败"), false, "planning");
+      const timedOut = deadline.signal.aborted || Date.now() >= input.cycle.budget.deadlineAt;
+      return failedResult(
+        audit,
+        input,
+        timedOut ? "MODEL_TIMEOUT" : "GENERATION_UNEXPECTED",
+        errorMessage(error, timedOut ? "Model Gateway 在截止时间内未完成" : "Model Gateway 调用失败"),
+        timedOut,
+        "planning"
+      );
+    } finally {
+      deadline.dispose();
     }
     audit = setStage(audit, "planning", "succeeded");
 
@@ -548,6 +577,7 @@ export class GenerationCycle {
     if (!resultEnvelope.success) {
       return failedResult(audit, input, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的结果 envelope 不符合版本化合同", false, "planning");
     }
+    audit = { ...audit, modelInvocation: resultEnvelope.data.invocation ?? null };
 
     if (modelResult.status === "error") {
       return failedResult(audit, input, modelResult.code, modelResult.message, modelResult.retryable, "planning");
@@ -671,62 +701,68 @@ class DeterministicModelGateway implements ModelGateway {
   }
 }
 
-function buildPreparedModelContext(input: GenerationCycleInput): PreparedModelContext {
+function buildPreparedModelContext(input: GenerationCycleInput): PreparedGenerationModelContext {
   const brief = asRecord(input.analysisBriefSnapshot);
   const metric = asRecord(input.metricDefinitionSnapshot);
   const numericProfile = input.profiles.find((profile) => profile.inferredType === "number");
   const selectedTemplate = selectPluginTemplate(input.prompt, input.pluginManifests ?? [], "vega-lite");
+  const conversationProjection = input.conversationProjection
+    ? validateCanonicalTextContextProjection(input.conversationProjection)
+    : projectConversationToCanonicalTextContext([{ role: "user", content: input.prompt }]);
   const samples = input.rows.slice(0, 5).map((row, index) => ({
     label: `row-${index + 1}`,
     text: JSON.stringify(row) || "{}"
   }));
-  return preparedModelContextSchema.parse({
-    version: "v1",
-    historyPolicy: { strategy: "canonical_text_context", adapterVersion: contextAdapterVersion },
-    brief: {
-      businessQuestion: contextText(brief.businessQuestion, input.prompt),
-      audience: contextText(brief.audience, "客户汇报"),
-      timeRange: nullableContextText(brief.timeRange),
-      timeGrain: nullableContextText(brief.timeGrain),
-      outputFormat: contextText(brief.outputFormat, "evidence_block")
-    },
-    metricDefinition: {
-      name: contextText(metric.name, numericProfile?.name ?? "待确认指标"),
-      meaning: contextText(metric.meaning, "按 Data Snapshot 中的数值字段聚合"),
-      formula: contextText(metric.formula, `sum(${numericProfile?.name ?? "待确认字段"})`),
-      unit: contextText(metric.unit, "未指定"),
-      timeRule: contextText(metric.timeRule, "按请求指定的时间粒度统计"),
-      filterRule: nullableContextText(metric.filterRule)
-    },
-    memories: [...(input.memoryContext?.project ?? []), ...(input.memoryContext?.workspace ?? [])]
-      .slice(0, 32)
-      .map((record) => ({ scope: record.scope, statement: contextText(record.statement, record.memoryKey) })),
-    fieldProfiles: input.profiles.map((profile) => ({
-      name: profile.name,
-      inferredType: profile.inferredType,
-      nullCount: profile.nullCount,
-      distinctCount: profile.distinctCount,
-      sampleValues: profile.sampleValues.slice(0, 16)
-    })),
-    statistics: input.profiles.flatMap((profile) => [
-      { name: `${profile.name}.nullRate`, value: input.rows.length ? profile.nullCount / input.rows.length : 0, unit: "ratio" },
-      { name: `${profile.name}.distinctCount`, value: profile.distinctCount, unit: "count" }
-    ]).slice(0, 128),
-    samples,
-    allowedOperations: ["filter", "derive", "aggregate", "sort", "limit"],
-    allowedChartTypes: ["line", "bar", "area"],
-    templateConstraints: {
-      templateId: selectedTemplate?.id ?? "builtin-default",
-      templateVersion: input.themeVersion ?? "v1",
-      requirements: selectedTemplate?.requiredFields.map((field) => `${field.role}:${field.semanticTypes.join("|")}`) ?? []
-    }
-  });
+  return {
+    context: preparedModelContextSchema.parse({
+      version: "v1",
+      historyPolicy: { strategy: "canonical_text_context", adapterVersion: CANONICAL_TEXT_CONTEXT_VERSION },
+      conversation: conversationProjection,
+      brief: {
+        businessQuestion: contextText(brief.businessQuestion, input.prompt),
+        audience: contextText(brief.audience, "客户汇报"),
+        timeRange: nullableContextText(brief.timeRange),
+        timeGrain: nullableContextText(brief.timeGrain),
+        outputFormat: contextText(brief.outputFormat, "evidence_block")
+      },
+      metricDefinition: {
+        name: contextText(metric.name, numericProfile?.name ?? "待确认指标"),
+        meaning: contextText(metric.meaning, "按 Data Snapshot 中的数值字段聚合"),
+        formula: contextText(metric.formula, `sum(${numericProfile?.name ?? "待确认字段"})`),
+        unit: contextText(metric.unit, "未指定"),
+        timeRule: contextText(metric.timeRule, "按请求指定的时间粒度统计"),
+        filterRule: nullableContextText(metric.filterRule)
+      },
+      memories: [...(input.memoryContext?.project ?? []), ...(input.memoryContext?.workspace ?? [])]
+        .slice(0, 32)
+        .map((record) => ({ scope: record.scope, statement: contextText(record.statement, record.memoryKey) })),
+      fieldProfiles: input.profiles.map((profile) => ({
+        name: profile.name,
+        inferredType: profile.inferredType,
+        nullCount: profile.nullCount,
+        distinctCount: profile.distinctCount,
+        sampleValues: profile.sampleValues.slice(0, 16)
+      })),
+      statistics: input.profiles.flatMap((profile) => [
+        { name: `${profile.name}.nullRate`, value: input.rows.length ? profile.nullCount / input.rows.length : 0, unit: "ratio" },
+        { name: `${profile.name}.distinctCount`, value: profile.distinctCount, unit: "count" }
+      ]).slice(0, 128),
+      samples,
+      allowedOperations: ["filter", "derive", "aggregate", "sort", "limit"],
+      allowedChartTypes: ["line", "bar", "area"],
+      templateConstraints: {
+        templateId: selectedTemplate?.id ?? "builtin-default",
+        templateVersion: input.themeVersion ?? "v1",
+        requirements: selectedTemplate?.requiredFields.map((field) => `${field.role}:${field.semanticTypes.join("|")}`) ?? []
+      }
+    }),
+    conversationProjection,
+    contextFallbacks: input.conversationProjection ? [] : ["legacy-prompt-projection-v1"]
+  };
 }
 
-function createAudit(input: GenerationCycleInput, context?: PreparedModelContext): GenerationCycleAudit {
-  const contextProjectionHash = context
-    ? createHash("sha256").update(JSON.stringify(context)).digest("hex")
-    : "unavailable";
+function createAudit(input: GenerationCycleInput, preparedContext?: PreparedGenerationModelContext): GenerationCycleAudit {
+  const contextProjectionHash = preparedContext?.conversationProjection.hash ?? "unavailable";
   const requestedProfile = input.requestedProfile ?? "deterministic-offline";
   const effectiveProfile = input.effectiveProfile ?? requestedProfile;
   return {
@@ -741,20 +777,33 @@ function createAudit(input: GenerationCycleInput, context?: PreparedModelContext
       effectiveProfile,
       requestedOptions: input.requestedOptions ?? {},
       effectiveOptions: input.effectiveOptions ?? input.requestedOptions ?? {},
-      historyPolicy: { strategy: "canonical_text_context", adapterVersion: contextAdapterVersion },
+      historyPolicy: {
+        strategy: "canonical_text_context",
+        adapterVersion: preparedContext?.conversationProjection.version ?? CANONICAL_TEXT_CONTEXT_VERSION
+      },
       contextProjectionHash,
       capturedAt: new Date().toISOString()
     },
+    modelInvocation: null,
     stages: [
       { name: "planning", status: "pending" },
       { name: "transforming", status: "pending" },
       { name: "compiling", status: "pending" },
       { name: "validating", status: "pending" }
     ],
-    planValidation: pendingValidationRecord(),
-    renderValidation: pendingValidationRecord(),
+    planValidation: pendingValidationRecord("plan-validator-v1"),
+    renderValidation: pendingValidationRecord("flint-render-v1"),
     repairCount: 0,
-    contextFallbacks: [deterministicAdapterVersion]
+    contextFallbacks: preparedContext?.contextFallbacks ?? []
+  };
+}
+
+function createDeadlineAbortController(deadlineAt: number): { signal: AbortSignal; dispose: () => void } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error("Generation Cycle deadline exceeded")), Math.max(0, deadlineAt - Date.now()));
+  return {
+    signal: controller.signal,
+    dispose: () => clearTimeout(timer)
   };
 }
 
@@ -786,15 +835,15 @@ function setStage(audit: GenerationCycleAudit, name: GenerationCycleStageName, s
   };
 }
 
-function pendingValidationRecord(): ValidationRecord {
-  return { status: "pending", errors: [], validatorVersion: "generation-cycle-v1" };
+function pendingValidationRecord(validatorVersion: string): ValidationRecord {
+  return { status: "pending", errors: [], validatorVersion };
 }
 
 function validationRecordFromReport(validation: ValidationReport): ValidationRecord {
   return {
     status: validation.valid ? "passed" : "failed",
     errors: validation.issues.map((issue) => ({ code: issue.code, path: issue.field, message: issue.message, severity: issue.severity })),
-    validatorVersion: "generation-cycle-v1",
+    validatorVersion: "plan-validator-v1",
     checkedAt: new Date().toISOString()
   };
 }
@@ -803,7 +852,7 @@ function validationRecordFromError(code: string, message: string): ValidationRec
   return {
     status: "failed",
     errors: [{ code, message, severity: "error" }],
-    validatorVersion: "generation-cycle-v1",
+    validatorVersion: "plan-validator-v1",
     checkedAt: new Date().toISOString()
   };
 }

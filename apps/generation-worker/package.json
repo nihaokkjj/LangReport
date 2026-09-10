@@ -21,6 +21,7 @@
     "@langreport/db": "workspace:*",
     "@langreport/generation": "workspace:*",
     "@langreport/memory": "workspace:*",
+    "@langreport/model-gateway": "workspace:*",
     "@langreport/plugin-sdk": "workspace:*",
     "@langreport/plugins": "workspace:*",
     "@langreport/storage": "workspace:*",

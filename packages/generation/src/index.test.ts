@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { loadBuiltinManifests } from "@langreport/plugin-sdk";
 import type { ModelGateway, RuntimeModelRequest, ModelResult } from "@langreport/contracts";
-import { GenerationCycle } from "./index.js";
+import { GenerationCycle, projectConversationToCanonicalTextContext } from "./index.js";
 
 const cycleInput = {
   cycle: {
@@ -66,9 +66,83 @@ test("Generation Cycle 通过确定性 adapter 产出 drafted 和完整审计", 
   assert.equal(result.audit.contextPolicy, "canonical_text_context");
   assert.equal(result.audit.modelRun.requestedProfile, "deterministic-offline");
   assert.equal(result.audit.modelRun.effectiveProfile, "deterministic-offline");
+  assert.equal(result.audit.modelRun.historyPolicy.adapterVersion, "canonical-text-context-v1");
+  assert.match(result.audit.modelRun.contextProjectionHash, /^sha256:[a-f0-9]{64}$/);
+  assert.deepEqual(result.audit.contextFallbacks, ["legacy-prompt-projection-v1"]);
   assert.deepEqual(result.audit.stages.map((stage) => stage.status), ["succeeded", "succeeded", "succeeded", "succeeded"]);
   assert.equal(result.audit.planValidation.status, "passed");
   assert.equal(result.audit.renderValidation.status, "pending");
+});
+
+test("Generation Cycle 将冻结的 Conversation 投影交给 Model Gateway，并在审计中保留版本和哈希", async () => {
+  const projection = projectConversationToCanonicalTextContext([
+    { role: "user", content: "先比较各区域销售额" },
+    { role: "assistant", content: "已记录，等待你确认指标。" },
+    { role: "user", content: "确认销售额，按月份展示趋势" }
+  ]);
+  let receivedContext: unknown;
+  const gateway: ModelGateway = {
+    async generateStructured<T>(request: RuntimeModelRequest<T>): Promise<ModelResult<T>> {
+      receivedContext = request.context;
+      return {
+        status: "ok",
+        data: request.output.parse({
+          decision: "needs_clarification",
+          intent: null,
+          plan: null,
+          chartSelection: null,
+          questions: [{ code: "test", question: "请确认分析期间" }]
+        }),
+        invocationId: request.invocationId
+      };
+    }
+  };
+
+  const result = await new GenerationCycle(gateway).run({ ...cycleInput, conversationProjection: projection });
+
+  assert.equal(result.status, "needs_clarification");
+  assert.deepEqual((receivedContext as { conversation?: unknown }).conversation, projection);
+  assert.equal(result.audit.modelRun.historyPolicy.adapterVersion, projection.version);
+  assert.equal(result.audit.modelRun.contextProjectionHash, projection.hash);
+  assert.deepEqual(result.audit.contextFallbacks, []);
+});
+
+test("Generation Cycle 将 Gateway 的有界模型调用摘要保留在审计中", async () => {
+  const gateway: ModelGateway = {
+    async generateStructured<T>(request: RuntimeModelRequest<T>): Promise<ModelResult<T>> {
+      return {
+        status: "error",
+        code: "MODEL_RATE_LIMITED",
+        message: "供应商暂时限流",
+        retryable: true,
+        invocationId: request.invocationId,
+        invocation: {
+          version: "v1",
+          invocationId: request.invocationId,
+          routeSnapshotId: request.routeSnapshotId,
+          provider: "bailian",
+          modelId: "qwen-plus",
+          adapterVersion: "bailian-qwen-native-http-v1",
+          startedAt: "2026-09-06T00:00:00.000Z",
+          completedAt: "2026-09-06T00:00:01.000Z",
+          outcome: "failed",
+          providerRequestId: "chatcmpl-001",
+          providerModelId: "qwen-plus",
+          finishReason: null,
+          usage: { inputTokens: null, outputTokens: null, totalTokens: null },
+          httpStatus: 429,
+          errorCode: "MODEL_RATE_LIMITED"
+        }
+      };
+    }
+  };
+
+  const result = await new GenerationCycle(gateway).run(cycleInput);
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.audit.modelInvocation?.providerRequestId, "chatcmpl-001");
+  assert.equal(result.audit.modelInvocation?.httpStatus, 429);
+  assert.equal(result.audit.modelInvocation?.errorCode, "MODEL_RATE_LIMITED");
 });
 
 test("Generation Cycle 在无法识别指标时返回 needs_clarification 而不是抛出异常", async () => {

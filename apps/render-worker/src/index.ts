@@ -1,21 +1,53 @@
-import { and, asc, desc, eq, or } from "drizzle-orm";
-import { createHash } from "node:crypto";
-import { chartRevisions, conversationMessages, conversations, db, dataAssets, evidenceBlocks, generationJobs, projects, withAdvisoryLock } from "@langreport/db";
-import { flintSpecSchema, memoryContextSchema, pluginContextSchema, pluginUsageSchema, validationReportSchema, type FlintSpec, type ValidationReport } from "@langreport/contracts";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { createHash, randomUUID } from "node:crypto";
+import { GenerationJobLeaseLostError, assertGenerationJobLease, chartRevisions, claimGenerationJobLease, conversationMessages, conversations, db, dataAssets, evidenceBlocks, generationJobs, projects, recoverExpiredGenerationJobLeases, startGenerationJobLeaseHeartbeat, updateGenerationJobUnderLease, withAdvisoryLock, type GenerationJobLease } from "@langreport/db";
+import { flintSpecSchema, memoryContextSchema, pluginContextSchema, pluginUsageSchema, validationRecordSchema, validationReportSchema, type FlintSpec, type ValidationRecord, type ValidationReport } from "@langreport/contracts";
 import { createDerivedRevision, createInitialRevision } from "@langreport/chart";
-import { renderChart, FLINT_VERSION, RENDERER_VERSION } from "@langreport/flint-adapter";
+import { renderChart, validateRenderedChart, FLINT_VERSION, RENDERER_VERSION } from "@langreport/flint-adapter";
 import { buildPluginSnapshot, PluginServiceError } from "@langreport/plugins";
 import { storageObjectKey } from "@langreport/storage";
 
 const workerName = "render-worker";
 const pollIntervalMs = Number(process.env.RENDER_POLL_INTERVAL_MS ?? 1000);
+const leaseDurationMs = Number(process.env.GENERATION_JOB_LEASE_MS ?? 30_000);
+const workerInstanceId = process.env.RENDER_WORKER_ID?.trim() || `${workerName}:${randomUUID()}`;
 let polling = false;
 
 export async function processRenderJob(jobId: string): Promise<void> {
-  await withAdvisoryLock(`generation-render:${jobId}`, () => processRenderJobLocked(jobId));
+  await withAdvisoryLock(`generation-render:${jobId}`, async () => {
+    const lease = await claimGenerationJobLease({
+      jobId,
+      owner: workerInstanceId,
+      currentStatuses: ["rendering"],
+      nextStatus: "rendering",
+      leaseDurationMs
+    });
+    if (!lease) return;
+    const heartbeat = startGenerationJobLeaseHeartbeat(lease);
+    try {
+      await processRenderJobLocked(jobId, lease);
+    } catch (error) {
+      if (error instanceof GenerationJobLeaseLostError || heartbeat.hasLostLease()) {
+        console.warn(`${workerName} lease lost`, { jobId, fencingToken: lease.fencingToken });
+        return;
+      }
+      const message = error instanceof Error ? error.message : "渲染失败";
+      try {
+        await failRenderJob(jobId, lease, "RENDER_FAILED", message);
+      } catch (failureError) {
+        if (failureError instanceof GenerationJobLeaseLostError) {
+          console.warn(`${workerName} lease lost before failure commit`, { jobId, fencingToken: lease.fencingToken });
+          return;
+        }
+        throw failureError;
+      }
+    } finally {
+      heartbeat.stop();
+    }
+  });
 }
 
-async function processRenderJobLocked(jobId: string): Promise<void> {
+async function processRenderJobLocked(jobId: string, lease: GenerationJobLease): Promise<void> {
   const [record] = await db
     .select({
       job: generationJobs,
@@ -35,29 +67,48 @@ async function processRenderJobLocked(jobId: string): Promise<void> {
     if (existingRevision) {
       const spec = flintSpecSchema.parse(existingRevision.flintSpec);
       const validation = validationReportSchema.parse(existingRevision.validation);
+      const storedPlanValidation = readPlanValidation(record.job.planValidation, validation);
+      const planValidation = storedPlanValidation?.status === "passed"
+        ? storedPlanValidation
+        : readPlanValidation(undefined, validation);
+      const storedRenderValidation = readRenderValidation(record.job.renderValidation);
+      const renderValidation = storedRenderValidation?.status === "passed"
+        ? storedRenderValidation
+        : legacyRenderValidation();
+      await assertGenerationJobLease(lease);
       await persistEvidenceBlock({ job: record.job, revision: existingRevision, spec, validation });
-      await db.update(generationJobs).set({
-        status: "succeeded",
+      await setStatus(jobId, lease, "succeeded", {
         outputs: existingRevision.outputObjects,
         vegaLiteSpec: existingRevision.vegaLiteSpec,
+        ...(planValidation ? { planValidation } : {}),
+        renderValidation,
+        generationAudit: withValidationAudit(record.job.generationAudit, { planValidation, renderValidation }),
         errorCode: null,
-        errorMessage: null,
-        updatedAt: new Date()
-      }).where(and(
-        eq(generationJobs.id, jobId),
-        or(eq(generationJobs.status, "rendering"), eq(generationJobs.status, "validating"))
-      ));
+        errorMessage: null
+      }, true);
       return;
     }
     const validation = validationReportSchema.safeParse(record.job.validation);
-    if (!validation.success || !validation.data.valid) {
-      await failRenderJob(jobId, "VALIDATION_FAILED", "渲染前校验未通过");
+    const planValidation = validation.success ? readPlanValidation(record.job.planValidation, validation.data) : undefined;
+    if (!validation.success || !validation.data.valid || planValidation?.status !== "passed") {
+      const failedValidation = planValidation?.status === "failed"
+        ? planValidation
+        : failedPlanValidation("PLAN_VALIDATION_FAILED", "渲染前计划校验未通过或缺失");
+      await failRenderJob(jobId, lease, "PLAN_VALIDATION_FAILED", "渲染前计划校验未通过或缺失", {
+        planValidation: failedValidation,
+        generationAudit: withValidationAudit(record.job.generationAudit, { planValidation: failedValidation })
+      });
       return;
     }
     const spec = flintSpecSchema.parse(record.job.flintSpec);
     const parsedPluginContext = pluginContextSchema.safeParse(record.job.pluginContext);
     if (hasPluginContext(record.job.pluginContext) && !parsedPluginContext.success) {
-      await failRenderJob(jobId, "PLUGIN_CONTEXT_INVALID", "插件上下文不符合已固化的 Schema");
+      const renderValidation = failedRenderValidation("PLUGIN_CONTEXT_INVALID", "插件上下文不符合已固化的 Schema");
+      await failRenderJob(jobId, lease, "PLUGIN_CONTEXT_INVALID", "插件上下文不符合已固化的 Schema", {
+        planValidation,
+        renderValidation,
+        generationAudit: withValidationAudit(record.job.generationAudit, { planValidation, renderValidation })
+      });
       return;
     }
     const [sourceRevision] = record.job.operation === "edit" && record.job.baseRevisionId
@@ -70,6 +121,22 @@ async function processRenderJobLocked(jobId: string): Promise<void> {
       ? await buildPluginSnapshot({ workspaceId: record.workspaceId, context: parsedPluginContext.data, rendererVersion: RENDERER_VERSION, usedCapabilities: pluginUsage.success ? pluginUsage.data.usedCapabilities : undefined })
       : sourceRevision?.pluginSnapshot ?? {};
     const rendered = await renderChart(spec);
+    const renderValidation = validateRenderedChart(rendered);
+    const generationAudit = withValidationAudit(record.job.generationAudit, { planValidation, renderValidation });
+    await setStatus(jobId, lease, "validating", {
+      vegaLiteSpec: rendered.vegaLiteSpec,
+      planValidation,
+      renderValidation,
+      generationAudit
+    });
+    if (renderValidation.status !== "passed") {
+      await failRenderJob(jobId, lease, "RENDER_VALIDATION_FAILED", "渲染产物未通过必要校验", {
+        planValidation,
+        renderValidation,
+        generationAudit
+      });
+      return;
+    }
     const outputBase = {
       workspaceId: record.workspaceId,
       projectId: record.job.projectId,
@@ -83,7 +150,6 @@ async function processRenderJobLocked(jobId: string): Promise<void> {
     await putObject({ key: vegaLiteKey, body: JSON.stringify(rendered.vegaLiteSpec), contentType: "application/json" });
     await putObject({ key: svgKey, body: rendered.svg, contentType: "image/svg+xml" });
     await putObject({ key: pngKey, body: rendered.png, contentType: "image/png" });
-    await setStatus(jobId, "validating", { vegaLiteSpec: rendered.vegaLiteSpec });
 
     const outputObjects = {
       vegaLite: vegaLiteKey,
@@ -92,6 +158,7 @@ async function processRenderJobLocked(jobId: string): Promise<void> {
       flintVersion: FLINT_VERSION,
       rendererVersion: RENDERER_VERSION
     };
+    await assertGenerationJobLease(lease);
     const revision = record.job.operation === "edit" && record.job.artifactId && record.job.baseRevisionId
       ? await createDerivedRevision({
         projectId: record.job.projectId,
@@ -142,23 +209,36 @@ async function processRenderJobLocked(jobId: string): Promise<void> {
         pluginSnapshot,
         outputObjects
       });
+    await assertGenerationJobLease(lease);
     await persistEvidenceBlock({ job: record.job, revision, spec, validation: validation.data });
     await appendAssistantMessage(record.job.conversationId, record.job.operation === "edit"
       ? `已创建新的 Draft Chart Revision R${revision.revision}。它保留原始 Data Snapshot 和历史版本，可从结果卡片继续编辑或提交审核。`
       : `已生成一个 Draft Evidence Block（Revision R${revision.revision}）。图表、发现、指标口径、数据来源和校验记录已绑定到同一个 Data Snapshot。`);
-    await setStatus(jobId, "succeeded", {
+    await setStatus(jobId, lease, "succeeded", {
       outputs: { vegaLite: vegaLiteKey, svg: svgKey, png: pngKey },
       vegaLiteSpec: rendered.vegaLiteSpec,
+      planValidation,
+      renderValidation,
+      generationAudit,
       errorCode: null,
       errorMessage: null
-    });
+    }, true);
     console.log(`${workerName} completed`, { jobId, revisionId: revision.id });
   } catch (error) {
     if (error instanceof PluginServiceError) {
-      await failRenderJob(jobId, error.code, error.message);
+      const renderValidation = failedRenderValidation(error.code, error.message);
+      await failRenderJob(jobId, lease, error.code, error.message, {
+        renderValidation,
+        generationAudit: withValidationAudit(record.job.generationAudit, { renderValidation })
+      });
       return;
     }
-    await failRenderJob(jobId, "RENDER_FAILED", error instanceof Error ? error.message : "渲染失败");
+    const message = error instanceof Error ? error.message : "渲染失败";
+    const renderValidation = failedRenderValidation("RENDER_FAILED", message);
+    await failRenderJob(jobId, lease, "RENDER_FAILED", message, {
+      renderValidation,
+      generationAudit: withValidationAudit(record.job.generationAudit, { renderValidation })
+    });
   }
 }
 
@@ -227,6 +307,7 @@ async function pollOnce(): Promise<void> {
   if (polling) return;
   polling = true;
   try {
+    await recoverExpiredGenerationJobLeases();
     const queued = await db
       .select({ id: generationJobs.id })
       .from(generationJobs)
@@ -235,29 +316,83 @@ async function pollOnce(): Promise<void> {
       .limit(1);
     const candidate = queued[0];
     if (!candidate) return;
-    const [claimed] = await db
-      .update(generationJobs)
-      .set({ updatedAt: new Date() })
-      .where(and(eq(generationJobs.id, candidate.id), eq(generationJobs.status, "rendering")))
-      .returning({ id: generationJobs.id });
-    if (claimed) await processRenderJob(claimed.id);
+    await processRenderJob(candidate.id);
   } finally {
     polling = false;
   }
 }
 
-async function setStatus(jobId: string, status: "validating" | "succeeded", values: Record<string, unknown> = {}): Promise<void> {
-  await db.update(generationJobs).set({ ...values, status, updatedAt: new Date() } as never).where(and(
-    eq(generationJobs.id, jobId),
-    status === "validating" ? eq(generationJobs.status, "rendering") : eq(generationJobs.status, "validating")
-  ));
+async function setStatus(jobId: string, lease: GenerationJobLease, status: "validating" | "succeeded", values: Record<string, unknown> = {}, release = false): Promise<void> {
+  await assertGenerationJobLease(lease);
+  const updated = await updateGenerationJobUnderLease({ lease, status, values, release });
+  if (!updated) throw new GenerationJobLeaseLostError(jobId);
 }
 
-async function failRenderJob(jobId: string, errorCode: string, errorMessage: string): Promise<void> {
-  await db.update(generationJobs).set({ status: "failed", errorCode, errorMessage, updatedAt: new Date() } as never).where(and(
-    eq(generationJobs.id, jobId),
-    or(eq(generationJobs.status, "rendering"), eq(generationJobs.status, "validating"))
-  ));
+async function failRenderJob(jobId: string, lease: GenerationJobLease, errorCode: string, errorMessage: string, values: Record<string, unknown> = {}): Promise<void> {
+  const updated = await updateGenerationJobUnderLease({
+    lease,
+    status: "failed",
+    release: true,
+    values: { ...values, errorCode, errorMessage }
+  });
+  if (!updated) throw new GenerationJobLeaseLostError(jobId);
+}
+
+function readPlanValidation(value: unknown, legacyValidation: ValidationReport): ValidationRecord | undefined {
+  const parsed = validationRecordSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  if (!legacyValidation.valid) return undefined;
+  return {
+    status: "passed",
+    errors: legacyValidation.issues.map((issue) => ({
+      code: issue.code,
+      ...(issue.field ? { path: issue.field } : {}),
+      message: issue.message,
+      severity: issue.severity
+    })),
+    validatorVersion: "legacy-plan-validator-v1",
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function readRenderValidation(value: unknown): ValidationRecord | undefined {
+  const parsed = validationRecordSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function failedPlanValidation(code: string, message: string): ValidationRecord {
+  return failedValidation(code, message, "plan-validator-v1");
+}
+
+function failedRenderValidation(code: string, message: string): ValidationRecord {
+  return failedValidation(code, message, "flint-render-v1");
+}
+
+function failedValidation(code: string, message: string, validatorVersion: string): ValidationRecord {
+  return {
+    status: "failed",
+    errors: [{ code, message, severity: "error" }],
+    validatorVersion,
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function legacyRenderValidation(): ValidationRecord {
+  return {
+    status: "passed",
+    errors: [],
+    validatorVersion: "legacy-render-revision-v1",
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function withValidationAudit(audit: unknown, validations: Partial<{ planValidation: ValidationRecord; renderValidation: ValidationRecord }>): unknown {
+  if (!isRecord(audit)) return audit;
+  return { ...audit, ...validations };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function readTitle(spec: { chartSpec: { title: string } }): string {

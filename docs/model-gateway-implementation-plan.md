@@ -1,10 +1,10 @@
 # 多供应商模型接入实施计划
 
-状态：M0-A/B/C 与确定性 Generation Cycle seam 已实施；M1 及后续里程碑待实施。用户已确认首批供应商为百炼千问、DeepSeek、OpenAI。本文中的真实供应商接口、配置、数据字段和验收门槛仍是方案，尚未表示已通过真实模型验证。核对日期：2026-09-06。
+状态：M0-A/B/C/D/E/F 与确定性 Generation Cycle seam 已实施；M1-A 已实施百炼千问 OpenAI 兼容 Chat Completions 的原生 HTTP 基线，M1 的真实账户验收、字段映射完善和 Web 呈现仍待实施。用户已确认首批供应商为百炼千问、DeepSeek、OpenAI。模拟传输测试不等同于真实账户验证。核对日期：2026-09-06。
 
 目标：顾问在一个 Project 内使用一个 Data Snapshot 和已确认的 Analysis Brief、Metric Definition，经任一已启用模型生成一个可追溯的 Draft Evidence Block。切换模型不改变数据计算、字段血缘、图表校验和审核规则。
 
-主要领域边界为 Generation Cycle / Generation Job。范围遵循 [第一阶段产品规格](./phase1-consulting-report.md)；术语遵循 [CONTEXT](../CONTEXT.md)；执行限制遵循 [Agent Loop 规范](./agent-loop-spec.md)。统一网关及数据最小化沿用 [ADR 0006](./adr/0006-data-minimization-and-model-gateway.md)。本轮只把确定性路径收口到 `GenerationCycle` seam，并保存判别结果与审计；不调用真实供应商、不安装 LangGraph、不自动故障切换。
+主要领域边界为 Generation Cycle / Generation Job。范围遵循 [第一阶段产品规格](./phase1-consulting-report.md)；术语遵循 [CONTEXT](../CONTEXT.md)；执行限制遵循 [Agent Loop 规范](./agent-loop-spec.md)。统一网关及数据最小化沿用 [ADR 0006](./adr/0006-data-minimization-and-model-gateway.md)。M1-A 将百炼千问原生 HTTP Adapter 接在既有 `GenerationCycle` seam 内；不安装 LangChain 或 LangGraph、不自动故障切换。真实供应商调用只在明确启用 `GENERATION_MODE=llm` 且 Worker 持有密钥时发生。
 
 已确认的首期策略：模型切换由用户发起，不自动故障切换；能力降级或工具调用失败时向用户展示原因和可选模型，用户选择后创建新的 Generation Cycle。首期上下文策略固定为 `canonical_text_context`，只向目标模型发送规范化的 Brief、指标和必要的脱敏文本，不直接回放供应商私有历史字段。用户补充澄清信息后也创建新的 Generation Cycle；原 Cycle 的输入、模型和失败原因保持不变。
 
@@ -303,11 +303,12 @@ Worker 需要原子领取、租约/心跳、超期恢复和条件写入。使用
 
 ## 9. 实施顺序与验收
 
-M0-A/B/C 已完成，M1 及后续里程碑仍待实施。每一轮围绕同一咨询项目场景推进；上一轮验收未通过时不扩大供应商覆盖。
+M0-A/B/C/D/E/F 与 M1-A 已完成；M1 的真实账户验收及后续里程碑仍待实施。每一轮围绕同一咨询项目场景推进；上一轮验收未通过时不扩大供应商覆盖。
 
 | 里程碑 | 具体工作与主要文件 | 完成条件 |
 | --- | --- | --- |
 | M0：合同和评测基线 | `packages/contracts` 增加模型决策与字段选择合同；准备固定数据/指标/预期数值；明确 Profile 与网关接口；补执行器所需的月度语义检查 | 离线样例可判定正确、错误或需澄清；供应商 Schema 能由本地契约生成；本关不单独上线 |
+| M1-A：百炼原生调用基线 | `packages/model-gateway` 以原生 HTTP 固定百炼 OpenAI 兼容 Chat Completions；API 固化无密钥 Model Route Snapshot；Worker 以加密 Workspace 凭据或 Worker-only 回退密钥执行并把 Model Invocation 写入 Generation Audit | 模拟传输覆盖 JSON Object/JSON Schema、鉴权、限流、超时、截断、空输出和非法 JSON；无配置不外发、不降级；真实账户验收另行显式启用 |
 | M1：百炼完成一个 Evidence Block | 新增 `packages/model-gateway`；改造 Generation 与 Worker；API 固化模型及业务上下文；DB 增量迁移调用审计与澄清；Web 展示澄清与实际模型；修正字段映射和完整结果事实摘要 | 百炼真实调用产生 Draft；缺失字段会澄清；同一 Revision 能定位完整输入和调用；有最小超时/重试上限、租约与明确失败 |
 | M2：DeepSeek 使用同一条业务链路 | 复用 Chat Adapter，增加 DeepSeek 参数/完成状态/JSON 模式映射及 Profile；复用 M0 场景 | 不改业务生成流程即可完成同场景；空内容、截断、参数差异都有测试；无凭据时明确记为尚未真实验证 |
 | M3：OpenAI 使用同一条业务链路 | 增加 Responses Adapter，映射 Schema、拒绝、incomplete、用量与存储参数；发布 Profile | 同场景通过；业务模块不出现供应商分支；账户、地域和数据目的地满足使用条件 |
@@ -323,6 +324,34 @@ M0-B 固定“区域销售月度同比”样例，包含原始行、字段画像
 M0-C 在 `packages/contracts` 内补齐首期网关边界，但不实现网关服务或供应商适配器。`preparedModelContextSchema` 固定只允许确认后的 Brief、Metric Definition、有限 Memory、字段画像、必要统计、脱敏文本样本、允许的 Transform 操作、允许的图表类型和模板约束；上下文策略固定为 `canonical_text_context`，未知的 reasoning、tool call 和供应商私有字段会被严格拒绝。`createChartPlanOutputDescriptor` 从本地 `chartPlanDecisionSchema` 生成 draft-07 JSON Schema，供后续适配器映射到供应商协议。
 
 `persistedModelRequestSchema` 只描述可持久化的 `chart-plan` 请求，`RuntimeModelRequest<T>` 才增加本地解析函数和 `AbortSignal`；`modelResultSchema` 固定成功与归一化错误二选一，`ModelGateway` 只作为业务层依赖的 TypeScript 接口。M0-C 不调用真实模型、不安装 LangGraph、不自动切换供应商；实际 Schema 子集转换、供应商完成状态映射、Schema 哈希持久化和重试策略留到 M1。
+
+### M0-D：Conversation 的规范上下文投影
+
+创建 Generation Job 时，API 将当前 Conversation 的已持久消息与本次待写入的 user turn 按时间和消息 ID 的稳定顺序投影为 `canonical-text-context-v1`，并在同一 Job 中冻结。投影仅包含 `user`、`assistant`、`system` 角色、规范化文本、被省略/截断的计数和 `sha256` 哈希；不包含消息 ID、时间戳、对象地址、数据库记录或供应商私有字段。首版保留最近 12 条消息、每条最多 2,000 字符；超出部分显示为已截断事实并计入哈希。
+
+Generation Worker 只校验并消费已冻结的 `conversationProjection`，不在领取任务后重新读取可变 Conversation。`ModelRunSnapshot.historyPolicy.adapterVersion` 与投影版本必须相同，`contextProjectionHash` 保存该精确投影的哈希。历史 Job 没有投影时只能使用由当前 prompt 形成的兼容投影，并在 `contextFallbacks` 中记录；新 Job 不允许使用该回退。投影或哈希不合法时，Job 以 `CONVERSATION_PROJECTION_INVALID` 失败。
+
+### M0-E：计划与渲染校验分层
+
+Generation Job 将 `planValidation` 与 `renderValidation` 独立持久化，也同步保留在 Generation Audit。`planValidation` 由 Generation Worker 在 TransformPlan、Flint Spec、字段、语义和模板规则完成后写入；只有状态为 `passed` 才允许 Render Worker 领取任务。`renderValidation` 由 Render Worker 在获得 Vega-Lite、SVG、PNG 后写入，检查规范非空、SVG 根元素和 PNG 文件签名；产物或存储阶段失败会留下可解释的 render 失败记录。
+
+旧 Job 可以从原有的 `validation` 派生兼容的计划记录，避免增量部署中断已在队列内的渲染任务。Chart Revision 继续保存既有汇总 `validation` 以保持 API 与审核兼容；它通过 `generationJobId` 回溯到两类独立校验。任一记录不是 `passed`，Generation Job 不得成为 `succeeded`，也不得创建新的 Draft Evidence Block。
+
+### M0-F：Worker 最小可靠性
+
+Generation Job 以 PostgreSQL 原子条件更新领取，持久化 `leaseOwner`、随机 `leaseToken`、单调递增的 `leaseFencingToken`、`leaseExpiresAt` 和 `leaseHeartbeatAt`。Generation Worker 从 `queued` 领取并在交接到 `rendering` 时释放；Render Worker 从 `rendering` 重新领取。每次 heartbeat、状态变更、失败和完成都必须匹配当前 owner、token、fencing token 且 Lease 尚未过期，因此接管后的旧 Worker 无法覆盖新结果。
+
+Worker 轮询会恢复已过期 Lease：生成阶段回到 `queued`，渲染阶段回到 `rendering`，以避免已通过计划被重新生成。Revision 和 Evidence Block 继续由 `generation_job_id` 唯一关系保证业务幂等；对象写入或外部模型请求仍可能是至少一次，不能表述为全链路 exactly-once。集成测试覆盖 A Worker 超期、B Worker 接管、A 的陈旧提交被拒绝以及终态 Lease 释放。
+
+### M1-A：百炼千问原生 HTTP 基线
+
+`@langreport/model-gateway` 只实现 `chart-plan` 的百炼 OpenAI 兼容 Chat Completions Adapter。API 在创建 Generation Job 时解析 `GENERATION_MODE`，并把不含 `BAILIAN_API_KEY` 的 Model Route Snapshot 写入 Job；其稳定路由哈希进入 `inputFingerprint`。Worker 只执行这份冻结的路由，不能读取后续变更的 Base URL、模型 ID 或结构化输出方式。历史 Job 没有路由快照时只走确定性兼容路径，绝不因为部署已启用 llm 而向外部模型发送历史输入。
+
+llm 路由必须显式提供 `BAILIAN_BASE_URL`（以 `/compatible-mode/v1` 结尾）、`BAILIAN_MODEL_ID` 与 `BAILIAN_STRUCTURED_OUTPUT=json_schema|json_object`。JSON Schema 路由发送 `response_format.json_schema.strict=true`；JSON Object 路由发送 `response_format.json_object`，并在系统提示中明确要求 JSON。两种路线都发送 `enable_thinking=false`、非流式请求和 `max_completion_tokens`，因为思考模式与该结构化输出组合不兼容。Adapter 不做 HTTP 自动重试或供应商自动切换；429、超时和服务不可用仅归一为可由用户发起 Job retry 的失败。
+
+每次已处理的供应商调用只在 `generationAudit.modelInvocation` 保存开始/结束时间、固定路由、供应商请求 ID、供应商模型名、finish reason、实报用量、HTTP 状态和归一化错误。它不保存 API Key、原始提示/响应或隐藏推理。模型输出即使匹配 JSON Schema，仍要经过本地 `chartPlanDecisionSchema`、受限 TransformPlan、Plan Validation 和 Render Validation；模型不会直接创建 Revision 或 Evidence Block。
+
+生产部署必须显式设置 `GENERATION_MODE`。模型路由变量仍只由部署环境提供；部署可将 `BAILIAN_API_KEY` 仅注入 Generation Worker 作为回退。Workspace Owner/Admin 也可在工作台录入百炼 Key：API 以共享的 `MODEL_CREDENTIAL_ENCRYPTION_KEY` 加密保存，Worker 在调用前解密，并优先使用该 Workspace 凭据。API 与 Worker 共享加密主密钥，Web 不接收它；密钥不会进入 Model Route Snapshot、Job、审计、响应或日志。没有真实凭据时，Adapter 测试使用合成上下文和模拟 HTTP 传输；只有经授权设置 llm 路由和密钥后，才可进行会产生外部调用费用的账户验收。
 
 具体改动入口以第 1 节的代码链接为准。新增文件建议按 `gateway`、`registry`、`adapters/chat-completions`、`adapters/responses`、`schema`、`errors`、`policy`、`usage` 组织在网关包内部，达到真实复杂度后再拆分，避免空壳文件。供应商参数差异由适配器和能力配置管理，不散布到 API、Web 或 TransformPlan 执行器。
 

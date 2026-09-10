@@ -1,6 +1,6 @@
 # LangChain / LangGraph 选型研究
 
-> 状态：待实施的选型建议；不是已接入能力。核对日期：2026-09-05。
+> 状态：M1-A 已采用百炼千问原生 HTTP 基线；LangChain / LangGraph 仍是后续内部实现选项，不是当前运行时依赖。核对日期：2026-09-06。
 > 本文核对 JavaScript / TypeScript 官方文档和 TypeScript 源码；没有安装依赖、调用真实模型或运行框架集成测试。源码链接指向研究时的 `main`，实施时必须锁定发行版本并重新验证。
 
 ## 1. 本轮边界与既有入口
@@ -116,7 +116,7 @@ LangSmith 追踪是可选能力，官方文档通过环境变量和 API Key 开�
 
 ## 总体选型建议
 
-建议先采用 **LangChain TypeScript 模型组件 + 项目自有 Model Gateway + 现有有限 Worker 流程**。在需要跨进程阶段恢复、多个条件分支或流程图调试时，再将编排替换为 LangGraph。两者可以组合使用：LangChain 的模型集成负责调用模型，LangGraph 管理执行过程；LangChain 的高层 Agent 基于 LangGraph，LangGraph 也可直接调用自有网关。[LangChain 概览](https://docs.langchain.com/oss/javascript/langchain/overview)、[LangGraph 概览](https://docs.langchain.com/oss/javascript/langgraph/overview)。
+M1-A 先采用 **项目自有 Model Gateway + 原生 HTTP + 现有有限 Worker 流程**。百炼兼容接口的端点、结构化输出、`enable_thinking`、请求 ID、用量和完成原因均需精确审计，当前直接请求比加入框架更容易验证这些字段。后续当第二家供应商的重复适配成本已经有真实证据时，LangChain 可以只在 Gateway 内替换客户端；不得扩散其消息类型或隐式重试到业务层。需要跨进程阶段恢复、多个条件分支或流程图调试时，再评估 LangGraph。
 
 | 选择 | 对 LangReport 的主要收益 | 新增成本与适用条件 |
 | --- | --- | --- |

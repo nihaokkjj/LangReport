@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DESIGN_CHART_COLORS, DESIGN_FONT_FAMILIES, renderChart, toFlintAssemblyInput } from "./index.js";
+import { DESIGN_CHART_COLORS, DESIGN_FONT_FAMILIES, renderChart, toFlintAssemblyInput, validateRenderedChart } from "./index.js";
 import { validateFlintTemplatePayload, validateFlintThemePayload } from "./validation.js";
 
 const spec = {
@@ -26,6 +26,17 @@ test("default deterministic chart uses the restrained design palette", async () 
   const rendered = await renderChart({ ...spec, themeConfig: {} });
   assert.ok(rendered.svg.includes(DESIGN_CHART_COLORS[0]));
   assert.doesNotMatch(rendered.svg, /#ff3d8b|#1f1d3d|#c5b0f4/i);
+});
+
+test("render validation records concrete Vega-Lite, SVG, and PNG artifacts independently", async () => {
+  const rendered = await renderChart(spec);
+  const valid = validateRenderedChart(rendered);
+  assert.equal(valid.status, "passed");
+  assert.equal(valid.validatorVersion, "flint-render-v1");
+
+  const invalid = validateRenderedChart({ vegaLiteSpec: {}, svg: "<svg>", png: Buffer.from("not-a-png") });
+  assert.equal(invalid.status, "failed");
+  assert.deepEqual(invalid.errors.map((error) => error.code), ["RENDER_VEGA_LITE_EMPTY", "RENDER_SVG_INVALID", "RENDER_PNG_INVALID"]);
 });
 
 test("default theme accepts adapter overrides without inventing a Flint preset", () => {

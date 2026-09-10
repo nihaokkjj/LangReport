@@ -54,6 +54,23 @@ export const members = pgTable("members", {
   index("members_user_idx").on(table.userId)
 ]);
 
+/**
+ * One encrypted vendor credential per Workspace. The plaintext key is never
+ * persisted in a Job, audit record, or HTTP response.
+ */
+export const workspaceModelCredentials = pgTable("workspace_model_credentials", {
+  workspaceId: uuid("workspace_id").primaryKey().references(() => workspaces.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull().default("bailian"),
+  encryptedApiKey: text("encrypted_api_key").notNull(),
+  keySuffix: text("key_suffix").notNull(),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => [
+  index("workspace_model_credentials_provider_idx").on(table.provider)
+]);
+
 export const projects = pgTable("projects", {
   id: uuid("id").defaultRandom().primaryKey(),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
@@ -198,14 +215,23 @@ export const generationJobs = pgTable("generation_jobs", {
   fieldLineage: jsonb("field_lineage"),
   flintSpec: jsonb("flint_spec"),
   validation: jsonb("validation"),
+  planValidation: jsonb("plan_validation"),
+  renderValidation: jsonb("render_validation"),
   vegaLiteSpec: jsonb("vega_lite_spec"),
   previewData: jsonb("preview_data"),
   memoryContext: jsonb("memory_context"),
+  conversationProjection: jsonb("conversation_projection").notNull().default({}),
+  modelRoute: jsonb("model_route").notNull().default({}),
   analysisBriefSnapshot: jsonb("analysis_brief_snapshot").notNull().default({}),
   metricDefinitionSnapshot: jsonb("metric_definition_snapshot").notNull().default({}),
   outputs: jsonb("outputs"),
   repairCount: integer("repair_count").notNull().default(0),
   attemptCount: integer("attempt_count").notNull().default(0),
+  leaseOwner: text("lease_owner"),
+  leaseToken: text("lease_token"),
+  leaseFencingToken: integer("lease_fencing_token").notNull().default(0),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  leaseHeartbeatAt: timestamp("lease_heartbeat_at", { withTimezone: true }),
   generationAudit: jsonb("generation_audit"),
   errorCode: text("error_code"),
   errorMessage: text("error_message"),
@@ -215,6 +241,7 @@ export const generationJobs = pgTable("generation_jobs", {
 }, (table) => [
   uniqueIndex("generation_jobs_project_idempotency_unique").on(table.projectId, table.idempotencyKey),
   index("generation_jobs_status_idx").on(table.status),
+  index("generation_jobs_status_lease_expiry_idx").on(table.status, table.leaseExpiresAt),
   index("generation_jobs_project_idx").on(table.projectId)
 ]);
 

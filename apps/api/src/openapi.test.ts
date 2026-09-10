@@ -32,6 +32,8 @@ test("serves OpenAPI JSON and a standard Swagger UI page", async () => {
     assert.ok(document.paths["/api/v1/projects/{projectId}/data-assets/paste"]?.post);
     assert.ok(document.paths["/api/v1/projects/{projectId}/metric-definitions"]?.post);
     assert.ok(document.paths["/api/v1/projects/{projectId}/generation-jobs"]?.post);
+    assert.ok(document.paths["/api/v1/workspaces/{workspaceId}/model-credential"]?.get);
+    assert.ok(document.paths["/api/v1/workspaces/{workspaceId}/model-credential"]?.put);
     assert.ok(document.paths["/api/v1/generation-jobs/{jobId}"]?.get);
     assert.ok(document.paths["/api/v1/generation-jobs/{jobId}/retry"]?.post);
 
@@ -89,6 +91,8 @@ test("documents the Generation Job async state and failure trace contract", asyn
     assert.ok(getJobProperties?.properties?.snapshotId);
     assert.ok(getJobProperties?.properties?.metricDefinitionId);
     assert.ok(getJobProperties?.properties?.generationAudit);
+    assert.ok(getJobProperties?.properties?.planValidation);
+    assert.ok(getJobProperties?.properties?.renderValidation);
   } finally {
     await app.close();
   }

@@ -14,6 +14,11 @@ packages/db/drizzle/*
 !packages/db/drizzle/0003_polite_maddog.sql
 !packages/db/drizzle/0004_thin_warstar.sql
 !packages/db/drizzle/0010_plugin_usage.sql
+!packages/db/drizzle/0011_generation_cycle_audit.sql
+!packages/db/drizzle/0012_canonical_text_context_projection.sql
+!packages/db/drizzle/0013_generation_validation_layers.sql
+!packages/db/drizzle/0014_generation_job_leases.sql
+!packages/db/drizzle/0015_bailian_model_route_snapshot.sql
 !packages/db/drizzle/meta/
 packages/db/drizzle/meta/*
 !packages/db/drizzle/meta/_journal.json

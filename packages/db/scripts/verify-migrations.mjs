@@ -30,6 +30,7 @@ async function readMigrations() {
   assert.equal(new Set(files.map(migrationNumber)).size, files.length, "migration numbers must be unique");
   assert.ok(files.includes("0007_lush_starbolt.sql"), "the Phase 5 migration must remain in the chain");
   assert.ok(files.includes("0010_plugin_usage.sql"), "the plugin usage migration must remain in the chain");
+  assert.ok(files.includes("0016_workspace_model_credentials.sql"), "the Workspace model credential migration must remain in the chain");
   return files;
 }
 
@@ -84,6 +85,7 @@ async function run() {
           j."prompt" AS job_prompt,
           j."plugin_context" AS plugin_context,
           j."plugin_usage" AS plugin_usage,
+          j."model_route" AS model_route,
           r."output_objects" AS revision_outputs,
           r."plugin_snapshot" AS plugin_snapshot,
           t."config" AS theme_config,
@@ -96,6 +98,7 @@ async function run() {
       assert.equal(historical.job_prompt, "历史销售额");
       assert.deepEqual(historical.plugin_context, {});
       assert.deepEqual(historical.plugin_usage, {});
+      assert.deepEqual(historical.model_route, {});
       assert.deepEqual(historical.plugin_snapshot, {});
       assert.deepEqual(historical.revision_outputs, { svg: "historical.svg" });
       assert.deepEqual(historical.theme_config, { ink: "#111111" });
@@ -105,11 +108,19 @@ async function run() {
         SELECT count(*)::integer AS count
         FROM information_schema.columns
         WHERE table_schema = '${schemaName}'
-          AND ((table_name = 'generation_jobs' AND column_name IN ('plugin_context', 'plugin_usage'))
+          AND ((table_name = 'generation_jobs' AND column_name IN ('plugin_context', 'plugin_usage', 'model_route'))
             OR (table_name = 'chart_revisions' AND column_name = 'plugin_snapshot')
             OR (table_name = 'project_themes' AND column_name = 'theme_ref'))
       `);
-      assert.equal(columns.count, 4, "all Phase 5 compatibility columns must exist");
+      assert.equal(columns.count, 5, "all compatibility columns must exist");
+
+      const [credentialsTable] = await transaction.unsafe(`
+        SELECT count(*)::integer AS count
+        FROM information_schema.tables
+        WHERE table_schema = '${schemaName}'
+          AND table_name = 'workspace_model_credentials'
+      `);
+      assert.equal(credentialsTable.count, 1, "Workspace model credential table must exist");
 
       const indexes = await transaction.unsafe(`
         SELECT indexname

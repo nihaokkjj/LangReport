@@ -74,7 +74,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ### Generation
 
-负责拥有 Generation Cycle 的阶段顺序、澄清/失败语义、模型调用 seam、数据执行、指标口径、Visual Template 和校验修复。公共入口是 `GenerationCycle`；当前由确定性 adapter 实现 Model Gateway 合同并包装既有规则路径，未来才接入真实供应商。首期使用 `canonical_text_context`；模型计划校验和渲染产物校验分开记录。Flint Spec 由经过校验的计划和固定模板确定性编译，不要求模型直接生成可执行图表规范。一次 Cycle 最多执行两轮自动修复。
+负责拥有 Generation Cycle 的阶段顺序、澄清/失败语义、模型调用 seam、数据执行、指标口径、Visual Template 和校验修复。公共入口是 `GenerationCycle`；当前由确定性 adapter 实现 Model Gateway 合同并包装既有规则路径，未来才接入真实供应商。首期使用 `canonical_text_context`：API 在 Job 创建时冻结 Conversation 的版本化文本投影和哈希，Worker 只消费该快照。Generation Job 将 `planValidation` 与 `renderValidation` 分列保存；前者覆盖计划/Flint Spec，后者覆盖具体 Vega-Lite、SVG、PNG 产物。Flint Spec 由经过校验的计划和固定模板确定性编译，不要求模型直接生成可执行图表规范。一次 Cycle 最多执行两轮自动修复。
 
 ### Chart
 
@@ -92,12 +92,12 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 1. API 创建 Generation Job，并记录用户原始意图、Project、Conversation、Analysis Brief、Data Snapshot 和 Visual Template 版本。
 2. Data Worker 读取指定 Data Asset，生成 Data Snapshot 和字段画像。
-3. Generation Worker 只读取并传递 Job 已固化的 Brief、Metric Definition、Data Snapshot、Memory、Visual Template 和路由信息；`GenerationCycle` 在内部构造 `PreparedModelContext`，按 `canonical_text_context` 交给 Model Gateway，不直接回放供应商私有历史字段。
+3. Generation Worker 原子领取带 Worker Lease 和 Fencing Token 的 Job，且只读取并传递 Job 已固化的 Brief、Metric Definition、Data Snapshot、Memory、Conversation projection、Visual Template 和路由信息；`GenerationCycle` 在内部构造 `PreparedModelContext`，按 `canonical_text_context` 交给 Model Gateway，不直接回放供应商私有历史字段或重新读取可变 Conversation。
 4. `GenerationCycle` 统一消费 `drafted`、`needs_clarification`、`failed` 判别结果；内部模块执行 TransformPlan、记录每一步输入/输出/空值处理/字段血缘，并确定性编译和校验 Flint Spec。
-5. 系统根据通过计划校验的 TransformPlan 和固定 Visual Template 确定性编译 Flint Spec，并执行结构校验、语义校验、数据字段校验和模板规则校验；渲染完成后再执行独立的渲染产物校验。
+5. 系统根据通过计划校验的 TransformPlan 和固定 Visual Template 确定性编译 Flint Spec，并将结构、语义、数据字段和模板规则写入 Job 的 `planValidation`；渲染完成后将 Vega-Lite、SVG、PNG 产物检查写入独立的 `renderValidation`。
 6. 计划或渲染校验失败时最多执行两轮受控修复；模型能力降级、工具调用失败或协议不兼容时，结束当前 Cycle 并提示用户选择模型。用户补充澄清或选择新模型后创建新的 Generation Cycle，不在原 Job 上覆盖输入。
-7. Render Worker 使用固定版本的 `flint-chart` 编译 Flint Spec，生成 Vega-Lite 规范和浏览器/PNG/SVG/HTML 输出。
-8. 系统创建不可变 Chart Revision 和 Evidence Block，保存输入、口径、计划、规范、字段血缘、Visual Template 快照、输出对象地址、校验结果和生成版本。
+7. Generation Worker 交接到 `rendering` 时释放租约；Render Worker 重新原子领取同一 Job，使用固定版本的 `flint-chart` 编译 Flint Spec，生成 Vega-Lite 规范和浏览器/PNG/SVG/HTML 输出。
+8. 系统以当前、未超期 Worker Lease 的 owner、token 和 fencing token 条件写入不可变 Chart Revision 和 Evidence Block 的完成状态，保存输入、口径、计划、规范、字段血缘、Visual Template 快照、输出对象地址、校验结果和生成版本。
 
 ## 6. Flint 集成边界
 
@@ -117,7 +117,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ### 任务队列
 
-初期使用 PostgreSQL-backed Queue 与事务性任务记录，保证业务写入和任务投递的一致性。任务量增长后可以替换为 Redis-backed Queue，但 Generation Job 的业务状态仍由数据库保存。
+初期使用 PostgreSQL-backed Queue 与事务性任务记录，保证业务写入和任务投递的一致性。Job 领取以数据库条件更新写入 owner、随机 lease token、单调 fencing token、到期时间和 heartbeat；只有这些字段仍匹配且未到期的 Worker 可以推进状态。超期的生成阶段 Job 回到 `queued`，超期的渲染阶段 Job 回到 `rendering` 以复用已通过的计划。任务量增长后可以替换为 Redis-backed Queue，但 Generation Job 的业务状态、租约和 fencing 仍由数据库保存。
 
 ## 8. 记忆策略
 
@@ -148,7 +148,8 @@ Plugin Manifest 只能声明模板、Theme、语义、校验器、示例和平�
 ## 11. 可靠性与安全
 
 - 每个 Generation Job 和 Render Job 都必须有幂等键、状态、重试次数和错误分类。
-- Render Worker 对同一个 Generation Job 使用 PostgreSQL advisory lock 做 single-flight；跨进程并发调用不能重复创建 Chart Revision，未取得锁的调用交给后续轮询。
+- Worker 以至少 3 秒的可续约 Lease 领取 Job；所有状态推进、失败、交接和完成写入同时匹配 owner、lease token、fencing token 与未过期时间。租约丢失的 Worker 只能停止，不能提交数据库结果。
+- Render Worker 对同一个 Generation Job 使用 PostgreSQL advisory lock 做 single-flight 作为性能优化；正确性依赖持久化 Lease/Fencing 条件和 `generation_job_id` 上的 Revision/Evidence Block 唯一约束，未取得锁或租约的调用交给后续轮询。
 - Approved Chart Revision 不可变；任何修改都产生新 Revision。
 - 模型默认只接收字段摘要、统计信息和少量脱敏样本。
 - 完整原始数据只通过受控 Worker 权限访问，不直接暴露给浏览器或模型供应商。

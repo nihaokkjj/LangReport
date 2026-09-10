@@ -1,19 +1,17 @@
 {
-  "name": "@langreport/generation",
+  "name": "@langreport/model-gateway",
   "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "tsx --test src/index.test.ts src/model-baseline.test.ts src/context-projection.test.ts",
+    "test": "tsx --test src/index.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@langreport/contracts": "workspace:*",
-    "@langreport/data-engine": "workspace:*",
-    "@langreport/plugin-sdk": "workspace:*"
+    "@langreport/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "26.4.0",

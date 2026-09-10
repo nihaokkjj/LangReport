@@ -20,6 +20,8 @@ import {
   projectThemeSchema,
   rejectMemoryCandidateRequestSchema,
   reviewNoteSchema,
+  updateWorkspaceModelCredentialRequestSchema,
+  validationRecordSchema,
   validationReportSchema
 } from "./index.js";
 
@@ -206,8 +208,17 @@ const responses = (success: Record<number, JsonSchema>, extra: Record<number, Js
 const workspaceDto = dto({
   id: uuid(),
   name: string(),
-  createdAt: dateTime()
+  createdAt: dateTime(),
+  role: { type: "string", enum: ["owner", "admin", "member"] }
 }, ["id", "name", "createdAt"]);
+
+const workspaceModelCredentialDto = dto({
+  workspaceId: uuid(),
+  provider: { type: "string", enum: ["bailian"] },
+  configured: boolean(),
+  keySuffix: nullable(string()),
+  updatedAt: nullable(dateTime())
+}, ["workspaceId", "provider", "configured", "keySuffix", "updatedAt"]);
 
 const projectDto = dto({
   id: uuid(),
@@ -295,6 +306,7 @@ const metricDto = dto({
 }, ["id", "projectId", "name", "meaning", "formula", "unit", "timeRule", "status", "version", "createdBy", "createdAt", "updatedAt"]);
 
 const validationDto = zodJson(validationReportSchema);
+const validationRecordDto = zodJson(validationRecordSchema);
 
 const generationJobDto = dto({
   id: uuid(),
@@ -321,8 +333,11 @@ const generationJobDto = dto({
   pluginContext: anyJson,
   pluginUsage: anyJson,
   validation: nullable(validationDto),
+  planValidation: nullable(validationRecordDto),
+  renderValidation: nullable(validationRecordDto),
   vegaLiteSpec: nullable(anyJson),
   previewData: nullable(anyJson),
+  modelRoute: anyJson,
   generationAudit: nullable(anyJson),
   outputs: nullable(anyJson),
   repairCount: integer(),
@@ -344,7 +359,10 @@ const generationJobSummaryDto = dto({
   fieldLineage: nullable(anyJson),
   flintSpec: nullable(anyJson),
   validation: nullable(validationDto),
+  planValidation: nullable(validationRecordDto),
+  renderValidation: nullable(validationRecordDto),
   previewData: nullable(anyJson),
+  modelRoute: anyJson,
   generationAudit: nullable(anyJson),
   repairCount: integer(),
   errorCode: nullable(string()),
@@ -604,6 +622,8 @@ export const routeContracts: RouteContract[] = [
   contract("GET", "/docs", "getSwaggerUi", ["Internal"], "打开标准 Swagger UI 调试页面", { 200: textResponse }, { internal: true, exposeInOpenApi: false, responseContentTypes: { 200: "text/html" } }),
   contract("GET", "/api/v1/projects", "listProjects", ["Projects"], "查询当前用户可访问的 Project", { 200: dto({ workspace: nullable(workspaceDto), projects: array(projectDto) }, ["workspace", "projects"]) }),
   contract("POST", "/api/v1/projects", "createProject", ["Projects"], "创建一个 Project", { 201: dto({ project: projectDto, workspaceId: uuid() }, ["project", "workspaceId"]) }, { request: { body: zodJson(createProjectRequestSchema) } }),
+  contract("GET", "/api/v1/workspaces/:workspaceId/model-credential", "getWorkspaceModelCredential", ["Model Configuration"], "读取 Workspace 百炼密钥的非敏感状态", { 200: dto({ credential: workspaceModelCredentialDto }, ["credential"]) }, { permission: "Workspace owner or admin" }),
+  contract("PUT", "/api/v1/workspaces/:workspaceId/model-credential", "updateWorkspaceModelCredential", ["Model Configuration"], "加密保存或轮换 Workspace 百炼 API Key", { 200: dto({ credential: workspaceModelCredentialDto }, ["credential"]) }, { permission: "Workspace owner or admin", request: pathRequest("/api/v1/workspaces/:workspaceId/model-credential", { body: zodJson(updateWorkspaceModelCredentialRequestSchema) }) }),
   contract("GET", "/api/v1/workspaces/:workspaceId/plugin-catalog", "listPluginCatalog", ["Plugins"], "查询内置 Plugin Manifest 目录", { 200: dto({ plugins: array(pluginCatalogDto) }, ["plugins"]) }),
   contract("POST", "/api/v1/workspaces/:workspaceId/plugins/validate", "validatePluginManifest", ["Plugins"], "校验 Plugin Manifest", { 200: dto({ summary: objectResponse, validationReport: pluginReportDto }, ["summary", "validationReport"]) }, { request: pathRequest("/api/v1/workspaces/:workspaceId/plugins/validate", { body: zodJson(pluginManifestSchema) }) }),
   contract("POST", "/api/v1/workspaces/:workspaceId/plugins", "installPlugin", ["Plugins"], "安装一个 Plugin Manifest", { 201: dto({ installation: pluginInstallationDto, summary: pluginReportDto, reused: boolean(), auditEventId: auditEventIdDto }, ["installation", "summary", "reused", "auditEventId"]), 200: dto({ installation: pluginInstallationDto, summary: pluginReportDto, reused: boolean(), auditEventId: auditEventIdDto }, ["installation", "summary", "reused", "auditEventId"]) }, { request: pathRequest("/api/v1/workspaces/:workspaceId/plugins", { body: json({ manifest: objectResponse, source: { type: "string", enum: ["builtin", "uploaded"] }, idempotencyKey: string() }, ["manifest", "idempotencyKey"]) }) }),

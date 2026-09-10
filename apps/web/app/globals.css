@@ -67,7 +67,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .menu-create { display: block; margin-top: 4px; border-top: 1px solid var(--border); border-radius: 0; padding: 12px 8px 8px; }
 .menu-create:hover { background: var(--accent-soft); }
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
-.plugin-link { border-bottom: 1px solid var(--ink); padding: 2px 0; color: inherit; font-size: var(--type-meta); text-decoration: none; }
+.plugin-link { border: 0; border-bottom: 1px solid var(--ink); background: transparent; padding: 2px 0; color: inherit; font-size: var(--type-meta); text-decoration: none; }
 .plugin-link:hover { background: var(--accent-soft); }
 .connection-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
 .connection-dot.attention { background: var(--accent); animation: pulse 1s ease-in-out infinite alternate; }
@@ -274,6 +274,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--ink); padding: 13px 20px; }
 .modal-footer p { margin: 0; font-family: var(--font-mono); font-size: var(--type-micro); line-height: 1.35; }
 .modal-footer > div { display: flex; gap: 8px; }
+.credential-status { display: grid; gap: 5px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 12px; }
+.credential-status.configured { border-color: var(--success); background: var(--success-soft); }
+.credential-status strong { font-size: var(--type-body-sm); font-weight: 600; }
+.credential-status span, .credential-note { margin: 0; color: var(--ink-muted); font-size: var(--type-label); line-height: 1.5; }
 .editor-body { display: grid; grid-template-columns: minmax(0, 1.35fr) 270px; gap: 16px; padding: 18px 20px; }
 .editor-preview { min-width: 0; border: 1px solid var(--ink); border-radius: 8px; background: var(--surface); padding: 13px; }
 .editor-preview-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }

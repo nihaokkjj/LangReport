@@ -12,6 +12,7 @@ import {
   preparedModelContextSchema,
   type ModelGateway,
   type RuntimeModelRequest,
+  generationValidationSchema,
   validationRecordSchema
 } from "./index.js";
 
@@ -52,7 +53,14 @@ const validPreparedModelContext = {
   version: "v1" as const,
   historyPolicy: {
     strategy: "canonical_text_context" as const,
-    adapterVersion: "v1"
+    adapterVersion: "canonical-text-context-v1"
+  },
+  conversation: {
+    version: "canonical-text-context-v1" as const,
+    messages: [{ role: "user" as const, content: "按月份展示销售额" }],
+    omittedMessageCount: 0,
+    truncatedMessageCount: 0,
+    hash: `sha256:${"a".repeat(64)}`
   },
   brief: {
     businessQuestion: "按月份展示各区域销售额和同比变化",
@@ -185,6 +193,10 @@ test("prepared model context is a strict canonical text projection", () => {
     ...validPreparedModelContext,
     historyPolicy: { strategy: "full_conversation", adapterVersion: "v1" }
   }));
+  assert.throws(() => preparedModelContextSchema.parse({
+    ...validPreparedModelContext,
+    historyPolicy: { strategy: "canonical_text_context", adapterVersion: "another-projection-v1" }
+  }));
 });
 
 test("chart-plan output descriptor is generated from the local decision contract", () => {
@@ -257,6 +269,30 @@ test("model result has mutually exclusive success and error envelopes", () => {
     message: "非法混合结果",
     retryable: true,
     invocationId: "invocation-001"
+  }));
+  assert.throws(() => modelResultSchema.parse({
+    status: "error",
+    code: "MODEL_TIMEOUT",
+    message: "审计记录不能属于另一次调用",
+    retryable: true,
+    invocationId: "invocation-001",
+    invocation: {
+      version: "v1",
+      invocationId: "invocation-002",
+      routeSnapshotId: "route-001",
+      provider: "bailian",
+      modelId: "qwen-plus",
+      adapterVersion: "bailian-qwen-native-http-v1",
+      startedAt: "2026-09-06T00:00:00.000Z",
+      completedAt: "2026-09-06T00:00:01.000Z",
+      outcome: "failed",
+      providerRequestId: null,
+      providerModelId: null,
+      finishReason: null,
+      usage: { inputTokens: null, outputTokens: null, totalTokens: null },
+      httpStatus: null,
+      errorCode: "MODEL_TIMEOUT"
+    }
   }));
 });
 
@@ -381,6 +417,29 @@ test("validation records have explicit status, errors, and validator version", (
       severity: "error"
     }],
     validatorVersion: "plan-validator-v1"
+  }));
+});
+
+test("generation validation persists plan and render records as separate facts", () => {
+  const record = generationValidationSchema.parse({
+    planValidation: {
+      status: "passed",
+      errors: [],
+      validatorVersion: "plan-validator-v1",
+      checkedAt: "2026-09-06T00:00:00.000Z"
+    },
+    renderValidation: {
+      status: "pending",
+      errors: [],
+      validatorVersion: "flint-render-v1"
+    }
+  });
+
+  assert.equal(record.planValidation.status, "passed");
+  assert.equal(record.renderValidation.status, "pending");
+  assert.throws(() => generationValidationSchema.parse({
+    plan: record.planValidation,
+    render: record.renderValidation
   }));
 });
 

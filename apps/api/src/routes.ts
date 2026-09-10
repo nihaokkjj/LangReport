@@ -1,11 +1,13 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
-import { acceptMemoryCandidateRequestSchema, chartGenerationRequestSchema, createConversationMessageRequestSchema, createConversationRequestSchema, createMetricDefinitionRequestSchema, createProjectRequestSchema, memoryDeleteRequestSchema, pasteDataRequestSchema, pluginEnableRequestSchema, rejectMemoryCandidateRequestSchema } from "@langreport/contracts";
+import { acceptMemoryCandidateRequestSchema, chartGenerationRequestSchema, createConversationMessageRequestSchema, createConversationRequestSchema, createMetricDefinitionRequestSchema, createProjectRequestSchema, memoryDeleteRequestSchema, pasteDataRequestSchema, pluginEnableRequestSchema, rejectMemoryCandidateRequestSchema, updateWorkspaceModelCredentialRequestSchema } from "@langreport/contracts";
 import { assertChartAction, ChartServiceError, getProjectAccess, getProjectTheme, getRevision } from "@langreport/chart";
-import { analysisBriefs, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, db, evidenceBlocks, generationJobs, members, metricDefinitions, projectMembers, projects, workspaces } from "@langreport/db";
+import { analysisBriefs, auditEvents, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, db, evidenceBlocks, generationJobs, members, metricDefinitions, projectMembers, projects, workspaces, workspaceModelCredentials } from "@langreport/db";
 import { getObject } from "@langreport/storage";
 import { MemoryServiceError, acceptMemoryCandidate, createMemoryExtractionJob, deleteMemory, getConversationMemory, getMemoryContextForGeneration, listMemoryCandidates, listProjectMemory, listWorkspaceMemory, rejectMemoryCandidate, updateConversationMemory } from "@langreport/memory";
+import { projectConversationToCanonicalTextContext } from "@langreport/generation";
+import { ModelCredentialEncryptionError, ModelGatewayConfigurationError, encryptWorkspaceModelCredential, modelRouteFingerprint, resolveModelRouteSnapshot } from "@langreport/model-gateway";
 import { PluginServiceError, assertProjectThemeReference, getWorkspacePlugin, installPlugin, listBuiltinPluginCatalog, listProjectPlugins, listWorkspacePlugins, resolveProjectPluginContext, restorePluginInstallation, revokePluginInstallation, setProjectPluginBinding, validatePluginManifest } from "@langreport/plugins";
 import { DataAssetError, getDataAsset, inferSourceType, ingestDataAsset, listDataAssets } from "./data-assets.js";
 import { registerChartRoutes } from "./chart-routes.js";
@@ -15,14 +17,14 @@ import { AuthenticationError, userIdFromRequest } from "./auth.js";
 
 const RENDERER_VERSION = "vega-lite-svg-v1";
 const MAX_GENERATION_ATTEMPTS = 3;
-const retryableGenerationErrors = new Set(["GENERATION_FAILED", "RENDER_FAILED"]);
+const retryableGenerationErrors = new Set(["GENERATION_FAILED", "RENDER_FAILED", "MODEL_RATE_LIMITED", "MODEL_TIMEOUT", "MODEL_PROVIDER_UNAVAILABLE"]);
 const projectIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function assertProjectId(projectId: string): void {
   if (!projectIdPattern.test(projectId)) throw new DataAssetError("项目 ID 无效");
 }
 
-export async function registerRoutes(app: FastifyInstance, environment: { NODE_ENV?: string; APP_ENV?: string } = process.env): Promise<void> {
+export async function registerRoutes(app: FastifyInstance, environment: NodeJS.ProcessEnv = process.env): Promise<void> {
   await registerChartRoutes(app);
 
   app.post("/api/v1/dev/bootstrap", async (request, reply) => {
@@ -80,7 +82,8 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
       const userId = userIdFromRequest(request);
       const rows = await db.select({
         project: projects,
-        workspace: { id: workspaces.id, name: workspaces.name, createdAt: workspaces.createdAt }
+        workspace: { id: workspaces.id, name: workspaces.name, createdAt: workspaces.createdAt },
+        workspaceRole: members.role
       }).from(projects)
         .innerJoin(members, eq(members.workspaceId, projects.workspaceId))
         .innerJoin(projectMembers, and(eq(projectMembers.projectId, projects.id), eq(projectMembers.userId, userId)))
@@ -88,7 +91,7 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
         .where(eq(members.userId, userId))
         .orderBy(desc(projects.createdAt));
       return reply.send({
-        workspace: rows[0]?.workspace ?? null,
+        workspace: rows[0] ? { ...rows[0].workspace, role: rows[0].workspaceRole } : null,
         projects: rows.map((row) => row.project)
       });
     } catch (error) {
@@ -119,6 +122,72 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
       }).returning();
       await db.insert(projectMembers).values({ projectId: project.id, userId, role: "editor" });
       return reply.code(201).send({ project, workspaceId: membership.workspaceId });
+    } catch (error) {
+      return sendDataError(reply, error);
+    }
+  });
+
+  app.get<{ Params: { workspaceId: string } }>("/api/v1/workspaces/:workspaceId/model-credential", async (request, reply) => {
+    try {
+      await assertWorkspaceCredentialManager(request.params.workspaceId, userIdFromRequest(request));
+      const [credential] = await db.select({
+        provider: workspaceModelCredentials.provider,
+        keySuffix: workspaceModelCredentials.keySuffix,
+        updatedAt: workspaceModelCredentials.updatedAt
+      }).from(workspaceModelCredentials)
+        .where(eq(workspaceModelCredentials.workspaceId, request.params.workspaceId))
+        .limit(1);
+      return reply.send({ credential: workspaceModelCredentialStatus(request.params.workspaceId, credential) });
+    } catch (error) {
+      return sendDataError(reply, error);
+    }
+  });
+
+  app.put<{ Params: { workspaceId: string } }>("/api/v1/workspaces/:workspaceId/model-credential", async (request, reply) => {
+    try {
+      const body = updateWorkspaceModelCredentialRequestSchema.parse(request.body);
+      const userId = userIdFromRequest(request);
+      await assertWorkspaceCredentialManager(request.params.workspaceId, userId);
+      const apiKey = body.apiKey.trim();
+      const encryptedApiKey = encryptWorkspaceModelCredential(apiKey, environment.MODEL_CREDENTIAL_ENCRYPTION_KEY);
+      const now = new Date();
+      const credential = await db.transaction(async (transaction) => {
+        const [saved] = await transaction.insert(workspaceModelCredentials).values({
+          workspaceId: request.params.workspaceId,
+          provider: "bailian",
+          encryptedApiKey,
+          keySuffix: apiKey.slice(-4),
+          createdBy: userId,
+          updatedBy: userId,
+          createdAt: now,
+          updatedAt: now
+        }).onConflictDoUpdate({
+          target: workspaceModelCredentials.workspaceId,
+          set: {
+            provider: "bailian",
+            encryptedApiKey,
+            keySuffix: apiKey.slice(-4),
+            updatedBy: userId,
+            updatedAt: now
+          }
+        }).returning({
+          provider: workspaceModelCredentials.provider,
+          keySuffix: workspaceModelCredentials.keySuffix,
+          updatedAt: workspaceModelCredentials.updatedAt
+        });
+        if (!saved) throw new Error("Workspace 模型凭据保存失败");
+        await transaction.insert(auditEvents).values({
+          workspaceId: request.params.workspaceId,
+          actorId: userId,
+          action: "workspace_model_credential.updated",
+          entityType: "workspace_model_credential",
+          entityId: request.params.workspaceId,
+          metadata: { provider: "bailian", keySuffix: saved.keySuffix },
+          requestId: request.id
+        });
+        return saved;
+      });
+      return reply.send({ credential: workspaceModelCredentialStatus(request.params.workspaceId, credential) });
     } catch (error) {
       return sendDataError(reply, error);
     }
@@ -471,6 +540,8 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
             pluginContext: job.pluginContext,
             pluginUsage: job.pluginUsage,
             validation: job.validation,
+            planValidation: job.planValidation,
+            renderValidation: job.renderValidation,
             previewData: job.previewData,
             generationAudit: job.generationAudit,
             repairCount: job.repairCount,
@@ -495,6 +566,7 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
       });
       const userId = userIdFromRequest(request);
       await assertChartAction(request.params.projectId, userId, "create_revision");
+      const modelRoute = resolveModelRouteSnapshot(environment);
       const [metricDefinition] = await db.select().from(metricDefinitions)
         .where(and(eq(metricDefinitions.projectId, request.params.projectId), eq(metricDefinitions.status, "confirmed")))
         .orderBy(desc(metricDefinitions.version)).limit(1);
@@ -521,6 +593,11 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
       const resolvedThemeConfig = resolvedThemeSource === "project" ? projectTheme.config : {};
       const assetRecord = await findReadyAsset(request.params.projectId, body.dataAssetId);
       if (!assetRecord) throw new DataAssetError("数据资产不存在或没有可用 Snapshot");
+      const conversationProjection = await projectConversationForGeneration({
+        projectId: request.params.projectId,
+        conversationId: body.conversationId,
+        prompt: body.prompt
+      });
       const preGenerationMemory = await getMemoryContextForGeneration({
         projectId: request.params.projectId,
         userId,
@@ -529,6 +606,10 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
       const fingerprint = fingerprintFor({
         snapshotId: assetRecord.snapshot.id,
         conversationId: body.conversationId ?? null,
+        conversationProjection: {
+          version: conversationProjection.version,
+          hash: conversationProjection.hash
+        },
         metricDefinition: `${metricDefinition.id}:v${metricDefinition.version}`,
         prompt: body.prompt,
         plan: body.plan ?? null,
@@ -538,7 +619,8 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
         renderer: body.renderer,
         rendererVersion: RENDERER_VERSION,
         memory: memoryFingerprintFor(preGenerationMemory),
-        plugins: pluginResolution.context
+        plugins: pluginResolution.context,
+        modelRoute: modelRouteFingerprint(modelRoute)
       });
       const idempotencyKey = body.idempotencyKey ?? fingerprint;
       const [existing] = await db.select().from(generationJobs).where(and(
@@ -552,8 +634,6 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
 
       const conversationId = body.conversationId ?? await createConversationForGeneration(request.params.projectId, body.prompt, userId);
       if (body.conversationId) {
-        const [conversation] = await db.select({ id: conversations.id }).from(conversations).where(and(eq(conversations.id, body.conversationId), eq(conversations.projectId, request.params.projectId))).limit(1);
-        if (!conversation) throw new DataAssetError("对话不属于当前项目");
         const [message] = await db.insert(conversationMessages).values({ conversationId, role: "user", content: body.prompt }).returning({ id: conversationMessages.id });
         await syncConversationTurn(conversationId, userId, message.id, body.prompt);
       }
@@ -586,6 +666,8 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
         themeConfig: resolvedThemeConfig,
         transformPlan: body.plan ?? null,
         memoryContext,
+        conversationProjection,
+        modelRoute,
         pluginContext: pluginResolution.context,
         analysisBriefSnapshot: analysisBrief,
         metricDefinitionSnapshot: metricDefinition,
@@ -624,6 +706,9 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
       const [requeued] = await db.update(generationJobs).set({
         status: existingRevision ? "rendering" : "queued",
         ...(existingRevision ? { attemptCount: sql`${generationJobs.attemptCount} + 1` } : {}),
+        leaseOwner: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
         errorCode: null,
         errorMessage: null,
         updatedAt: new Date()
@@ -730,6 +815,8 @@ export async function registerRoutes(app: FastifyInstance, environment: { NODE_E
         fieldLineage: job.fieldLineage,
         flintSpec: job.flintSpec,
         validation: job.validation,
+        planValidation: job.planValidation,
+        renderValidation: job.renderValidation,
         previewData: job.previewData,
         generationAudit: job.generationAudit,
         vegaLiteSpec: job.vegaLiteSpec,
@@ -776,8 +863,56 @@ async function findReadyAsset(projectId: string, assetId: string) {
   return asset ?? null;
 }
 
+async function projectConversationForGeneration(input: {
+  projectId: string;
+  conversationId?: string;
+  prompt: string;
+}) {
+  const previousMessages = input.conversationId
+    ? await listConversationMessagesForProjection(input.conversationId, input.projectId)
+    : [];
+  return projectConversationToCanonicalTextContext([
+    ...previousMessages,
+    { role: "user", content: input.prompt }
+  ]);
+}
+
+async function listConversationMessagesForProjection(conversationId: string, projectId: string) {
+  const [conversation] = await db.select({ id: conversations.id }).from(conversations)
+    .where(and(eq(conversations.id, conversationId), eq(conversations.projectId, projectId)))
+    .limit(1);
+  if (!conversation) throw new DataAssetError("对话不属于当前项目");
+  return db.select({ role: conversationMessages.role, content: conversationMessages.content })
+    .from(conversationMessages)
+    .where(eq(conversationMessages.conversationId, conversationId))
+    .orderBy(asc(conversationMessages.createdAt), asc(conversationMessages.id));
+}
+
 async function assertProjectAccess(projectId: string, userId: string): Promise<void> {
   await getProjectAccess(projectId, userId);
+}
+
+async function assertWorkspaceCredentialManager(workspaceId: string, userId: string): Promise<void> {
+  const [membership] = await db.select({ role: members.role }).from(members)
+    .where(and(eq(members.workspaceId, workspaceId), eq(members.userId, userId)))
+    .limit(1);
+  if (!membership) throw new ChartServiceError("FORBIDDEN", "无权访问当前 Workspace", 404);
+  if (membership.role !== "owner" && membership.role !== "admin") {
+    throw new ChartServiceError("FORBIDDEN", "只有 Workspace Owner 或 Admin 可以配置模型密钥", 403);
+  }
+}
+
+function workspaceModelCredentialStatus(
+  workspaceId: string,
+  credential: { provider: string; keySuffix: string; updatedAt: Date } | undefined
+) {
+  return {
+    workspaceId,
+    provider: "bailian" as const,
+    configured: Boolean(credential),
+    keySuffix: credential?.keySuffix ?? null,
+    updatedAt: credential?.updatedAt?.toISOString() ?? null
+  };
 }
 
 async function createConversationForGeneration(projectId: string, prompt: string, userId: string): Promise<string> {
@@ -830,6 +965,8 @@ function sendDataError(reply: FastifyReply, error: unknown) {
   if (error instanceof PluginServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code, error.details);
   if (error instanceof ChartServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code);
   if (error instanceof MemoryServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code, error.details);
+  if (error instanceof ModelCredentialEncryptionError) return sendHttpError(reply, 503, error.message, "MODEL_CREDENTIAL_CONFIGURATION_INVALID");
+  if (error instanceof ModelGatewayConfigurationError) return sendHttpError(reply, 503, error.message, "MODEL_ROUTE_CONFIGURATION_INVALID");
   if (error instanceof DataAssetError || error instanceof Error && ["DataParseError", "ZodError"].includes(error.name)) {
     return sendHttpError(reply, 400, error.message, "INVALID_INPUT");
   }

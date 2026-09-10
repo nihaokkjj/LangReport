@@ -39,6 +39,12 @@ _Avoid_: Chat、Thread、Session
 **Generation Cycle**：围绕一个明确 Analysis Brief，从用户意图到一个候选 Evidence Block 的完整生成尝试。一次 Cycle 有明确输入、输出、校验结果和结束原因。
 _Avoid_: Infinite Loop、Chat Response
 
+**Plan Validation**：对 TransformPlan、Flint Spec 与其字段、语义和 Visual Template 约束的校验记录。它证明候选图表计划可以进入渲染，不证明渲染产物已经可用。
+_Avoid_: Render Check、Final Approval
+
+**Render Validation**：对已生成的 Vega-Lite、SVG 和 PNG 图表产物的校验记录。它证明实际渲染输出可用，不替代 Plan Validation 或 Review。
+_Avoid_: Plan Check、Review Approval
+
 **TransformPlan**：根据 Analysis Brief 和 Metric Definition 形成的结构化数据变换计划，由受限执行者执行；它不改变 Data Snapshot。
 _Avoid_: SQL、Script、Query
 
@@ -84,3 +90,18 @@ _Avoid_: Project Approval、Publish
 
 **Generation Job**：承载 Generation Cycle 的可观察执行单元，记录数据画像、计划、变换、规范生成、校验和渲染状态。
 _Avoid_: Request、Chat Response
+
+**Workspace Model Credential**：由 Workspace Owner 或 Admin 通过受控入口配置、以加密形式保存的供应商 API Key。它只在受信任的 Worker 进程内短暂解密用于实际调用；不属于 Generation Job、Model Route Snapshot 或审计正文。
+_Avoid_: Project API Key、Browser Secret、Model Route
+
+**Model Route Snapshot**：在 Generation Job 创建时冻结的、无密钥的模型执行选择，包含 Profile、模型标识、协议、端点、结构化输出方式、输出合同哈希和生效参数。它保证排队任务不会因运行环境后来改变而静默改用另一条模型路线。
+_Avoid_: Live Model Config、API Key、Model Switch
+
+**Model Invocation**：一次实际发往模型供应商的、有界审计摘要，记录路由、开始/结束时间、供应商请求标识、完成原因、用量和归一化结果；不保存密钥、隐藏推理或供应商原始正文。
+_Avoid_: Chain of Thought、Raw Provider Log、Billing Invoice
+
+**Worker Lease**：某个 Worker 在有限时间内独占推进一个 Generation Job 的可续约执行权。租约可以超期并被其他 Worker 重新领取；它不是永久锁，也不是业务成功状态。
+_Avoid_: Queue Lock、Worker Ownership
+
+**Fencing Token**：每次领取 Worker Lease 时单调递增的序号。任何推进 Job 状态或提交业务结果的数据库写入都必须同时匹配该序号、租约拥有者和租约令牌，因此已超期的 Worker 不能覆盖接管者的结果。
+_Avoid_: Retry Number、Lock ID

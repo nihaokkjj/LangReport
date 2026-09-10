@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import {
   chartRevisions,
+  claimGenerationJobLease,
   closeDatabase,
   conversations,
   dataAssets,
@@ -14,9 +15,12 @@ import {
   members,
   projectMembers,
   projects,
+  recoverExpiredGenerationJobLeases,
+  heartbeatGenerationJobLease,
+  updateGenerationJobUnderLease,
   workspaces
 } from "@langreport/db";
-import { flintSpecSchema, pluginSnapshotSchema, pluginUsageSchema } from "@langreport/contracts";
+import { flintSpecSchema, pluginSnapshotSchema, pluginUsageSchema, validationRecordSchema } from "@langreport/contracts";
 import {
   installPlugin,
   listBuiltinPluginCatalog,
@@ -132,6 +136,8 @@ test("real generation and render workers persist plugin usage and historical sna
     await processGenerationJob(job.id);
     const [generatedJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id)).limit(1);
     assert.equal(generatedJob.status, "rendering");
+    assert.equal(validationRecordSchema.parse(generatedJob.planValidation).status, "passed");
+    assert.equal(validationRecordSchema.parse(generatedJob.renderValidation).status, "pending");
     const generatedSpec = flintSpecSchema.parse(generatedJob.flintSpec);
     assert.equal(generatedSpec.themeConfig.ink && typeof generatedSpec.themeConfig.ink === "object", true);
     assert.equal((generatedSpec.themeConfig.ink as { series?: { single?: string } }).series?.single, "#2563EB");
@@ -144,6 +150,12 @@ test("real generation and render workers persist plugin usage and historical sna
     await Promise.all([processRenderJob(job.id), processRenderJob(job.id)]);
     const [renderedJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id)).limit(1);
     assert.equal(renderedJob.status, "succeeded");
+    assert.equal(renderedJob.leaseOwner, null);
+    assert.equal(renderedJob.leaseToken, null);
+    assert.equal(renderedJob.leaseExpiresAt, null);
+    assert.ok(renderedJob.leaseFencingToken >= 2);
+    assert.equal(validationRecordSchema.parse(renderedJob.planValidation).status, "passed");
+    assert.equal(validationRecordSchema.parse(renderedJob.renderValidation).status, "passed");
     const outputs = renderedJob.outputs as { svg?: string; png?: string; vegaLite?: string };
     for (const key of [outputs.svg, outputs.png, outputs.vegaLite]) {
       if (typeof key !== "string") throw new Error("render output key is missing");
@@ -172,6 +184,68 @@ test("real generation and render workers persist plugin usage and historical sna
     const [recoveredJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id)).limit(1);
     assert.equal(recoveredJob.status, "succeeded");
     assert.equal((await db.select({ id: chartRevisions.id }).from(chartRevisions).where(eq(chartRevisions.generationJobId, job.id))).length, 1);
+
+    const [leaseJob] = await db.insert(generationJobs).values({
+      projectId: project.id,
+      conversationId: conversation.id,
+      dataAssetId: asset.id,
+      snapshotId: snapshot.id,
+      prompt: "Worker 租约围栏测试",
+      idempotencyKey: `worker-lease-${suffix}`,
+      inputFingerprint: `worker-lease-fingerprint-${suffix}`,
+      renderer: "vega-lite",
+      rendererVersion: "vega-lite-svg-v1",
+      theme: "economist",
+      themeVersion: "v1",
+      themeSource: "request",
+      themeConfig: {},
+      analysisBriefSnapshot: {},
+      metricDefinitionSnapshot: {},
+      createdBy: userId
+    }).returning();
+    const leaseA = await claimGenerationJobLease({
+      jobId: leaseJob.id,
+      owner: "worker-a",
+      currentStatuses: ["queued"],
+      nextStatus: "profiling",
+      leaseDurationMs: 3_000,
+      incrementAttempt: true
+    });
+    assert.ok(leaseA);
+    assert.equal(await heartbeatGenerationJobLease(leaseA), true);
+    await db.update(generationJobs).set({ leaseExpiresAt: new Date(Date.now() - 1_000) }).where(eq(generationJobs.id, leaseJob.id));
+    assert.ok((await recoverExpiredGenerationJobLeases()).includes(leaseJob.id));
+    const [requeuedLeaseJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, leaseJob.id)).limit(1);
+    assert.equal(requeuedLeaseJob.status, "queued");
+    assert.equal(requeuedLeaseJob.leaseOwner, null);
+    assert.equal(requeuedLeaseJob.leaseToken, null);
+
+    const leaseB = await claimGenerationJobLease({
+      jobId: leaseJob.id,
+      owner: "worker-b",
+      currentStatuses: ["queued"],
+      nextStatus: "profiling",
+      leaseDurationMs: 3_000
+    });
+    assert.ok(leaseB);
+    assert.ok(leaseB.fencingToken > leaseA.fencingToken);
+    assert.equal(await updateGenerationJobUnderLease({
+      lease: leaseA,
+      status: "failed",
+      release: true,
+      values: { errorCode: "STALE_WORKER", errorMessage: "must not persist" }
+    }), false);
+    assert.equal(await updateGenerationJobUnderLease({
+      lease: leaseB,
+      status: "failed",
+      release: true,
+      values: { errorCode: "FRESH_WORKER", errorMessage: "persisted by owner" }
+    }), true);
+    const [fencedLeaseJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, leaseJob.id)).limit(1);
+    assert.equal(fencedLeaseJob.status, "failed");
+    assert.equal(fencedLeaseJob.errorCode, "FRESH_WORKER");
+    assert.equal(fencedLeaseJob.leaseOwner, null);
+    assert.equal(fencedLeaseJob.leaseToken, null);
 
     const [invalidJob] = await db.insert(generationJobs).values({
       projectId: project.id,

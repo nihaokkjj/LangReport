@@ -157,6 +157,7 @@ Brief ready
 - 一个 Data Snapshot；
 - 一个 Analysis Brief；
 - 已确认的 Metric Definition 或明确的待确认口径；
+- 一个已冻结的 `canonical_text_context` Conversation 投影及其版本和哈希；
 - 一个 Visual Template 及版本；
 - 用户原始请求。
 
@@ -170,7 +171,7 @@ Brief ready
 4. TransformPlan 只能使用产品规格列出的受限操作，并记录输入、输出、空值处理和字段血缘。
 5. 自动修复最多两轮；每轮记录错误、修复意图和新的校验结果。
 6. 口径不清、字段不存在、时间粒度不确定或数据质量阻塞时，系统请求用户澄清。
-7. Cycle 成功只代表生成的 Draft 通过必要校验；它不代表结论已经审核或可以发布。
+7. Cycle 成功只代表 `planValidation` 与 `renderValidation` 都通过必要校验；它不代表结论已经审核或可以发布。
 8. 每次图表编辑、回滚或复制都创建新的 Revision。
 9. 长期记忆和 Project Visual Template 只在用户显式确认后更新。
 10. 生成结果必须显示数据来源、口径、更新时间和数据质量警告。
@@ -195,6 +196,8 @@ Planning / Validating
 ```
 
 `Needs Clarification` 由用户补充信息后创建新的 Generation Cycle；它不通过静默修改原始请求继续运行。`Failed` 必须带错误类别、用户可理解的原因和建议动作。
+
+运行中的 Job 由 Worker Lease 保护。租约超期时，Profiling、Planning、Transforming 和 Compiling 恢复到 Queued；Rendering 和 Validating 恢复到 Rendering 以复用已通过的计划。每次领取都增加 Fencing Token，旧 Worker 的心跳、状态推进、失败或完成提交必须因条件不匹配而失败。
 
 模型能力降级、工具调用失败或协议不兼容时，当前 Cycle 不得在后台切换模型。系统保存 `requested/effective` 配置和失败原因，并在用户界面提供可操作的模型选择；用户选择后创建新的 Generation Cycle。前端保存的模型偏好不能替代服务端对 Profile、Project 授权和当前 run 状态的检查。
 
@@ -233,6 +236,8 @@ Planning / Validating
 - 模型通过 Model Gateway 获得最小必要数据；
 - 结构化计划由受限执行器运行；
 - 运行时限制、重试次数和实际数据访问范围被记录；
+- Worker 只能在其未超期的 Lease 内写入，且所有 Job 提交受 owner、lease token 和 Fencing Token 条件保护；
+- 业务结果以 Job 到 Chart Revision/Evidence Block 的唯一关系保持幂等，不能把外部模型调用误称为 exactly-once；
 - 任何外部工具或插件都服从 Workspace/Project 权限。
 
 ## 6. 停止条件

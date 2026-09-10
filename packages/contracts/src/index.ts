@@ -441,6 +441,11 @@ export const createWorkspaceRequestSchema = z.object({
   name: z.string().trim().min(1).max(80)
 });
 
+/** API input only. The plaintext is accepted over TLS and immediately encrypted. */
+export const updateWorkspaceModelCredentialRequestSchema = z.object({
+  apiKey: z.string().trim().min(8).max(1000)
+}).strict();
+
 export const createProjectRequestSchema = z.object({
   name: z.string().trim().min(1).max(80)
 });
@@ -465,6 +470,7 @@ export type ReviewNote = z.infer<typeof reviewNoteSchema>;
 export type CreateCommentRequest = z.infer<typeof createCommentRequestSchema>;
 export type ProjectThemeInput = z.infer<typeof projectThemeSchema>;
 export type CreateShareRequest = z.infer<typeof createShareRequestSchema>;
+export type UpdateWorkspaceModelCredentialRequest = z.infer<typeof updateWorkspaceModelCredentialRequestSchema>;
 export type MemoryScope = z.infer<typeof memoryScopeSchema>;
 export type MemoryType = z.infer<typeof memoryTypeSchema>;
 export type MemoryCandidateStatus = z.infer<typeof memoryCandidateStatusSchema>;
@@ -562,14 +568,33 @@ export const historyPolicySchema = z.object({
   adapterVersion: z.string().trim().min(1).max(80)
 }).strict();
 
+export const canonicalTextContextMessageSchema = z.object({
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string().trim().min(1).max(2000)
+}).strict();
+
+/**
+ * A frozen, provider-neutral projection of a Conversation. Source message IDs,
+ * timestamps, and provider-private fields remain outside this model boundary.
+ */
+export const canonicalTextContextProjectionSchema = z.object({
+  version: z.literal("canonical-text-context-v1"),
+  messages: z.array(canonicalTextContextMessageSchema).min(1).max(12),
+  omittedMessageCount: z.number().int().nonnegative(),
+  truncatedMessageCount: z.number().int().nonnegative(),
+  hash: z.string().regex(/^sha256:[a-f0-9]{64}$/)
+}).strict();
+
 /**
  * The only context shape that may cross the model boundary in the first cycle.
- * It deliberately contains canonical snapshots and text samples, not raw history,
- * provider-private messages, reasoning, tool calls, or executable content.
+ * It deliberately contains canonical snapshots, a bounded platform-normalized
+ * Conversation projection, and text samples—never provider-private messages,
+ * reasoning, tool calls, or executable content.
  */
 export const preparedModelContextSchema = z.object({
   version: z.literal("v1"),
   historyPolicy: historyPolicySchema,
+  conversation: canonicalTextContextProjectionSchema,
   brief: preparedBriefContextSchema,
   metricDefinition: preparedMetricDefinitionContextSchema,
   memories: z.array(preparedMemoryContextSchema).max(32),
@@ -579,7 +604,15 @@ export const preparedModelContextSchema = z.object({
   allowedOperations: z.array(z.enum(["filter", "derive", "aggregate", "sort", "limit"])).min(1).max(5),
   allowedChartTypes: z.array(z.enum(["line", "bar", "area"])).min(1).max(3),
   templateConstraints: preparedTemplateConstraintsSchema
-}).strict();
+}).strict().superRefine((context, issue) => {
+  if (context.historyPolicy.adapterVersion !== context.conversation.version) {
+    issue.addIssue({
+      code: "custom",
+      path: ["historyPolicy", "adapterVersion"],
+      message: "HistoryAdapter 版本必须与 Conversation 投影版本一致"
+    });
+  }
+});
 
 export const clarificationOptionSchema = z.object({
   value: z.string().trim().min(1).max(200),
@@ -658,6 +691,52 @@ export const modelProfileSchema = z.object({
 
 export const modelOptionsSchema = z.record(z.string().trim().min(1).max(120), z.unknown());
 
+/**
+ * A non-secret, immutable routing decision captured before a Generation Job is
+ * queued. Credentials and provider-private request/response bodies never
+ * belong here.
+ */
+export const generationModeSchema = z.enum(["deterministic", "llm"]);
+
+export const modelRouteSnapshotSchema = z.object({
+  version: z.literal("v1"),
+  routeSnapshotId: z.string().trim().min(1).max(200),
+  generationMode: generationModeSchema,
+  provider: z.string().trim().min(1).max(80),
+  connectionId: z.string().trim().min(1).max(160),
+  protocol: modelProtocolSchema.nullable(),
+  profileId: z.string().trim().min(1).max(160),
+  profileVersion: z.string().trim().min(1).max(80),
+  adapterVersion: z.string().trim().min(1).max(80),
+  modelId: z.string().trim().min(1).max(200),
+  baseUrl: z.string().url().max(600).nullable(),
+  structuredOutputMethod: structuredOutputMethodSchema.nullable(),
+  outputSchemaId: z.literal("chart-plan"),
+  outputSchemaVersion: z.literal("v1"),
+  outputSchemaHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  requestedOptions: modelOptionsSchema,
+  effectiveOptions: modelOptionsSchema,
+  capturedAt: z.string().datetime()
+}).strict().superRefine((route, issue) => {
+  if (route.generationMode === "deterministic") {
+    if (route.protocol !== null || route.baseUrl !== null || route.structuredOutputMethod !== null) {
+      issue.addIssue({
+        code: "custom",
+        path: ["generationMode"],
+        message: "deterministic 路由不能声明供应商协议、端点或结构化输出方式"
+      });
+    }
+    return;
+  }
+  if (route.protocol === null || route.baseUrl === null || route.structuredOutputMethod === null) {
+    issue.addIssue({
+      code: "custom",
+      path: ["generationMode"],
+      message: "llm 路由必须固定协议、端点和结构化输出方式"
+    });
+  }
+});
+
 export const modelRunSnapshotSchema = z.object({
   version: z.literal("v1"),
   task: modelTaskSchema,
@@ -702,8 +781,8 @@ export const validationRecordSchema = z.object({
 });
 
 export const generationValidationSchema = z.object({
-  plan: validationRecordSchema,
-  render: validationRecordSchema
+  planValidation: validationRecordSchema,
+  renderValidation: validationRecordSchema
 }).strict();
 
 export const modelErrorCodeSchema = z.enum([
@@ -728,6 +807,36 @@ export const modelErrorSchema = z.object({
   retryable: z.boolean(),
   invocationId: z.string().trim().min(1).max(200)
 }).strict();
+
+/** A bounded call summary suitable for Generation Job audit storage. */
+export const modelInvocationSchema = z.object({
+  version: z.literal("v1"),
+  invocationId: z.string().trim().min(1).max(200),
+  routeSnapshotId: z.string().trim().min(1).max(200),
+  provider: z.string().trim().min(1).max(80),
+  modelId: z.string().trim().min(1).max(200),
+  adapterVersion: z.string().trim().min(1).max(80),
+  startedAt: z.string().datetime(),
+  completedAt: z.string().datetime(),
+  outcome: z.enum(["succeeded", "failed"]),
+  providerRequestId: z.string().trim().min(1).max(300).nullable(),
+  providerModelId: z.string().trim().min(1).max(200).nullable(),
+  finishReason: z.string().trim().min(1).max(120).nullable(),
+  usage: z.object({
+    inputTokens: z.number().int().nonnegative().nullable(),
+    outputTokens: z.number().int().nonnegative().nullable(),
+    totalTokens: z.number().int().nonnegative().nullable()
+  }).strict(),
+  httpStatus: z.number().int().min(100).max(599).nullable(),
+  errorCode: modelErrorCodeSchema.nullable()
+}).strict().superRefine((invocation, issue) => {
+  if (invocation.outcome === "succeeded" && invocation.errorCode !== null) {
+    issue.addIssue({ code: "custom", path: ["errorCode"], message: "成功调用不能保存模型错误码" });
+  }
+  if (invocation.outcome === "failed" && invocation.errorCode === null) {
+    issue.addIssue({ code: "custom", path: ["errorCode"], message: "失败调用必须保存归一化模型错误码" });
+  }
+});
 
 export const modelOutputDescriptorSchema = z.object({
   schemaId: z.string().trim().min(1).max(160),
@@ -775,23 +884,35 @@ export const persistedModelRequestSchema = z.object({
 const modelSuccessResultSchema = z.object({
   status: z.literal("ok"),
   data: z.unknown(),
-  invocationId: z.string().trim().min(1).max(200)
+  invocationId: z.string().trim().min(1).max(200),
+  invocation: modelInvocationSchema.optional()
 }).strict();
 
 const modelErrorResultSchema = modelErrorSchema.extend({
-  status: z.literal("error")
+  status: z.literal("error"),
+  invocation: modelInvocationSchema.optional()
 });
 
 /** A gateway call either returns parsed data or one explicit normalized error. */
 export const modelResultSchema = z.discriminatedUnion("status", [
   modelSuccessResultSchema,
   modelErrorResultSchema
-]);
+]).superRefine((result, issue) => {
+  if (result.invocation && result.invocation.invocationId !== result.invocationId) {
+    issue.addIssue({
+      code: "custom",
+      path: ["invocation", "invocationId"],
+      message: "Model Invocation 必须属于同一个结果 invocationId"
+    });
+  }
+});
 
 export type ModelTask = z.infer<typeof modelTaskSchema>;
 export type ModelProtocol = z.infer<typeof modelProtocolSchema>;
 export type StructuredOutputMethod = z.infer<typeof structuredOutputMethodSchema>;
 export type HistoryPolicy = z.infer<typeof historyPolicySchema>;
+export type CanonicalTextContextMessage = z.infer<typeof canonicalTextContextMessageSchema>;
+export type CanonicalTextContextProjection = z.infer<typeof canonicalTextContextProjectionSchema>;
 export type ClarificationOption = z.infer<typeof clarificationOptionSchema>;
 export type ClarificationQuestion = z.infer<typeof clarificationQuestionSchema>;
 export type ChartSelection = z.infer<typeof chartSelectionSchema>;
@@ -800,12 +921,15 @@ export type StructuredOutputCapability = z.infer<typeof structuredOutputCapabili
 export type ModelCapabilities = z.infer<typeof modelCapabilitiesSchema>;
 export type ModelProfile = z.infer<typeof modelProfileSchema>;
 export type ModelOptions = z.infer<typeof modelOptionsSchema>;
+export type GenerationMode = z.infer<typeof generationModeSchema>;
+export type ModelRouteSnapshot = z.infer<typeof modelRouteSnapshotSchema>;
 export type ModelRunSnapshot = z.infer<typeof modelRunSnapshotSchema>;
 export type ModelValidationError = z.infer<typeof modelValidationErrorSchema>;
 export type ValidationRecord = z.infer<typeof validationRecordSchema>;
 export type GenerationValidation = z.infer<typeof generationValidationSchema>;
 export type ModelErrorCode = z.infer<typeof modelErrorCodeSchema>;
 export type ModelError = z.infer<typeof modelErrorSchema>;
+export type ModelInvocation = z.infer<typeof modelInvocationSchema>;
 export type PreparedModelContext = z.infer<typeof preparedModelContextSchema>;
 export type ModelOutputDescriptor = z.infer<typeof modelOutputDescriptorSchema>;
 export type ChartPlanOutputDescriptor = z.infer<typeof chartPlanOutputDescriptorSchema>;
@@ -816,8 +940,8 @@ export type RuntimeModelRequest<T> = Omit<PersistedModelRequest, "output"> & {
   signal: AbortSignal;
 };
 export type ModelResult<T> =
-  | { status: "ok"; data: T; invocationId: string }
-  | ({ status: "error" } & ModelError);
+  | { status: "ok"; data: T; invocationId: string; invocation?: ModelInvocation }
+  | ({ status: "error"; invocation?: ModelInvocation } & ModelError);
 
 /** Business code depends on this contract, not on a provider SDK or framework. */
 export interface ModelGateway {

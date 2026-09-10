@@ -1,6 +1,6 @@
 import { assembleVegaLite } from "flint-chart";
 import sharp from "sharp";
-import type { FlintSpec } from "@langreport/contracts";
+import type { FlintSpec, ValidationRecord } from "@langreport/contracts";
 
 export const FLINT_VERSION = "0.5.1";
 export const RENDERER_VERSION = "vega-lite-svg-v1";
@@ -15,6 +15,63 @@ export type RenderedChart = {
   svg: string;
   png: Buffer;
 };
+
+/**
+ * Validate the concrete render artifacts independently from Flint Spec plan
+ * validation. This is deliberately limited to the files this adapter owns.
+ */
+export function validateRenderedChart(rendered: RenderedChart): ValidationRecord {
+  const errors: ValidationRecord["errors"] = [];
+  if (Object.keys(rendered.vegaLiteSpec).length === 0) {
+    errors.push({
+      code: "RENDER_VEGA_LITE_EMPTY",
+      path: "vegaLiteSpec",
+      message: "渲染器没有产出 Vega-Lite 规范",
+      severity: "error"
+    });
+  }
+  if (!rendered.svg.trim()) {
+    errors.push({
+      code: "RENDER_SVG_EMPTY",
+      path: "svg",
+      message: "渲染器没有产出 SVG",
+      severity: "error"
+    });
+  } else if (!rendered.svg.includes("<svg") || !rendered.svg.includes("</svg>")) {
+    errors.push({
+      code: "RENDER_SVG_INVALID",
+      path: "svg",
+      message: "SVG 输出缺少完整根元素",
+      severity: "error"
+    });
+  }
+  if (rendered.png.byteLength === 0) {
+    errors.push({
+      code: "RENDER_PNG_EMPTY",
+      path: "png",
+      message: "渲染器没有产出 PNG",
+      severity: "error"
+    });
+  } else if (!hasPngSignature(rendered.png)) {
+    errors.push({
+      code: "RENDER_PNG_INVALID",
+      path: "png",
+      message: "PNG 输出不包含有效文件签名",
+      severity: "error"
+    });
+  }
+  return {
+    status: errors.length === 0 ? "passed" : "failed",
+    errors,
+    validatorVersion: "flint-render-v1",
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function hasPngSignature(value: Buffer): boolean {
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  return value.byteLength >= signature.length && signature.every((byte, index) => value[index] === byte);
+}
 
 /** Convert the platform-owned Flint Spec into Flint's native input shape. */
 export function toFlintAssemblyInput(spec: FlintSpec): Record<string, unknown> {

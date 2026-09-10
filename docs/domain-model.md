@@ -6,6 +6,8 @@
 
 Workspace 是多租户隔离边界，拥有 Member、Project、Workspace Memory、Workspace Theme、Plugin 和使用配额。
 
+Workspace 还拥有至多一个当前有效的 **Workspace Model Credential**。它只保存供应商标识、密文、尾号和更新元数据；Owner/Admin 可以轮换，普通 Member 无权读取状态或写入。它是可轮换的运行凭据，不是 Model Route Snapshot 的一部分，也不会写入 Generation Job、Revision 或 Model Invocation。
+
 ### Project
 
 Project 属于一个 Workspace，拥有 Data Asset、Conversation、Analysis Brief、Metric Definition、Project Memory、Visual Template、Chart Artifact、Evidence Block 和 Project Role。第一阶段的 Project 默认是一个咨询客户项目。
@@ -42,6 +44,10 @@ Visual Template 属于一个 Project，是版本化的项目输出规范，包�
 
 Generation Cycle 是围绕一个 Analysis Brief，从用户意图到一个候选 Evidence Block 的有限生成尝试。它有明确的输入、输出、校验结果和结束原因；Generation Job 是它的可观察执行单元。
 
+### Worker Lease
+
+Worker Lease 附着在 Generation Job，不是独立的业务聚合。每一次领取生成新的 owner、随机令牌和单调递增的 Fencing Token；只有未超期且三者均匹配的 Worker 可以推进 Job。交接、成功、失败和澄清会释放 Lease；租约超期后，生成阶段返回 `Queued`，渲染阶段返回 `Rendering`。
+
 ### Memory
 
 Memory Candidate 来自 Conversation，确认后转化为 Project Memory 或 Workspace Memory。长期 Memory 必须可以追溯到来源 Conversation 或用户明确输入。
@@ -57,6 +63,7 @@ Workspace 1 ── * Member
 Workspace 1 ── * Project
 Workspace 1 ── * Workspace Memory
 Workspace 1 ── * Plugin Installation
+Workspace 1 ── 0..1 Workspace Model Credential
 
 Project 1 ── * Data Asset
 Data Asset 1 ── * Data Snapshot
@@ -93,7 +100,10 @@ Chart Revision 1 ── * Review Comment
 11. Evidence Block 中的发现/结论不能超出其 Chart Revision、Metric Definition 和数据质量信息支持的范围。
 12. 用户可见的“生成成功”必须意味着 Flint Spec 和输出产物通过必要校验；成功不等于已审核。
 13. Generation Cycle 固化一个 Model Profile、路由、提示词、Schema、数据策略和上下文投影版本；切换模型或补充澄清必须创建新的 Cycle。
-14. 模型计划校验和渲染产物校验分别保存状态、错误和校验器版本，任一失败都不能标记生成成功。
+14. Generation Job 的 `planValidation` 与 `renderValidation` 分别保存状态、错误和校验器版本；前者通过不代表渲染产物可用，任一失败都不能标记生成成功。
+15. Generation Job 保存不可变的 Conversation 投影及其 `sha256` 哈希；Worker 不得以执行时的 Conversation 重新生成该投影。
+16. 只有 owner、lease token、Fencing Token 全部匹配且 Lease 未超期的 Worker 可以推进 Generation Job 或记录完成；已超期 Worker 的写入必须无效。Generation Job 到 Chart Revision 和 Evidence Block 的唯一关系提供至少一次执行下的业务幂等。
+17. Workspace Model Credential 的明文只能在 TLS 请求处理和受信任 Worker 调用期间存在；持久化、HTTP 响应、Job、审计和日志不得包含明文。若加密主密钥缺失或密文不能认证，Worker 必须失败，不能回退到另一份密钥。
 
 ## 4. 状态机
 
@@ -115,7 +125,7 @@ Any running state      → Failed
 
 修复循环只能发生在 Validating 之后，最多两次；每次修复都必须保留模型输出和校验错误。
 
-上图的 `Validating` 是 Generation Job 的阶段状态；计划校验发生在 Transforming 之前，渲染产物校验发生在 Rendering 之后，二者通过独立的校验记录区分。模型能力降级、工具调用失败或协议不兼容时，当前 Job 结束并保存用户可操作的失败原因；用户选择模型或补充信息后创建新的 Generation Cycle。
+上图的 `Validating` 是 Generation Job 的阶段状态；计划校验发生在 Transforming 之前，渲染产物校验发生在 Rendering 之后，二者通过独立的校验记录区分。每个运行状态还受 Worker Lease 保护：超期的 Profiling、Planning、Transforming 或 Compiling Job 恢复至 Queued，超期的 Rendering 或 Validating Job 恢复至 Rendering，旧 Worker 不得继续写入。模型能力降级、工具调用失败或协议不兼容时，当前 Job 结束并保存用户可操作的失败原因；用户选择模型或补充信息后创建新的 Generation Cycle。
 
 ### Generation Cycle
 
