@@ -113,6 +113,13 @@
       "when": 1788708000000,
       "tag": "0016_workspace_model_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788708000001,
+      "tag": "0017_message_trigger_generation",
+      "breakpoints": true
     }
   ]
 }

@@ -432,6 +432,114 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       if (!conversation) throw new DataAssetError("对话不存在");
       const userId = userIdFromRequest(request);
       await assertChartAction(conversation.projectId, userId, "create_revision");
+
+      if (body.generate) {
+        const existingMessage = body.clientRequestId
+          ? await findConversationMessageByClientRequestId(conversation.id, body.clientRequestId)
+          : undefined;
+        if (existingMessage && existingMessage.content !== body.content) {
+          return sendHttpError(reply, 409, "clientRequestId 已用于另一条消息", "IDEMPOTENCY_CONFLICT");
+        }
+        const existingJob = body.clientRequestId
+          ? (await db.select().from(generationJobs).where(and(
+            eq(generationJobs.projectId, conversation.projectId),
+            eq(generationJobs.idempotencyKey, body.clientRequestId)
+          )).limit(1))[0]
+          : undefined;
+        if (existingJob) {
+          if (existingJob.prompt !== body.content || existingJob.conversationId !== conversation.id) {
+            return sendHttpError(reply, 409, "clientRequestId 已用于另一组生成输入", "IDEMPOTENCY_CONFLICT");
+          }
+          const message = existingMessage ?? await findConversationMessageByContent(conversation.id, body.content);
+          if (!message) throw new ChartServiceError("GENERATION_MESSAGE_NOT_FOUND", "生成任务缺少触发消息", 409);
+          return reply.code(200).send({
+            message,
+            job: existingJob,
+            nextAction: pollGenerationJobAction(existingJob.id)
+          });
+        }
+
+        const precondition = await checkGenerationPreconditions({
+          projectId: conversation.projectId,
+          dataAssetId: body.dataAssetId,
+          metricDefinitionId: body.metricDefinitionId
+        });
+        const conversationProjection = await projectConversationForGeneration({
+          projectId: conversation.projectId,
+          conversationId: conversation.id,
+          prompt: body.content
+        });
+        let userMessage = existingMessage;
+        let createdMessage = false;
+        if (!userMessage) {
+          try {
+            [userMessage] = await db.insert(conversationMessages).values({
+              conversationId: conversation.id,
+              role: "user",
+              content: body.content,
+              clientRequestId: body.clientRequestId ?? null
+            }).returning();
+            createdMessage = true;
+          } catch (error) {
+            if (!isUniqueViolation(error) || !body.clientRequestId) throw error;
+            userMessage = await findConversationMessageByClientRequestId(conversation.id, body.clientRequestId);
+            if (!userMessage) throw error;
+            if (userMessage.content !== body.content) {
+              return sendHttpError(reply, 409, "clientRequestId 已用于另一条消息", "IDEMPOTENCY_CONFLICT");
+            }
+          }
+        }
+        if (!userMessage) throw new Error("用户消息保存失败");
+        if (createdMessage) await syncConversationTurn(conversation.id, userId, userMessage.id, body.content);
+        await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, conversation.id));
+
+        if (precondition.nextAction) {
+          return reply.code(201).send({
+            message: userMessage,
+            job: null,
+            nextAction: precondition.nextAction
+          });
+        }
+
+        let result: Awaited<ReturnType<typeof createGenerationJobRecord>>;
+        try {
+          result = await createGenerationJobRecord({
+            params: { projectId: conversation.projectId },
+            body: {
+              projectId: conversation.projectId,
+              conversationId: conversation.id,
+              dataAssetId: body.dataAssetId,
+              metricDefinitionId: body.metricDefinitionId,
+              prompt: body.content,
+              renderer: body.renderer,
+              idempotencyKey: body.clientRequestId
+            },
+            id: request.id
+          }, environment, {
+            userId,
+            triggerMessage: userMessage,
+            conversationProjection,
+            precondition
+          });
+        } catch (error) {
+          if (!isUniqueViolation(error) || !body.clientRequestId) throw error;
+          const [concurrentJob] = await db.select().from(generationJobs).where(and(
+            eq(generationJobs.projectId, conversation.projectId),
+            eq(generationJobs.idempotencyKey, body.clientRequestId)
+          )).limit(1);
+          if (!concurrentJob) throw error;
+          if (concurrentJob.prompt !== body.content || concurrentJob.conversationId !== conversation.id) {
+            return sendHttpError(reply, 409, "clientRequestId 已用于另一组生成输入", "IDEMPOTENCY_CONFLICT");
+          }
+          result = { job: concurrentJob, reused: true };
+        }
+        return reply.code(result.reused ? 200 : 202).send({
+          message: userMessage,
+          job: result.job,
+          nextAction: pollGenerationJobAction(result.job.id)
+        });
+      }
+
       const [userMessage] = await db.insert(conversationMessages).values({
         conversationId: conversation.id,
         role: "user",
@@ -543,6 +651,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
             planValidation: job.planValidation,
             renderValidation: job.renderValidation,
             previewData: job.previewData,
+            clarificationQuestions: job.clarificationQuestions,
             generationAudit: job.generationAudit,
             repairCount: job.repairCount,
             errorCode: job.errorCode,
@@ -556,23 +665,36 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
     }
   });
 
-  const createGenerationJob = async (request: any, reply: FastifyReply) => {
-    try {
+  type GenerationJobCreationOptions = {
+    userId?: string;
+    triggerMessage?: typeof conversationMessages.$inferSelect;
+    conversationProjection?: Awaited<ReturnType<typeof projectConversationForGeneration>>;
+    precondition?: GenerationPrecondition;
+  };
+
+  const createGenerationJobRecord = async (request: any, environment: NodeJS.ProcessEnv, options: GenerationJobCreationOptions = {}) => {
       assertProjectId(request.params.projectId);
       const rawBody = (request.body && typeof request.body === "object") ? request.body as Record<string, unknown> : {};
       const body = chartGenerationRequestSchema.parse({
         ...rawBody,
         projectId: request.params.projectId
       });
-      const userId = userIdFromRequest(request);
+      const userId = options.userId ?? userIdFromRequest(request);
       await assertChartAction(request.params.projectId, userId, "create_revision");
-      const modelRoute = resolveModelRouteSnapshot(environment);
-      const [metricDefinition] = await db.select().from(metricDefinitions)
-        .where(and(eq(metricDefinitions.projectId, request.params.projectId), eq(metricDefinitions.status, "confirmed")))
-        .orderBy(desc(metricDefinitions.version)).limit(1);
-      if (!metricDefinition) {
-        throw new ChartServiceError("METRIC_DEFINITION_REQUIRED", "请先确认指标口径，再生成 Evidence Block", 400);
+      const precondition = options.precondition ?? await checkGenerationPreconditions({
+        projectId: request.params.projectId,
+        dataAssetId: body.dataAssetId,
+        metricDefinitionId: body.metricDefinitionId
+      });
+      if (precondition.nextAction || !precondition.assetRecord || !precondition.metricDefinition) {
+        throw new ChartServiceError(
+          precondition.nextAction?.code ?? "GENERATION_INPUT_REQUIRED",
+          precondition.nextAction?.message ?? "生成所需输入尚未准备好",
+          400
+        );
       }
+      const modelRoute = resolveModelRouteSnapshot(environment);
+      const metricDefinition = precondition.metricDefinition;
       const projectTheme = await getProjectTheme(request.params.projectId, userId);
       const hasThemeOverride = Object.prototype.hasOwnProperty.call(rawBody, "theme");
       const hasThemeVersionOverride = Object.prototype.hasOwnProperty.call(rawBody, "themeVersion");
@@ -591,9 +713,8 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
           : `project-v${projectTheme.version}`;
       const resolvedThemeSource = hasThemeOverride || hasThemeVersionOverride ? "request" : "project";
       const resolvedThemeConfig = resolvedThemeSource === "project" ? projectTheme.config : {};
-      const assetRecord = await findReadyAsset(request.params.projectId, body.dataAssetId);
-      if (!assetRecord) throw new DataAssetError("数据资产不存在或没有可用 Snapshot");
-      const conversationProjection = await projectConversationForGeneration({
+      const assetRecord = precondition.assetRecord;
+      const conversationProjection = options.conversationProjection ?? await projectConversationForGeneration({
         projectId: request.params.projectId,
         conversationId: body.conversationId,
         prompt: body.prompt
@@ -628,52 +749,65 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
         eq(generationJobs.idempotencyKey, idempotencyKey)
       )).limit(1);
       if (existing) {
-        if (existing.inputFingerprint !== fingerprint) return sendHttpError(reply, 409, "幂等键已经用于另一组生成输入", "IDEMPOTENCY_CONFLICT");
-        return reply.send({ job: existing, reused: true });
+        if (existing.inputFingerprint !== fingerprint) {
+          throw new ChartServiceError("IDEMPOTENCY_CONFLICT", "幂等键已经用于另一组生成输入", 409);
+        }
+        return { job: existing, reused: true };
       }
 
       const conversationId = body.conversationId ?? await createConversationForGeneration(request.params.projectId, body.prompt, userId);
-      if (body.conversationId) {
+      if (body.conversationId && !options.triggerMessage) {
         const [message] = await db.insert(conversationMessages).values({ conversationId, role: "user", content: body.prompt }).returning({ id: conversationMessages.id });
         await syncConversationTurn(conversationId, userId, message.id, body.prompt);
       }
-      const [analysisBrief] = await db.insert(analysisBriefs).values({
-        projectId: request.params.projectId,
-        conversationId,
-        businessQuestion: body.prompt,
-        audience: "客户汇报",
-        timeRange: null,
-        timeGrain: null,
-        status: "confirmed",
-        createdBy: userId,
-        updatedAt: new Date()
-      }).returning();
       const memoryContext = await getMemoryContextForGeneration({ projectId: request.params.projectId, conversationId, userId, prompt: body.prompt });
-      const [job] = await db.insert(generationJobs).values({
-        projectId: request.params.projectId,
-        conversationId,
-        dataAssetId: body.dataAssetId,
-        snapshotId: assetRecord.snapshot.id,
-        analysisBriefId: analysisBrief.id,
-        metricDefinitionId: metricDefinition.id,
-        prompt: body.prompt,
-        idempotencyKey,
-        inputFingerprint: fingerprint,
-        renderer: body.renderer,
-        theme: resolvedTheme,
-        themeVersion: resolvedThemeVersion,
-        themeSource: resolvedThemeSource,
-        themeConfig: resolvedThemeConfig,
-        transformPlan: body.plan ?? null,
-        memoryContext,
-        conversationProjection,
-        modelRoute,
-        pluginContext: pluginResolution.context,
-        analysisBriefSnapshot: analysisBrief,
-        metricDefinitionSnapshot: metricDefinition,
-        createdBy: userId
-      }).returning();
-      return reply.code(202).send({ job, reused: false });
+      const result = await db.transaction(async (tx) => {
+        const [analysisBrief] = await tx.insert(analysisBriefs).values({
+          projectId: request.params.projectId,
+          conversationId,
+          businessQuestion: body.prompt,
+          audience: "客户汇报",
+          timeRange: null,
+          timeGrain: null,
+          status: "confirmed",
+          createdBy: userId,
+          updatedAt: new Date()
+        }).returning();
+        if (!analysisBrief) throw new Error("Analysis Brief 创建失败");
+        const [job] = await tx.insert(generationJobs).values({
+          projectId: request.params.projectId,
+          conversationId,
+          dataAssetId: body.dataAssetId,
+          snapshotId: assetRecord.snapshot.id,
+          analysisBriefId: analysisBrief.id,
+          metricDefinitionId: metricDefinition.id,
+          prompt: body.prompt,
+          idempotencyKey,
+          inputFingerprint: fingerprint,
+          renderer: body.renderer,
+          theme: resolvedTheme,
+          themeVersion: resolvedThemeVersion,
+          themeSource: resolvedThemeSource,
+          themeConfig: resolvedThemeConfig,
+          transformPlan: body.plan ?? null,
+          memoryContext,
+          conversationProjection,
+          modelRoute,
+          pluginContext: pluginResolution.context,
+          analysisBriefSnapshot: analysisBrief,
+          metricDefinitionSnapshot: metricDefinition,
+          createdBy: userId
+        }).returning();
+        if (!job) throw new Error("Generation Job 创建失败");
+        return job;
+      });
+      return { job: result, reused: false };
+  };
+
+  const createGenerationJob = async (request: any, reply: FastifyReply) => {
+    try {
+      const result = await createGenerationJobRecord(request, environment);
+      return reply.code(result.reused ? 200 : 202).send(result);
     } catch (error) {
       return sendDataError(reply, error);
     }
@@ -851,7 +985,10 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
   });
 }
 
-async function findReadyAsset(projectId: string, assetId: string) {
+async function findReadyAsset(projectId: string, assetId: string): Promise<{
+  asset: typeof dataAssets.$inferSelect;
+  snapshot: typeof dataSnapshots.$inferSelect;
+} | null> {
   const [asset] = await db.select({
     asset: dataAssets,
     snapshot: dataSnapshots
@@ -861,6 +998,102 @@ async function findReadyAsset(projectId: string, assetId: string) {
     .orderBy(desc(dataSnapshots.version))
     .limit(1);
   return asset ?? null;
+}
+
+type GenerationNextAction = {
+  type: "poll_generation_job" | "prepare_generation";
+  jobId?: string | null;
+  code?: string | null;
+  message: string;
+};
+
+type GenerationPrecondition = {
+  assetRecord: Awaited<ReturnType<typeof findReadyAsset>>;
+  metricDefinition: typeof metricDefinitions.$inferSelect | null;
+  nextAction: GenerationNextAction | null;
+};
+
+async function checkGenerationPreconditions(input: {
+  projectId: string;
+  dataAssetId?: string;
+  metricDefinitionId?: string;
+}): Promise<GenerationPrecondition> {
+  if (!input.dataAssetId) {
+    return {
+      assetRecord: null,
+      metricDefinition: null,
+      nextAction: prepareGenerationAction("DATA_SNAPSHOT_REQUIRED", "请先上传数据并生成可用 Data Snapshot")
+    };
+  }
+  const assetRecord = await findReadyAsset(input.projectId, input.dataAssetId);
+  if (!assetRecord) {
+    return {
+      assetRecord: null,
+      metricDefinition: null,
+      nextAction: prepareGenerationAction("DATA_SNAPSHOT_REQUIRED", "请先上传数据并生成可用 Data Snapshot")
+    };
+  }
+
+  const confirmedMetrics = await db.select().from(metricDefinitions)
+    .where(and(eq(metricDefinitions.projectId, input.projectId), eq(metricDefinitions.status, "confirmed")))
+    .orderBy(desc(metricDefinitions.version));
+  if (confirmedMetrics.length === 0) {
+    return {
+      assetRecord,
+      metricDefinition: null,
+      nextAction: prepareGenerationAction("METRIC_DEFINITION_REQUIRED", "请先确认指标口径，再发送生成请求")
+    };
+  }
+  if (input.metricDefinitionId) {
+    const metricDefinition = confirmedMetrics.find((definition) => definition.id === input.metricDefinitionId);
+    if (!metricDefinition) {
+      return {
+        assetRecord,
+        metricDefinition: null,
+        nextAction: prepareGenerationAction("METRIC_DEFINITION_INVALID", "所选指标口径不存在、未确认或不属于当前 Project")
+      };
+    }
+    return { assetRecord, metricDefinition, nextAction: null };
+  }
+  if (confirmedMetrics.length > 1) {
+    return {
+      assetRecord,
+      metricDefinition: null,
+      nextAction: prepareGenerationAction("METRIC_SELECTION_REQUIRED", "当前 Project 有多个已确认指标，请明确选择一个指标口径")
+    };
+  }
+  return { assetRecord, metricDefinition: confirmedMetrics[0] ?? null, nextAction: null };
+}
+
+function prepareGenerationAction(code: string, message: string): GenerationNextAction {
+  return { type: "prepare_generation", jobId: null, code, message };
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  if ("code" in error && (error as { code?: unknown }).code === "23505") return true;
+  return "cause" in error && isUniqueViolation((error as { cause?: unknown }).cause);
+}
+
+function pollGenerationJobAction(jobId: string): GenerationNextAction {
+  return { type: "poll_generation_job", jobId, code: null, message: "生成任务已创建，正在处理。" };
+}
+
+async function findConversationMessageByClientRequestId(conversationId: string, clientRequestId: string) {
+  const [message] = await db.select().from(conversationMessages).where(and(
+    eq(conversationMessages.conversationId, conversationId),
+    eq(conversationMessages.clientRequestId, clientRequestId)
+  )).limit(1);
+  return message;
+}
+
+async function findConversationMessageByContent(conversationId: string, content: string) {
+  const [message] = await db.select().from(conversationMessages).where(and(
+    eq(conversationMessages.conversationId, conversationId),
+    eq(conversationMessages.role, "user"),
+    eq(conversationMessages.content, content)
+  )).orderBy(desc(conversationMessages.createdAt)).limit(1);
+  return message;
 }
 
 async function projectConversationForGeneration(input: {

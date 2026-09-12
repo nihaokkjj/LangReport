@@ -223,6 +223,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .composer-meta span { overflow: hidden; max-width: 180px; text-overflow: ellipsis; white-space: nowrap; }
 .composer-actions { display: flex; gap: 7px; }
 .composer-send, .composer-generate { min-height: 44px; padding: 8px 12px; font-size: var(--type-meta); }
+.clarification-stage { display: grid; gap: 14px; max-width: 760px; margin: auto; border: 1px solid var(--warning); border-radius: 12px; background: var(--warning-soft); padding: 24px; }
+.clarification-stage h2 { margin: 0; font-size: 26px; font-weight: 600; }
+.clarification-stage p { margin: 0; font-size: var(--type-body-sm); line-height: 1.55; }
+.clarification-list { display: grid; gap: 10px; }
+.clarification-question { display: grid; gap: 4px; border-top: 1px solid rgba(138, 90, 0, .24); padding-top: 10px; }
+.clarification-question strong { font-size: var(--type-body-sm); font-weight: 600; }
+.clarification-question span { font-size: var(--type-label); }
+.clarification-options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+.clarification-options span { border: 1px solid var(--warning); border-radius: 50px; background: var(--canvas); padding: 6px 9px; }
+.empty-hint { display: block; color: var(--ink-muted); font-size: var(--type-body-sm); line-height: 1.5; }
 .prompt-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .prompt-chip { border: 0; border-radius: 50px; background: var(--surface); padding: 7px 11px; font-family: var(--font-mono); font-size: var(--type-micro); letter-spacing: .25px; }
 .prompt-chip:hover { background: var(--accent-soft); }

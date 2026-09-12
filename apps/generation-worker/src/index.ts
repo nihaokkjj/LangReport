@@ -1,7 +1,7 @@
 import { and, asc, eq, lt, or } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { GenerationCycle, validateCanonicalTextContextProjection, validateGenerationRevision } from "@langreport/generation";
-import { GenerationJobLeaseLostError, assertGenerationJobLease, claimGenerationJobLease, db, chartRevisions, dataAssets, dataSnapshots, generationJobs, memoryExtractionJobs, projects, recoverExpiredGenerationJobLeases, startGenerationJobLeaseHeartbeat, updateGenerationJobUnderLease, workspaceModelCredentials, type GenerationJobLease, type GenerationJobStatus } from "@langreport/db";
+import { GenerationJobLeaseLostError, assertGenerationJobLease, claimGenerationJobLease, db, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, generationJobs, memoryExtractionJobs, projects, recoverExpiredGenerationJobLeases, startGenerationJobLeaseHeartbeat, updateGenerationJobUnderLease, workspaceModelCredentials, type GenerationJobLease, type GenerationJobStatus } from "@langreport/db";
 import { getObject } from "@langreport/storage";
 import type { ColumnProfile, DataRow } from "@langreport/data-engine";
 import { applyRevisionPatch } from "@langreport/chart";
@@ -159,9 +159,15 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
       effectiveOptions: { ...modelRoute.effectiveOptions, maxOutputTokens: budget.maxOutputTokens }
     });
     if (cycleResult.status === "needs_clarification") {
+      await assertGenerationJobLease(lease);
+      await appendAssistantMessage(
+        job.job.conversationId,
+        cycleResult.questions.map((question) => `需要澄清：${question.question}${question.reason ? `（${question.reason}）` : ""}`).join("\n")
+      );
       await setStatus(jobId, lease, "needs_clarification", {
         generationAudit: cycleResult.audit,
         ...validationFieldsFromAudit(cycleResult.audit),
+        clarificationQuestions: cycleResult.questions,
         errorCode: "GENERATION_NEEDS_CLARIFICATION",
         errorMessage: cycleResult.questions.map((question) => question.question).join("；")
       }, true);
@@ -303,6 +309,11 @@ async function failJob(jobId: string, lease: GenerationJobLease, errorCode: stri
     }
   });
   if (!updated) throw new GenerationJobLeaseLostError(jobId);
+}
+
+async function appendAssistantMessage(conversationId: string, content: string): Promise<void> {
+  await db.insert(conversationMessages).values({ conversationId, role: "assistant", content });
+  await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, conversationId));
 }
 
 function isTransformPlan(value: unknown): value is TransformPlan {

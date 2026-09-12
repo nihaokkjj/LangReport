@@ -8,6 +8,7 @@ import {
   routeContracts,
   routeSchema
 } from "./http.js";
+import { createConversationMessageRequestSchema } from "./index.js";
 
 const expectedRoutes = [
   "GET /health",
@@ -17,6 +18,8 @@ const expectedRoutes = [
   "GET /docs",
   "GET /api/v1/projects",
   "POST /api/v1/projects",
+  "GET /api/v1/workspaces/:workspaceId/model-credential",
+  "PUT /api/v1/workspaces/:workspaceId/model-credential",
   "GET /api/v1/workspaces/:workspaceId/plugin-catalog",
   "POST /api/v1/workspaces/:workspaceId/plugins/validate",
   "POST /api/v1/workspaces/:workspaceId/plugins",
@@ -134,6 +137,21 @@ test("route lookup is stable and marks bootstrap as internal", () => {
   assert.equal(getRouteContract("GET", "/api/v1/projects"), routeContracts.find((item) => item.operationId === "listProjects"));
   assert.equal(getRouteContract("POST", "/api/v1/dev/bootstrap")?.internal, true);
   assert.equal(getRouteContract("GET", "/missing"), undefined);
+});
+
+test("generation message contract carries the single-send inputs and allows precondition responses", () => {
+  const request = createConversationMessageRequestSchema.parse({
+    content: "按月份展示各区域销售额",
+    generate: true,
+    clientRequestId: "request-1"
+  });
+  assert.equal(request.generate, true);
+  assert.equal(request.renderer, "vega-lite");
+  assert.equal(request.dataAssetId, undefined);
+  const contract = getRouteContract("POST", "/api/v1/conversations/:conversationId/messages");
+  assert.ok(contract?.responses[201]);
+  assert.ok(contract?.responses[202]);
+  assert.ok(contract?.responses[200]);
 });
 
 test("OpenAPI document is generated from the route contracts", () => {

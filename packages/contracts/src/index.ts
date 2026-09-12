@@ -408,6 +408,7 @@ export const chartGenerationRequestSchema = z.object({
   projectId: z.string().uuid(),
   conversationId: z.string().uuid().optional(),
   dataAssetId: z.string().uuid(),
+  metricDefinitionId: z.string().uuid().optional(),
   prompt: z.string().min(1).max(4000),
   renderer: z.literal("vega-lite").default("vega-lite"),
   plan: transformPlanSchema.optional(),
@@ -424,7 +425,12 @@ export const createConversationRequestSchema = z.object({
 
 export const createConversationMessageRequestSchema = z.object({
   content: z.string().trim().min(1).max(4000),
-  assistantContent: z.string().trim().min(1).max(4000).optional()
+  assistantContent: z.string().trim().min(1).max(4000).optional(),
+  generate: z.boolean().default(false),
+  dataAssetId: z.string().uuid().optional(),
+  metricDefinitionId: z.string().uuid().optional(),
+  renderer: z.literal("vega-lite").default("vega-lite"),
+  clientRequestId: z.string().trim().min(1).max(200).optional()
 });
 
 export const createMetricDefinitionRequestSchema = z.object({

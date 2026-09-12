@@ -141,9 +141,11 @@ export const conversationMessages = pgTable("conversation_messages", {
   role: conversationMessageRole("role").notNull(),
   content: text("content").notNull(),
   intent: jsonb("intent"),
+  clientRequestId: text("client_request_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => [
-  index("conversation_messages_conversation_idx").on(table.conversationId)
+  index("conversation_messages_conversation_idx").on(table.conversationId),
+  uniqueIndex("conversation_messages_conversation_client_request_unique").on(table.conversationId, table.clientRequestId)
 ]);
 
 export const analysisBriefs = pgTable("analysis_briefs", {
@@ -235,6 +237,7 @@ export const generationJobs = pgTable("generation_jobs", {
   generationAudit: jsonb("generation_audit"),
   errorCode: text("error_code"),
   errorMessage: text("error_message"),
+  clarificationQuestions: jsonb("clarification_questions"),
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()

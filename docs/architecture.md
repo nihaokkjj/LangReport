@@ -156,7 +156,32 @@ Plugin Manifest 只能声明模板、Theme、语义、校验器、示例和平�
 - 所有跨模块查询都必须先验证 Workspace 作用域和 Project 权限。
 - 记录生成、导出、分享、记忆确认、插件安装和审核事件。
 
-## 12. 建议的仓库结构
+## 12. Harness 与应用层的目标 seam
+
+详细决策与迁移门槛见 [ADR 0014：将受控执行 Harness 与 LangReport 应用层分离](./adr/0014-harness-and-application-seam.md)、[ADR 0015：用 LangGraph 编排有限的 Generation Cycle](./adr/0015-langgraph-bounded-generation-orchestration.md) 和 [Harness 与 LangGraph 迁移实施计划](./harness-langgraph-migration-plan.md)。本节描述目标依赖方向，不表示已经改变当前 package 结构或允许扩大第一阶段范围。
+
+```text
+apps/*（Web / API / Worker 宿主）
+        │ 组装依赖、处理传输与进程生命周期
+        ▼
+LangReport 应用层（GenerationCycle、数据、图表、记忆、审核）
+        │ 使用小而稳定的 Harness Interface
+        ├───────────────────────┐
+        ▼                       ▼
+@langreport/harness        产品基础设施 Adapter
+模型调用/预算/取消         db / storage / flint-adapter
+        │
+        ▼
+模型供应商与遥测端
+```
+
+Harness 不得依赖 Workspace、Project、Data Snapshot、Metric Definition、TransformPlan、Flint Spec、Chart Revision、Evidence Block 或任何 LangReport 数据库 Schema。应用层先冻结并授权输入，再通过 Harness 调用模型；模型调用结果不能自行改写业务状态。
+
+第一步只抽取已有 deterministic 与百炼 Adapter 支撑的结构化模型调用 seam。Generation Job 状态机、Worker Lease、Fencing Token、受限 TransformPlan、Flint 渲染和 Plugin Manifest 均保持在应用层。通用 Agent、用户代码 Sandbox、MCP、IM Channel 和运行中配置热加载不属于这一目标。
+
+LangGraph 已被选为后续 `GenerationCycle` 的内部、有限 `StateGraph` 实现，但 Graph State、节点与路由仍属于 `packages/generation` 的应用语义，而非 Harness。首版不启用 Checkpointer 或 `interrupt()`；`needs_clarification` 继续由 Job、Conversation 和新的 Generation Cycle 表达。当前运行时尚未安装该依赖，实施顺序和阶段门禁以迁移计划为准。
+
+## 13. 建议的仓库结构
 
 ```text
 apps/
@@ -165,6 +190,7 @@ apps/
   generation-worker/    # Job 调度、Cycle 输入快照和结果持久化
   render-worker/        # flint-chart、Vega-Lite、PNG/SVG
 packages/
+  harness/              # 目标：先承载中性的结构化模型调用 Interface/Adapter
   domain/               # 领域对象和不变量
   contracts/            # API、任务和 Plugin Manifest Schema
   data-engine/          # 受限 TransformPlan 执行器

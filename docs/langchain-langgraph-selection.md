@@ -1,7 +1,9 @@
 # LangChain / LangGraph 选型研究
 
-> 状态：M1-A 已采用百炼千问原生 HTTP 基线；LangChain / LangGraph 仍是后续内部实现选项，不是当前运行时依赖。核对日期：2026-09-06。
+> 状态：M1-A 已采用百炼千问原生 HTTP 基线；[ADR 0015](./adr/0015-langgraph-bounded-generation-orchestration.md) 已选择 LangGraph 作为后续有限 `Generation Cycle` 的内部编排实现，但它仍不是当前运行时依赖。具体阶段、目标文件与门禁见 [Harness 与 LangGraph 迁移实施计划](./harness-langgraph-migration-plan.md)。核对日期：2026-09-06；架构决策更新：2026-09-12。
 > 本文核对 JavaScript / TypeScript 官方文档和 TypeScript 源码；没有安装依赖、调用真实模型或运行框架集成测试。源码链接指向研究时的 `main`，实施时必须锁定发行版本并重新验证。
+
+> 说明：本文中将 LangGraph 视为“后续选项”的条件性建议保留为研究历史；是否采用及其业务边界以 ADR 0015 为准。供应商适配、数据最小化、审计、取消和依赖锁定的核对结论仍然有效。
 
 ## 1. 本轮边界与既有入口
 

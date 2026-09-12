@@ -268,6 +268,7 @@ const messageDto = dto({
   role: { type: "string", enum: ["user", "assistant", "system"] },
   content: string(),
   intent: nullable(anyJson),
+  clientRequestId: nullable(string()),
   createdAt: dateTime()
 }, ["id", "conversationId", "role", "content", "createdAt"]);
 
@@ -326,6 +327,7 @@ const generationJobDto = dto({
   artifactId: nullable(uuid()),
   baseRevisionId: nullable(uuid()),
   status: { type: "string", enum: ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "needs_clarification", "succeeded", "failed"] },
+  clarificationQuestions: nullable(anyJson),
   intent: nullable(anyJson),
   transformPlan: nullable(anyJson),
   fieldLineage: nullable(anyJson),
@@ -354,6 +356,7 @@ const generationJobSummaryDto = dto({
   status: { type: "string", enum: ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "needs_clarification", "succeeded", "failed"] },
   prompt: string(),
   snapshotId: uuid(),
+  clarificationQuestions: nullable(anyJson),
   intent: nullable(anyJson),
   transformPlan: nullable(anyJson),
   fieldLineage: nullable(anyJson),
@@ -436,6 +439,26 @@ const evidenceRecordDto = dto({
   revision: revisionDto,
   job: nullable(generationJobSummaryDto)
 }, ["block", "artifact", "revision", "job"]);
+
+const generationNextActionDto = dto({
+  type: { type: "string", enum: ["poll_generation_job", "prepare_generation"] },
+  jobId: nullable(uuid()),
+  code: nullable(string()),
+  message: string()
+}, ["type", "message"]);
+
+const generatedMessageResponseDto = dto({
+  message: messageDto,
+  job: nullable(generationJobDto),
+  nextAction: generationNextActionDto
+}, ["message", "job", "nextAction"]);
+
+const savedConversationMessageResponseDto = {
+  oneOf: [
+    dto({ messages: array(messageDto) }, ["messages"]),
+    generatedMessageResponseDto
+  ]
+};
 
 const memoryDto = dto({
   id: uuid(),
@@ -642,7 +665,7 @@ export const routeContracts: RouteContract[] = [
   contract("POST", "/api/v1/projects/:projectId/conversations", "createConversation", ["Conversations"], "创建一个 Conversation", { 201: dto({ conversation: conversationDto }, ["conversation"]) }, { request: pathRequest("/api/v1/projects/:projectId/conversations", { body: zodJson(createConversationRequestSchema.omit({ projectId: true })) }) }),
   contract("GET", "/api/v1/projects/:projectId/conversations", "listConversations", ["Conversations"], "查询 Project Conversation", { 200: dto({ conversations: array(conversationDto) }, ["conversations"]) }),
   contract("GET", "/api/v1/conversations/:conversationId/messages", "listConversationMessages", ["Conversations"], "查询 Conversation 消息", { 200: dto({ conversation: conversationDto, messages: array(messageDto) }, ["conversation", "messages"]) }),
-  contract("POST", "/api/v1/conversations/:conversationId/messages", "createConversationMessage", ["Conversations"], "追加 Conversation 消息", { 201: dto({ messages: array(messageDto) }, ["messages"]) }, { request: pathRequest("/api/v1/conversations/:conversationId/messages", { body: zodJson(createConversationMessageRequestSchema) }) }),
+  contract("POST", "/api/v1/conversations/:conversationId/messages", "createConversationMessage", ["Conversations"], "追加 Conversation 消息或触发一次 Generation Cycle", { 201: savedConversationMessageResponseDto, 202: generatedMessageResponseDto, 200: generatedMessageResponseDto }, { request: pathRequest("/api/v1/conversations/:conversationId/messages", { body: zodJson(createConversationMessageRequestSchema) }) }),
   contract("GET", "/api/v1/projects/:projectId/metric-definition", "getMetricDefinition", ["Metric Definitions"], "查询 Project 当前指标口径", { 200: dto({ definition: nullable(metricDto) }, ["definition"]) }),
   contract("POST", "/api/v1/projects/:projectId/metric-definitions", "createMetricDefinition", ["Metric Definitions"], "确认并保存 Metric Definition", { 201: dto({ definition: metricDto }, ["definition"]) }, { request: pathRequest("/api/v1/projects/:projectId/metric-definitions", { body: zodJson(createMetricDefinitionRequestSchema) }) }),
   contract("GET", "/api/v1/projects/:projectId/analysis-brief", "getAnalysisBrief", ["Analysis Brief"], "查询 Project 当前 Analysis Brief", { 200: dto({ brief: nullable(briefDto) }, ["brief"]) }),
