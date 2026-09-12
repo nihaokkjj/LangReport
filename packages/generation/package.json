@@ -6,14 +6,17 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "tsx --test src/index.test.ts src/model-baseline.test.ts src/context-projection.test.ts",
+    "test": "tsx --test src/index.test.ts src/model-baseline.test.ts src/context-projection.test.ts src/evidence-generation-graph/graph.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@langchain/core": "1.1.48",
+    "@langchain/langgraph": "1.4.15",
     "@langreport/contracts": "workspace:*",
     "@langreport/data-engine": "workspace:*",
-    "@langreport/plugin-sdk": "workspace:*"
+    "@langreport/plugin-sdk": "workspace:*",
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@types/node": "26.4.0",

@@ -146,6 +146,26 @@ test("normalizes auth, rate-limit, timeout, empty, and malformed model responses
   }
 });
 
+test("uses Harness deadline cancellation while retaining the existing timeout audit result", async () => {
+  const route = resolveModelRouteSnapshot(baseEnvironment, capturedAt);
+  let requestWasAborted = false;
+  const gateway = createBailianQwenGateway(route, { BAILIAN_API_KEY: "worker-secret" }, async (_input, init) => new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => {
+      requestWasAborted = true;
+      reject(new Error("aborted"));
+    }, { once: true });
+  }));
+
+  const result = await gateway.generateStructured({ ...runtimeRequest("invocation-timeout", route.routeSnapshotId), budget: { deadlineAt: Date.now() + 5, maxOutputTokens: 512 } });
+
+  assert.equal(requestWasAborted, true);
+  assert.equal(result.status, "error");
+  if (result.status !== "error") return;
+  assert.equal(result.code, "MODEL_TIMEOUT");
+  assert.equal(result.retryable, true);
+  assert.equal(result.invocation?.errorCode, "MODEL_TIMEOUT");
+});
+
 function runtimeRequest(invocationId = "invocation-001", routeSnapshotId = "route-001"): RuntimeModelRequest<ChartPlanDecision> {
   return {
     version: "v1",

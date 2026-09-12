@@ -3,6 +3,8 @@
 > 状态：已批准的实现计划；尚未开始代码迁移。
 >
 > 决策来源：[ADR 0014：Harness/App seam](./adr/0014-harness-and-application-seam.md)、[ADR 0015：有限 Generation Cycle 的 LangGraph 编排](./adr/0015-langgraph-bounded-generation-orchestration.md)。
+>
+> 学习与面试表达见：[Harness / App + LangGraph 架构学习与面试笔记](./harness-langgraph-architecture-notes.md)。
 
 ## 结果、范围与停止条件
 
@@ -46,7 +48,7 @@ packages/harness
 
 ### M1：建立结构化模型调用 Harness
 
-状态：未开始。该阶段不引入 LangGraph。
+状态：进行中；当前工作树已有未提交的 `packages/harness` 与 `packages/model-gateway` M1 改动。只有完成本节验证、审阅并合并后，才可标记为完成。该阶段不引入 LangGraph。
 
 目标文件：
 

@@ -1,18 +1,15 @@
 {
-  "name": "@langreport/model-gateway",
+  "name": "@langreport/harness",
   "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "tsx --test src/index.test.ts",
+    "test": "tsx --test src/structured-model.test.ts",
+    "check:dependencies": "tsx --test --test-name-pattern=\"does not depend on LangReport application packages\" src/structured-model.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc --noEmit -p tsconfig.json"
-  },
-  "dependencies": {
-    "@langreport/harness": "workspace:*",
-    "@langreport/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "26.4.0",

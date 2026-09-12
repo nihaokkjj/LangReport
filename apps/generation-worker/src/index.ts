@@ -11,6 +11,7 @@ import { createBailianQwenGateway, decryptWorkspaceModelCredential, ModelCredent
 import { pluginContextSchema } from "@langreport/contracts";
 import { PluginServiceError, resolvePluginContextForWorkspace } from "@langreport/plugins";
 import { resolveThemePayload } from "@langreport/plugin-sdk";
+import { EvidenceGenerationWorkflow } from "./evidence-generation-workflow.js";
 
 const workerName = "generation-worker";
 const pollIntervalMs = Number(process.env.GENERATION_POLL_INTERVAL_MS ?? 1000);
@@ -74,6 +75,34 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
       return;
     }
     await setStatus(jobId, lease, "profiling", { errorCode: null, errorMessage: null });
+    const workflowResult = await new EvidenceGenerationWorkflow(workspaceApiKeyForGeneration).run({
+      job: job.job,
+      snapshot: job.snapshot,
+      workspaceId: job.workspaceId,
+      readSnapshot: getObject
+    });
+    if (workflowResult.status === "failed") {
+      await failJob(jobId, lease, workflowResult.failure.code, workflowResult.failure.message);
+      return;
+    }
+    const { cycleResult, memoryContext } = workflowResult;
+    await setStatus(jobId, lease, "planning", { memoryContext });
+    if (cycleResult.status === "needs_clarification") {
+      await assertGenerationJobLease(lease);
+      await appendAssistantMessage(job.job.conversationId, cycleResult.questions.map((question) => `需要澄清：${question.question}${question.reason ? `（${question.reason}）` : ""}`).join("\n"));
+      await setStatus(jobId, lease, "needs_clarification", { generationAudit: cycleResult.audit, ...validationFieldsFromAudit(cycleResult.audit), clarificationQuestions: cycleResult.questions, errorCode: "GENERATION_NEEDS_CLARIFICATION", errorMessage: cycleResult.questions.map((question) => question.question).join("；") }, true);
+      return;
+    }
+    if (cycleResult.status === "failed") { await failJob(jobId, lease, cycleResult.error.code, cycleResult.error.message, undefined, cycleResult.audit); return; }
+    const artifacts = cycleResult.artifacts;
+    await setStatus(jobId, lease, "transforming", { generationAudit: cycleResult.audit, ...validationFieldsFromAudit(cycleResult.audit), intent: artifacts.intent, transformPlan: artifacts.plan, fieldLineage: artifacts.transform.lineage, validation: artifacts.validation, pluginUsage: artifacts.pluginUsage, repairCount: artifacts.repairCount, previewData: { columns: artifacts.transform.columns, rows: artifacts.transform.rows.slice(0, 500), steps: artifacts.transform.steps } });
+    await setStatus(jobId, lease, "compiling", { flintSpec: artifacts.flintSpec });
+    if (!artifacts.validation.valid) { await failJob(jobId, lease, "VALIDATION_FAILED", "Flint Spec 未通过必要校验", artifacts.validation, cycleResult.audit); return; }
+    await setStatus(jobId, lease, "rendering", {}, true);
+    console.log(`${workerName} handed off to render-worker`, { jobId, repairCount: artifacts.repairCount });
+    return;
+    /* Legacy first-generation assembly removed from the executable type surface.
+    if (false) {
     const snapshotPayload = JSON.parse((await getObject(job.snapshot.normalizedObjectKey)).toString("utf8")) as { rows: DataRow[] };
     const profiles = job.snapshot.schema as unknown as ColumnProfile[];
     if (!Array.isArray(snapshotPayload.rows) || !Array.isArray(profiles)) throw new Error("Data Snapshot 内容无效");
@@ -202,6 +231,8 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
 
     await setStatus(jobId, lease, "rendering", {}, true);
     console.log(`${workerName} handed off to render-worker`, { jobId, repairCount: artifacts.repairCount });
+    }
+    */
   } catch (error) {
     if (error instanceof PluginServiceError) {
       await failJob(jobId, lease, error.code, error.message);

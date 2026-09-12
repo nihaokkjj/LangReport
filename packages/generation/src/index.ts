@@ -30,6 +30,8 @@ import {
 import { executeTransformPlan, type ColumnProfile, type DataRow, type TransformResult } from "@langreport/data-engine";
 import { evaluatePluginValidators, type ParsedPluginManifest, type ResolvedCapability } from "@langreport/plugin-sdk";
 import { CANONICAL_TEXT_CONTEXT_VERSION, projectConversationToCanonicalTextContext, validateCanonicalTextContextProjection } from "./context-projection.js";
+import { runEvidenceGenerationGraph } from "./evidence-generation-graph/graph.js";
+import type { EvidenceGenerationGraphPort, EvidenceGenerationGraphState } from "./evidence-generation-graph/state.js";
 
 export {
   CANONICAL_TEXT_CONTEXT_VERSION,
@@ -507,6 +509,9 @@ export class GenerationCycle {
   constructor(private readonly gateway: ModelGateway = new DeterministicModelGateway()) {}
 
   async run(input: GenerationCycleInput): Promise<GenerationCycleResult> {
+    return runGenerationCycleGraph(input, this.gateway);
+    /*
+    Legacy imperative implementation removed from the executable type surface.
     let context: PreparedModelContext;
     let preparedContext: PreparedGenerationModelContext;
     let audit: GenerationCycleAudit;
@@ -519,7 +524,7 @@ export class GenerationCycle {
       return failedResult(audit, input, "GENERATION_CONTEXT_INVALID", errorMessage(error, "模型上下文无效"), false, "planning");
     }
 
-    if (input.memoryContext?.conflicts.some((conflict) => conflict.requiresDecision)) {
+    if (input.memoryContext?.conflicts?.some((conflict) => conflict.requiresDecision)) {
       const questions = input.memoryContext.conflicts
         .filter((conflict) => conflict.requiresDecision)
         .slice(0, 8)
@@ -574,17 +579,18 @@ export class GenerationCycle {
     audit = setStage(audit, "planning", "succeeded");
 
     const resultEnvelope = modelResultSchema.safeParse(modelResult);
-    if (!resultEnvelope.success) {
+    if (!resultEnvelope.success || !resultEnvelope.data) {
       return failedResult(audit, input, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的结果 envelope 不符合版本化合同", false, "planning");
     }
     audit = { ...audit, modelInvocation: resultEnvelope.data.invocation ?? null };
 
-    if (modelResult.status === "error") {
-      return failedResult(audit, input, modelResult.code, modelResult.message, modelResult.retryable, "planning");
+    const normalizedModelResult = modelResult as ModelResult<ChartPlanDecision>;
+    if (normalizedModelResult.status === "error") {
+      return failedResult(audit, input, normalizedModelResult.code, normalizedModelResult.message, normalizedModelResult.retryable, "planning");
     }
 
-    const decision = chartPlanDecisionSchema.safeParse(modelResult.data);
-    if (!decision.success) {
+    const decision = chartPlanDecisionSchema.safeParse((normalizedModelResult as Extract<ModelResult<ChartPlanDecision>, { status: "ok" }>).data);
+    if (!decision.success || !decision.data) {
       return failedResult(audit, input, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的 chart-plan 不符合版本化合同", false, "planning");
     }
     if (decision.data.decision === "needs_clarification") {
@@ -619,7 +625,83 @@ export class GenerationCycle {
       );
     }
     return { status: "drafted", artifacts, audit };
+    */
   }
+}
+
+async function runGenerationCycleGraph(input: GenerationCycleInput, gateway: ModelGateway): Promise<GenerationCycleResult> {
+  let prepared: PreparedGenerationModelContext | undefined;
+  let transform: TransformResult | undefined;
+  let flintSpec: FlintSpec | undefined;
+  let decision: Extract<ChartPlanDecision, { decision: "ready" }> | undefined;
+  let validation: ValidationReport | undefined;
+  const pluginManifests = input.pluginManifests ?? [];
+  const pluginTemplate = selectPluginTemplate(input.prompt, pluginManifests, "vega-lite");
+  const pluginChartType = pluginTemplate?.payload.chartType;
+  const chartTypeOverride = pluginChartType === "Line Chart" || pluginChartType === "Bar Chart" || pluginChartType === "Area Chart" ? pluginChartType : undefined;
+  const fail = (audit: GenerationCycleAudit, code: GenerationCycleFailureCode, message: string, retryable: boolean, stage: GenerationCycleStageName): Partial<EvidenceGenerationGraphState> => {
+    const result = failedResult(audit, input, code, message, retryable, stage);
+    return { audit: result.audit, terminal: "failed", failure: result.error };
+  };
+  const port: EvidenceGenerationGraphPort = {
+    async prepare() {
+      try { prepared = buildPreparedModelContext(input); } catch (error) { return fail(createAudit(input), "GENERATION_CONTEXT_INVALID", errorMessage(error, "模型上下文无效"), false, "planning"); }
+      const audit = createAudit(input, prepared);
+      const conflicts = input.memoryContext?.conflicts.filter((conflict) => conflict.requiresDecision) ?? [];
+      if (conflicts.length) return { audit: setStage(audit, "planning", "succeeded"), terminal: "needs_clarification", questions: conflicts.slice(0, 8).map((conflict) => ({ code: "memory_conflict", question: `请确认 Memory「${conflict.memoryKey}」应采用哪一条规则`, reason: "项目级与 Workspace 级记忆存在冲突，Cycle 不能静默选择", field: conflict.memoryKey })) };
+      if (Date.now() >= input.cycle.budget.deadlineAt) return fail(audit, "MODEL_BUDGET_EXCEEDED", "Generation Cycle 在模型调用前已超过截止时间预算", false, "planning");
+      return { audit };
+    },
+    async plan(state) {
+      const audit = state.audit as GenerationCycleAudit;
+      const deadline = createDeadlineAbortController(input.cycle.budget.deadlineAt);
+      let modelResult: ModelResult<ChartPlanDecision>;
+      try { modelResult = await gateway.generateStructured({ version: "v1", workspaceId: input.cycle.workspaceId, projectId: input.cycle.projectId, generationJobId: input.cycle.generationJobId, invocationId: input.cycle.invocationId, task: "chart-plan", routeSnapshotId: input.cycle.routeSnapshotId, context: prepared!.context, output: { ...createChartPlanOutputDescriptor(), parse: (value) => chartPlanDecisionSchema.parse(value) }, budget: input.cycle.budget, signal: deadline.signal }); }
+      catch (error) { const timedOut = deadline.signal.aborted || Date.now() >= input.cycle.budget.deadlineAt; return fail(audit, timedOut ? "MODEL_TIMEOUT" : "GENERATION_UNEXPECTED", errorMessage(error, timedOut ? "Model Gateway 在截止时间内未完成" : "Model Gateway 调用失败"), timedOut, "planning"); }
+      finally { deadline.dispose(); }
+      let nextAudit = setStage(audit, "planning", "succeeded");
+      const envelope = modelResultSchema.safeParse(modelResult);
+      if (!envelope.success) return fail(nextAudit, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的结果 envelope 不符合版本化合同", false, "planning");
+      nextAudit = { ...nextAudit, modelInvocation: envelope.data.invocation ?? null };
+      if (modelResult.status === "error") return fail(nextAudit, modelResult.code, modelResult.message, modelResult.retryable, "planning");
+      const parsed = chartPlanDecisionSchema.safeParse(modelResult.data);
+      if (!parsed.success) return fail(nextAudit, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的 chart-plan 不符合版本化合同", false, "planning");
+      if (parsed.data.decision === "needs_clarification") return { audit: nextAudit, terminal: "needs_clarification", questions: parsed.data.questions };
+      decision = parsed.data;
+      return { audit: nextAudit, decision, transformPlan: input.plan ? transformPlanSchema.parse(input.plan) : decision.plan };
+    },
+    async transform(state) {
+      const audit = state.audit as GenerationCycleAudit;
+      try { transform = executeTransformPlan(state.transformPlan!, input.rows); return { audit: setStage(audit, "transforming", "succeeded") }; }
+      catch (error) { return fail(audit, "GENERATION_TRANSFORM_FAILED", errorMessage(error, "生成阶段失败"), false, "transforming"); }
+    },
+    async compile(state) {
+      const audit = state.audit as GenerationCycleAudit;
+      try { flintSpec = generateFlintSpec({ intent: decision!.intent, transform: transform!, theme: input.theme, themeVersion: input.themeVersion, themeConfig: input.themeConfig ?? {}, chartTypeOverride }); return { audit: setStage(audit, "compiling", "succeeded"), compiledFlintSpec: flintSpec }; }
+      catch (error) { return fail(audit, "GENERATION_COMPILATION_FAILED", errorMessage(error, "生成阶段失败"), false, "compiling"); }
+    },
+    async validate(state) {
+      const audit = state.audit as GenerationCycleAudit;
+      const semanticTypes = semanticTypesFromPlugins(input.profiles, pluginManifests);
+      flintSpec = { ...flintSpec!, semanticTypes: { ...flintSpec!.semanticTypes, ...semanticTypes } };
+      validation = applyPluginValidation(validateFlintSpec(flintSpec), pluginManifests, { templateId: pluginTemplate?.id, renderer: "vega-lite", columns: input.profiles.map((profile) => profile.name), roles: { ...rolesForIntent(decision!.intent), [flintSpec.chartSpec.encodings.y.field]: "measure" }, semanticTypes: flintSpec.semanticTypes, nullRates: Object.fromEntries(input.profiles.map((profile) => [profile.name, input.rows.length ? profile.nullCount / input.rows.length : 0])), cardinalities: Object.fromEntries(input.profiles.map((profile) => [profile.name, profile.distinctCount])) });
+      const nextAudit = { ...setStage(audit, "validating", "succeeded"), planValidation: validationRecordFromReport(validation), repairCount: state.repairCount };
+      if (validation.valid) return { audit: nextAudit, validation, compiledFlintSpec: flintSpec, terminal: "ready_for_render" };
+      if (state.repairCount >= 2) return fail(nextAudit, "MODEL_BUDGET_EXCEEDED", "生成修复预算已耗尽，Flint Spec 仍未通过校验", false, "validating");
+      return { audit: nextAudit, validation, compiledFlintSpec: flintSpec };
+    },
+    async repair(state) {
+      const audit = state.audit as GenerationCycleAudit;
+      try { return { audit, transformPlan: repairPlan(state.transformPlan!, state.validation!, input.profiles), repairCount: state.repairCount + 1 }; }
+      catch (error) { return fail(audit, "GENERATION_TRANSFORM_FAILED", errorMessage(error, "生成修复失败"), false, "transforming"); }
+    }
+  };
+  const state = await runEvidenceGenerationGraph(port);
+  const audit = state.audit as GenerationCycleAudit;
+  if (state.terminal === "needs_clarification") return { status: "needs_clarification", questions: state.questions ?? [], audit };
+  if (state.terminal === "failed") return { status: "failed", error: state.failure as Extract<GenerationCycleResult, { status: "failed" }>["error"], audit };
+  const pluginSemanticTypes = semanticTypesFromPlugins(input.profiles, pluginManifests);
+  return { status: "drafted", artifacts: { intent: decision!.intent, plan: state.transformPlan!, transform: transform!, flintSpec: flintSpec!, validation: validation!, repairCount: state.repairCount, pluginUsage: buildPluginUsage({ manifests: pluginManifests, template: pluginTemplate, themeRef: input.pluginThemeRef ?? null, semanticTypes: pluginSemanticTypes, renderer: "vega-lite" }) }, audit };
 }
 
 /** Keep revision validation behind the Generation public seam for edit jobs. */

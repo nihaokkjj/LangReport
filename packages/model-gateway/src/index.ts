@@ -10,14 +10,18 @@ import {
   type ModelRouteSnapshot,
   type RuntimeModelRequest
 } from "@langreport/contracts";
+import {
+  sendStructuredModelRequest,
+  type FetchLike,
+  type JsonRecord
+} from "@langreport/harness";
 
 const BAILIAN_ADAPTER_VERSION = "bailian-qwen-native-http-v1";
 const BAILIAN_PROFILE_ID = "bailian-qwen-chart-plan";
 const BAILIAN_PROFILE_VERSION = "v1";
 
 type Environment = Record<string, string | undefined>;
-type JsonRecord = Record<string, unknown>;
-export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+export type { FetchLike } from "@langreport/harness";
 
 /** Configuration errors are surfaced before a Job is queued or an external request is sent. */
 export class ModelGatewayConfigurationError extends Error {
@@ -188,16 +192,14 @@ export class BailianQwenGateway implements ModelGateway {
       return this.failure(request, startedAt, "MODEL_BUDGET_EXCEEDED", "模型调用前已超过 Generation Cycle 截止时间", false);
     }
 
-    let response: Response;
-    try {
-      response = await this.fetcher(chatCompletionsUrl(this.route.baseUrl!), {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json",
-          Accept: "application/json"
-        },
-        body: JSON.stringify({
+    const transport = await sendStructuredModelRequest({
+      url: chatCompletionsUrl(this.route.baseUrl!),
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: {
           model: this.route.modelId,
           stream: false,
           messages: buildMessages(request),
@@ -207,24 +209,25 @@ export class BailianQwenGateway implements ModelGateway {
           // Structured output is incompatible with Qwen thinking mode. The
           // route records this effective setting for later audit.
           enable_thinking: false
-        }),
-        signal: request.signal
-      });
-    } catch (error) {
-      if (request.signal.aborted || Date.now() >= request.budget.deadlineAt) {
-        return this.failure(request, startedAt, "MODEL_TIMEOUT", "百炼请求在 Generation Cycle 截止时间内未完成", true);
-      }
-      return this.failure(request, startedAt, "MODEL_PROVIDER_UNAVAILABLE", providerErrorMessage(error, "百炼网络请求失败"), true);
+      },
+      signal: request.signal,
+      deadlineAt: request.budget.deadlineAt
+    }, this.fetcher);
+    if (transport.kind === "timeout" || transport.kind === "cancelled") {
+      return this.failure(request, startedAt, "MODEL_TIMEOUT", "百炼请求在 Generation Cycle 截止时间内未完成", true);
+    }
+    if (transport.kind === "transport_error") {
+      return this.failure(request, startedAt, "MODEL_PROVIDER_UNAVAILABLE", `百炼网络请求失败：${transport.message}`, true);
     }
 
-    const payload = await responsePayload(response);
+    const payload = transport.payload;
     const providerRequestId = textValue(payload.id);
     const providerModelId = textValue(payload.model);
     const usage = usageFromPayload(payload.usage);
-    if (!response.ok) {
-      const mapped = errorForStatus(response.status, payload.error);
+    if (!transport.ok) {
+      const mapped = errorForStatus(transport.status, payload.error);
       return this.failure(request, startedAt, mapped.code, mapped.message, mapped.retryable, {
-        httpStatus: response.status,
+        httpStatus: transport.status,
         providerRequestId,
         providerModelId,
         usage
@@ -233,26 +236,26 @@ export class BailianQwenGateway implements ModelGateway {
 
     const choice = Array.isArray(payload.choices) ? asRecord(payload.choices[0]) : undefined;
     if (!choice) {
-      return this.failure(request, startedAt, "MODEL_OUTPUT_EMPTY", "百炼响应未包含 choices[0]", false, { httpStatus: response.status, providerRequestId, providerModelId, usage });
+      return this.failure(request, startedAt, "MODEL_OUTPUT_EMPTY", "百炼响应未包含 choices[0]", false, { httpStatus: transport.status, providerRequestId, providerModelId, usage });
     }
     const finishReason = textValue(choice.finish_reason);
     if (finishReason === "length") {
-      return this.failure(request, startedAt, "MODEL_OUTPUT_TRUNCATED", "百炼响应因长度限制被截断", false, { httpStatus: response.status, providerRequestId, providerModelId, finishReason, usage });
+      return this.failure(request, startedAt, "MODEL_OUTPUT_TRUNCATED", "百炼响应因长度限制被截断", false, { httpStatus: transport.status, providerRequestId, providerModelId, finishReason, usage });
     }
     const message = asRecord(choice.message);
     if (textValue(message?.refusal)) {
-      return this.failure(request, startedAt, "MODEL_REFUSED", "百炼拒绝生成 chart-plan", false, { httpStatus: response.status, providerRequestId, providerModelId, finishReason, usage });
+      return this.failure(request, startedAt, "MODEL_REFUSED", "百炼拒绝生成 chart-plan", false, { httpStatus: transport.status, providerRequestId, providerModelId, finishReason, usage });
     }
     const content = textValue(message?.content);
     if (!content) {
-      return this.failure(request, startedAt, "MODEL_OUTPUT_EMPTY", "百炼响应未包含结构化输出内容", false, { httpStatus: response.status, providerRequestId, providerModelId, finishReason, usage });
+      return this.failure(request, startedAt, "MODEL_OUTPUT_EMPTY", "百炼响应未包含结构化输出内容", false, { httpStatus: transport.status, providerRequestId, providerModelId, finishReason, usage });
     }
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(content);
     } catch {
-      return this.failure(request, startedAt, "MODEL_OUTPUT_INVALID", "百炼响应不是合法 JSON", false, { httpStatus: response.status, providerRequestId, providerModelId, finishReason, usage });
+      return this.failure(request, startedAt, "MODEL_OUTPUT_INVALID", "百炼响应不是合法 JSON", false, { httpStatus: transport.status, providerRequestId, providerModelId, finishReason, usage });
     }
     try {
       return {
@@ -260,7 +263,7 @@ export class BailianQwenGateway implements ModelGateway {
         data: request.output.parse(parsed),
         invocationId: request.invocationId,
         invocation: this.invocation(request, startedAt, "succeeded", {
-          httpStatus: response.status,
+          httpStatus: transport.status,
           providerRequestId,
           providerModelId,
           finishReason,
@@ -270,7 +273,7 @@ export class BailianQwenGateway implements ModelGateway {
       };
     } catch (error) {
       return this.failure(request, startedAt, "MODEL_OUTPUT_INVALID", providerErrorMessage(error, "百炼输出不符合 chart-plan 合同"), false, {
-        httpStatus: response.status,
+        httpStatus: transport.status,
         providerRequestId,
         providerModelId,
         finishReason,
@@ -442,14 +445,6 @@ function responseFormatFor<T>(route: ModelRouteSnapshot, request: RuntimeModelRe
     };
   }
   throw new ModelGatewayConfigurationError("百炼路由没有可执行的结构化输出方式");
-}
-
-async function responsePayload(response: Response): Promise<JsonRecord> {
-  try {
-    return asRecord(await response.json()) ?? {};
-  } catch {
-    return {};
-  }
 }
 
 function errorForStatus(status: number, error: unknown): { code: ModelErrorCode; message: string; retryable: boolean } {
