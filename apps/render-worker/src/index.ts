@@ -182,6 +182,7 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
         metricDefinitionSnapshot: record.job.metricDefinitionSnapshot,
         memorySnapshot: memorySnapshotForRevision(record.job.memoryContext),
         pluginSnapshot,
+        executionAssembly: record.job.executionAssembly,
         outputObjects
       })
       : await createInitialRevision({
@@ -207,6 +208,7 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
         metricDefinitionSnapshot: record.job.metricDefinitionSnapshot,
         memorySnapshot: memorySnapshotForRevision(record.job.memoryContext),
         pluginSnapshot,
+        executionAssembly: record.job.executionAssembly,
         outputObjects
       });
     await assertGenerationJobLease(lease);

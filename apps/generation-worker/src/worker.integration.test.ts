@@ -20,7 +20,7 @@ import {
   updateGenerationJobUnderLease,
   workspaces
 } from "@langreport/db";
-import { flintSpecSchema, pluginSnapshotSchema, pluginUsageSchema, validationRecordSchema } from "@langreport/contracts";
+import { executionAssemblySchema, flintSpecSchema, pluginSnapshotSchema, pluginUsageSchema, validationRecordSchema } from "@langreport/contracts";
 import {
   installPlugin,
   listBuiltinPluginCatalog,
@@ -90,6 +90,22 @@ test("real generation and render workers persist plugin usage and historical sna
       { name: "区域", inferredType: "string", nullCount: 0, distinctCount: 2, sampleValues: ["华东", "华南"] },
       { name: "销售额", inferredType: "number", nullCount: 0, distinctCount: 4, sampleValues: [100, 130, 80, 110] }
     ];
+    const executionAssembly = executionAssemblySchema.parse({
+      version: "v1",
+      graph: {
+        id: "evidence-generation-graph",
+        definitionHash: `sha256:${"a".repeat(64)}`,
+        runtimeVersion: "@langchain/langgraph@1.4.15",
+        checkpointerMode: "none"
+      },
+      harness: { adapterVersion: "structured-model-harness-v1" },
+      structuredOutput: {
+        contractId: "chart-plan",
+        contractVersion: "v1",
+        contractHash: `sha256:${"b".repeat(64)}`
+      },
+      modelRoute: { routeSnapshotId: "worker-route-v1" }
+    });
     const [asset] = await db.insert(dataAssets).values({
       projectId: project.id,
       name: "phase5-worker.csv",
@@ -127,6 +143,7 @@ test("real generation and render workers persist plugin usage and historical sna
       themeVersion: "project-v1",
       themeSource: "project",
       themeConfig: {},
+      executionAssembly,
       pluginContext: pluginResolution.context,
       analysisBriefSnapshot: {},
       metricDefinitionSnapshot: {},
@@ -169,6 +186,7 @@ test("real generation and render workers persist plugin usage and historical sna
 
     const [revision] = await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, job.id)).limit(1);
     assert.ok(revision);
+    assert.deepEqual(revision.executionAssembly, executionAssembly);
     const pluginSnapshot = pluginSnapshotSchema.parse(revision.pluginSnapshot);
     assert.equal(pluginSnapshot.plugins[0]?.pluginId, installation.pluginId);
     assert.equal(pluginSnapshot.plugins[0]?.contentHash, installation.contentHash);
@@ -184,6 +202,8 @@ test("real generation and render workers persist plugin usage and historical sna
     const [recoveredJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id)).limit(1);
     assert.equal(recoveredJob.status, "succeeded");
     assert.equal((await db.select({ id: chartRevisions.id }).from(chartRevisions).where(eq(chartRevisions.generationJobId, job.id))).length, 1);
+    const [recoveredRevision] = await db.select({ executionAssembly: chartRevisions.executionAssembly }).from(chartRevisions).where(eq(chartRevisions.generationJobId, job.id)).limit(1);
+    assert.deepEqual(recoveredRevision.executionAssembly, executionAssembly);
 
     const [leaseJob] = await db.insert(generationJobs).values({
       projectId: project.id,

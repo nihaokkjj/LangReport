@@ -164,6 +164,7 @@ export async function createInitialRevision(input: {
   metricDefinitionSnapshot?: unknown;
   memorySnapshot?: unknown;
   pluginSnapshot?: unknown;
+  executionAssembly?: unknown;
   outputObjects: unknown;
 }) {
   const existing = await findRevisionByJob(input.jobId);
@@ -198,6 +199,7 @@ export async function createInitialRevision(input: {
       metricDefinitionSnapshot: input.metricDefinitionSnapshot ?? {},
       memorySnapshot: input.memorySnapshot ?? [],
       pluginSnapshot: input.pluginSnapshot ?? {},
+      executionAssembly: input.executionAssembly ?? null,
       outputObjects: input.outputObjects
     }).returning();
     await tx.update(chartArtifacts).set({
@@ -233,6 +235,7 @@ export async function createDerivedRevision(input: {
   metricDefinitionSnapshot?: unknown;
   memorySnapshot?: unknown;
   pluginSnapshot?: unknown;
+  executionAssembly?: unknown;
   idempotencyKey?: string;
 }) {
   await assertChartAction(input.projectId, input.createdBy, "create_revision");
@@ -280,6 +283,7 @@ export async function createDerivedRevision(input: {
     metricDefinitionSnapshot: input.metricDefinitionSnapshot ?? source.metricDefinitionSnapshot,
     memorySnapshot: input.memorySnapshot ?? source.memorySnapshot,
     pluginSnapshot: input.pluginSnapshot ?? source.pluginSnapshot,
+    executionAssembly: input.executionAssembly ?? source.executionAssembly,
     outputObjects: input.outputObjects ?? source.outputObjects
   }).returning();
   await db.update(chartArtifacts).set({ headRevisionId: revision.id, updatedAt: new Date() })

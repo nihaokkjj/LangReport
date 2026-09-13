@@ -120,6 +120,13 @@
       "when": 1788708000001,
       "tag": "0017_message_trigger_generation",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789225200000,
+      "tag": "0018_execution_assembly",
+      "breakpoints": true
     }
   ]
 }

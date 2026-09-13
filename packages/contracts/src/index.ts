@@ -743,6 +743,32 @@ export const modelRouteSnapshotSchema = z.object({
   }
 });
 
+/**
+ * A non-secret, immutable record of the executable assembly selected when a
+ * Generation Job was created. Historical records may not have an assembly;
+ * callers must represent that absence as null rather than reconstructing it.
+ */
+export const executionAssemblySchema = z.object({
+  version: z.literal("v1"),
+  graph: z.object({
+    id: z.literal("evidence-generation-graph"),
+    definitionHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    runtimeVersion: z.string().trim().min(1).max(120),
+    checkpointerMode: z.literal("none")
+  }).strict(),
+  harness: z.object({
+    adapterVersion: z.string().trim().min(1).max(120)
+  }).strict(),
+  structuredOutput: z.object({
+    contractId: z.literal("chart-plan"),
+    contractVersion: z.literal("v1"),
+    contractHash: z.string().regex(/^sha256:[a-f0-9]{64}$/)
+  }).strict(),
+  modelRoute: z.object({
+    routeSnapshotId: z.string().trim().min(1).max(200)
+  }).strict()
+}).strict();
+
 export const modelRunSnapshotSchema = z.object({
   version: z.literal("v1"),
   task: modelTaskSchema,
@@ -929,6 +955,7 @@ export type ModelProfile = z.infer<typeof modelProfileSchema>;
 export type ModelOptions = z.infer<typeof modelOptionsSchema>;
 export type GenerationMode = z.infer<typeof generationModeSchema>;
 export type ModelRouteSnapshot = z.infer<typeof modelRouteSnapshotSchema>;
+export type ExecutionAssembly = z.infer<typeof executionAssemblySchema>;
 export type ModelRunSnapshot = z.infer<typeof modelRunSnapshotSchema>;
 export type ModelValidationError = z.infer<typeof modelValidationErrorSchema>;
 export type ValidationRecord = z.infer<typeof validationRecordSchema>;

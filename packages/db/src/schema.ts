@@ -224,6 +224,7 @@ export const generationJobs = pgTable("generation_jobs", {
   memoryContext: jsonb("memory_context"),
   conversationProjection: jsonb("conversation_projection").notNull().default({}),
   modelRoute: jsonb("model_route").notNull().default({}),
+  executionAssembly: jsonb("execution_assembly"),
   analysisBriefSnapshot: jsonb("analysis_brief_snapshot").notNull().default({}),
   metricDefinitionSnapshot: jsonb("metric_definition_snapshot").notNull().default({}),
   outputs: jsonb("outputs"),
@@ -287,6 +288,7 @@ export const chartRevisions = pgTable("chart_revisions", {
   metricDefinitionSnapshot: jsonb("metric_definition_snapshot").notNull().default({}),
   memorySnapshot: jsonb("memory_snapshot").notNull().default([]),
   pluginSnapshot: jsonb("plugin_snapshot").notNull().default({}),
+  executionAssembly: jsonb("execution_assembly"),
   outputObjects: jsonb("output_objects").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => [

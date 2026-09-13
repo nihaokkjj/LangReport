@@ -86,8 +86,10 @@ async function run() {
           j."plugin_context" AS plugin_context,
           j."plugin_usage" AS plugin_usage,
           j."model_route" AS model_route,
+          j."execution_assembly" AS job_execution_assembly,
           r."output_objects" AS revision_outputs,
           r."plugin_snapshot" AS plugin_snapshot,
+          r."execution_assembly" AS revision_execution_assembly,
           t."config" AS theme_config,
           t."theme_ref" AS theme_ref
         FROM "generation_jobs" j
@@ -99,7 +101,9 @@ async function run() {
       assert.deepEqual(historical.plugin_context, {});
       assert.deepEqual(historical.plugin_usage, {});
       assert.deepEqual(historical.model_route, {});
+      assert.equal(historical.job_execution_assembly, null);
       assert.deepEqual(historical.plugin_snapshot, {});
+      assert.equal(historical.revision_execution_assembly, null);
       assert.deepEqual(historical.revision_outputs, { svg: "historical.svg" });
       assert.deepEqual(historical.theme_config, { ink: "#111111" });
       assert.equal(historical.theme_ref, null);
@@ -108,11 +112,11 @@ async function run() {
         SELECT count(*)::integer AS count
         FROM information_schema.columns
         WHERE table_schema = '${schemaName}'
-          AND ((table_name = 'generation_jobs' AND column_name IN ('plugin_context', 'plugin_usage', 'model_route'))
-            OR (table_name = 'chart_revisions' AND column_name = 'plugin_snapshot')
+          AND ((table_name = 'generation_jobs' AND column_name IN ('plugin_context', 'plugin_usage', 'model_route', 'execution_assembly'))
+            OR (table_name = 'chart_revisions' AND column_name IN ('plugin_snapshot', 'execution_assembly'))
             OR (table_name = 'project_themes' AND column_name = 'theme_ref'))
       `);
-      assert.equal(columns.count, 5, "all compatibility columns must exist");
+      assert.equal(columns.count, 7, "all compatibility columns must exist");
 
       const [credentialsTable] = await transaction.unsafe(`
         SELECT count(*)::integer AS count

@@ -114,6 +114,11 @@ test("message-triggered generation is single-write, idempotent and explains miss
     assert.equal(result.status, 202, JSON.stringify(result.body));
     assert.equal(asObject(result.body.message).role, "user");
     assert.equal(asObject(result.body.job).status, "queued");
+    const executionAssembly = asObject(asObject(result.body.job).executionAssembly);
+    assert.equal(asObject(executionAssembly.graph).id, "evidence-generation-graph");
+    assert.equal(asObject(executionAssembly.graph).checkpointerMode, "none");
+    assert.equal(typeof asObject(executionAssembly.modelRoute).routeSnapshotId, "string");
+    assert.equal(executionAssembly.apiKey, undefined);
     result = await request(valid.conversationId, validPayload);
     assert.equal(result.status, 200);
 

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   chartPlanDecisionSchema,
   createChartPlanOutputDescriptor,
+  executionAssemblySchema,
   historyPolicySchema,
   modelErrorCodeSchema,
   modelProfileSchema,
@@ -211,6 +212,33 @@ test("chart-plan output descriptor is generated from the local decision contract
   assert.equal(jsonSchema.$schema, "http://json-schema.org/draft-07/schema#");
   assert.ok(jsonSchema.oneOf?.some((branch) => branch.properties?.decision !== undefined));
   assert.match(JSON.stringify(jsonSchema), /needs_clarification/);
+});
+
+test("execution assembly is versioned, non-secret, and does not fabricate legacy records", () => {
+  const assembly = executionAssemblySchema.parse({
+    version: "v1",
+    graph: {
+      id: "evidence-generation-graph",
+      definitionHash: `sha256:${"a".repeat(64)}`,
+      runtimeVersion: "@langchain/langgraph@1.4.15",
+      checkpointerMode: "none"
+    },
+    harness: { adapterVersion: "structured-model-harness-v1" },
+    structuredOutput: {
+      contractId: "chart-plan",
+      contractVersion: "v1",
+      contractHash: `sha256:${"b".repeat(64)}`
+    },
+    modelRoute: { routeSnapshotId: "route-001" }
+  });
+
+  assert.equal(assembly.graph.checkpointerMode, "none");
+  assert.equal(assembly.modelRoute.routeSnapshotId, "route-001");
+  assert.throws(() => executionAssemblySchema.parse({ ...assembly, apiKey: "must-not-persist" }));
+  assert.throws(() => executionAssemblySchema.parse({
+    ...assembly,
+    structuredOutput: { ...assembly.structuredOutput, rawProviderResponse: "must-not-persist" }
+  }));
 });
 
 test("persisted request excludes runtime parser and cancellation objects", () => {

@@ -1,12 +1,12 @@
 import { GenerationCycle, validateCanonicalTextContextProjection, type GenerationCycleResult } from "@langreport/generation";
 import type { ColumnProfile, DataRow } from "@langreport/data-engine";
-import { memoryContextSchema, modelRouteSnapshotSchema, pluginContextSchema, themePresetSchema, type ModelRouteSnapshot, type TransformPlan } from "@langreport/contracts";
+import { executionAssemblySchema, memoryContextSchema, modelRouteSnapshotSchema, pluginContextSchema, themePresetSchema, type ModelRouteSnapshot, type TransformPlan } from "@langreport/contracts";
 import { getMemoryContextForGeneration } from "@langreport/memory";
 import { createBailianQwenGateway, ModelCredentialEncryptionError, ModelGatewayConfigurationError, resolveModelRouteSnapshot } from "@langreport/model-gateway";
 import { PluginServiceError, resolvePluginContextForWorkspace } from "@langreport/plugins";
 import { resolveThemePayload } from "@langreport/plugin-sdk";
 
-type ClaimedJob = { id: string; projectId: string; conversationId: string; createdBy: string; attemptCount: number; prompt: string; memoryContext: unknown; conversationProjection: unknown; pluginContext: unknown; themeConfig: unknown; modelRoute: unknown; theme: unknown; themeVersion: string; analysisBriefSnapshot: unknown; metricDefinitionSnapshot: unknown; transformPlan: unknown };
+type ClaimedJob = { id: string; projectId: string; conversationId: string; createdBy: string; attemptCount: number; prompt: string; memoryContext: unknown; conversationProjection: unknown; pluginContext: unknown; themeConfig: unknown; modelRoute: unknown; executionAssembly: unknown; theme: unknown; themeVersion: string; analysisBriefSnapshot: unknown; metricDefinitionSnapshot: unknown; transformPlan: unknown };
 type Snapshot = { normalizedObjectKey: string; schema: unknown };
 export type EvidenceGenerationWorkflowFailure = { code: string; message: string };
 export type EvidenceGenerationWorkflowResult = { status: "completed"; cycleResult: GenerationCycleResult; memoryContext: unknown } | { status: "failed"; failure: EvidenceGenerationWorkflowFailure };
@@ -27,6 +27,9 @@ export class EvidenceGenerationWorkflow {
       catch (error) { return failed("CONVERSATION_PROJECTION_INVALID", error instanceof Error ? error.message : "已固化的 Conversation 上下文投影不符合版本化合同"); }
       const pluginContext = pluginContextSchema.safeParse(input.job.pluginContext);
       if (!pluginContext.success && hasRecordValues(input.job.pluginContext)) return failed("PLUGIN_CONTEXT_INVALID", "插件上下文不符合已固化的 Schema");
+      if (input.job.executionAssembly !== null && !executionAssemblySchema.safeParse(input.job.executionAssembly).success) {
+        return failed("EXECUTION_ASSEMBLY_INVALID", "已冻结的执行装配不符合版本化合同");
+      }
       const pluginManifests = pluginContext.success ? await resolvePluginContextForWorkspace(input.workspaceId, pluginContext.data) : [];
       const pluginThemeRef = pluginContext.success && pluginContext.data.themeRef?.source === "plugin" ? pluginContext.data.themeRef : null;
       const pluginThemeManifest = pluginThemeRef ? pluginManifests.find((manifest) => manifest.pluginId === pluginThemeRef.pluginId && manifest.version === pluginThemeRef.version && manifest.contentHash === pluginThemeRef.contentHash) : undefined;

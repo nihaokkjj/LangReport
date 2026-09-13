@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
-import { acceptMemoryCandidateRequestSchema, chartGenerationRequestSchema, createConversationMessageRequestSchema, createConversationRequestSchema, createMetricDefinitionRequestSchema, createProjectRequestSchema, memoryDeleteRequestSchema, pasteDataRequestSchema, pluginEnableRequestSchema, rejectMemoryCandidateRequestSchema, updateWorkspaceModelCredentialRequestSchema } from "@langreport/contracts";
+import { acceptMemoryCandidateRequestSchema, chartGenerationRequestSchema, createConversationMessageRequestSchema, createConversationRequestSchema, createMetricDefinitionRequestSchema, createProjectRequestSchema, executionAssemblySchema, memoryDeleteRequestSchema, pasteDataRequestSchema, pluginEnableRequestSchema, rejectMemoryCandidateRequestSchema, updateWorkspaceModelCredentialRequestSchema, type ModelRouteSnapshot } from "@langreport/contracts";
 import { assertChartAction, ChartServiceError, getProjectAccess, getProjectTheme, getRevision } from "@langreport/chart";
 import { analysisBriefs, auditEvents, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, db, evidenceBlocks, generationJobs, members, metricDefinitions, projectMembers, projects, workspaces, workspaceModelCredentials } from "@langreport/db";
 import { getObject } from "@langreport/storage";
@@ -694,6 +694,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
         );
       }
       const modelRoute = resolveModelRouteSnapshot(environment);
+      const executionAssembly = freezeExecutionAssembly(modelRoute);
       const metricDefinition = precondition.metricDefinition;
       const projectTheme = await getProjectTheme(request.params.projectId, userId);
       const hasThemeOverride = Object.prototype.hasOwnProperty.call(rawBody, "theme");
@@ -741,7 +742,8 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
         rendererVersion: RENDERER_VERSION,
         memory: memoryFingerprintFor(preGenerationMemory),
         plugins: pluginResolution.context,
-        modelRoute: modelRouteFingerprint(modelRoute)
+        modelRoute: modelRouteFingerprint(modelRoute),
+        executionAssembly
       });
       const idempotencyKey = body.idempotencyKey ?? fingerprint;
       const [existing] = await db.select().from(generationJobs).where(and(
@@ -793,6 +795,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
           memoryContext,
           conversationProjection,
           modelRoute,
+          executionAssembly,
           pluginContext: pluginResolution.context,
           analysisBriefSnapshot: analysisBrief,
           metricDefinitionSnapshot: metricDefinition,
@@ -1173,6 +1176,26 @@ function memoryFingerprintFor(context: { project: Array<{ id: string; version: n
 
 function fingerprintFor(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function freezeExecutionAssembly(modelRoute: ModelRouteSnapshot) {
+  const graphDefinition = "evidence-generation-graph:v1:prepare>plan>transform>compile>validate>repair";
+  return executionAssemblySchema.parse({
+    version: "v1",
+    graph: {
+      id: "evidence-generation-graph",
+      definitionHash: `sha256:${fingerprintFor(graphDefinition)}`,
+      runtimeVersion: "@langchain/langgraph@1.4.15",
+      checkpointerMode: "none"
+    },
+    harness: { adapterVersion: "structured-model-harness-v1" },
+    structuredOutput: {
+      contractId: modelRoute.outputSchemaId,
+      contractVersion: modelRoute.outputSchemaVersion,
+      contractHash: modelRoute.outputSchemaHash
+    },
+    modelRoute: { routeSnapshotId: modelRoute.routeSnapshotId }
+  });
 }
 
 function slugify(value: string): string {
