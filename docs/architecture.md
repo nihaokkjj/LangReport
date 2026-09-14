@@ -13,7 +13,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ## 2. MVP 边界
 
-第一阶段支持咨询 Project、Project 内 Conversation、CSV/XLSX/JSON/粘贴表格、Analysis Brief、已确认 Metric Definition、有限 TransformPlan、Line/Bar/Area 主图表、Evidence Block、Visual Template、Chart Revision、Review，以及浏览器交互预览、Vega-Lite JSON、PNG 和 SVG 输出。HTML 导出尚未实现，不属于当前验收。
+第一阶段目标支持咨询 Project、Project 内 Conversation、CSV/XLSX/JSON/粘贴表格、Analysis Brief、已确认 Metric Definition、有限 TransformPlan、Line/Bar/Area 主图表、Evidence Block、Visual Template、Chart Revision、Review，以及浏览器交互预览和固定 Revision 导出。当前渲染/下载合同已实现 Vega-Lite JSON、PNG 和 SVG；HTML 尚未实现，是第一阶段未完成项。
 
 第一阶段不支持数据库、外部 API、实时数据源、跨文件 Join、Dashboard、实时多人编辑、Workspace 外部公开分享、用户自定义服务器端代码、插件市场、完整 PPT 排版或强监管行业合规承诺。单次 Generation Cycle 只绑定一个 Data Snapshot 和一个 Visual Template 版本，并创建一个主 Evidence Block。
 

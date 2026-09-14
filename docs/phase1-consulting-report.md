@@ -61,7 +61,7 @@ LangReport 第一阶段不是通用 BI，也不是自动替代顾问的报告生
 | 可追溯 | 每个结果关联 Data Snapshot、Metric Definition、TransformPlan、字段血缘、Flint Spec、Visual Template 版本和校验结果 |
 | 项目规范 | 提供内置模板；项目可复制模板并修改允许的视觉令牌，保存为版本 |
 | 审核 | Draft、In Review、Approved、Changes Requested；Approved 内容不可变 |
-| 输出 | 浏览器交互预览、Vega-Lite JSON、PNG、SVG；下载固定 Revision。HTML 导出保留为后续能力 |
+| 输出 | 目标为浏览器交互预览、PNG、SVG、HTML，并下载固定 Revision；当前代码已实现 Vega-Lite JSON、PNG、SVG，HTML 仍待完成 |
 
 ### 明确不做
 
@@ -328,7 +328,7 @@ Reviewer 只能在以下内容都可见时批准：
 7. 逻辑修改会重新执行并生成新 Revision；视觉修改也会留下 Revision。
 8. 每个 Revision 都能查看 Snapshot、Metric Definition、TransformPlan、字段血缘、Flint Spec、模板版本和校验结果。
 9. Reviewer 可以评论、要求修改和批准；Approved Revision 不可修改。
-10. PNG、SVG 和 Vega-Lite JSON 导出都指向固定 Revision；HTML 导出不属于当前实现验收。
+10. PNG、SVG、HTML 导出都指向固定 Revision；当前代码已满足 PNG、SVG 和 Vega-Lite JSON，HTML 尚未完成，因此输出项尚未全部验收。
 11. 失败的生成显示原因和下一步操作，不显示成功图表。
 12. 刷新页面或重新登录后，Project、Conversation、Data Asset、Evidence Block 和 Revision 仍然存在。
 
