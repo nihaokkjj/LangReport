@@ -163,31 +163,14 @@ test("plugin API completes install, binding, theme, revoke, restore and audit fl
     assert.equal(result.body.reused, true);
     assert.equal(result.body.auditEventId, installAuditEventId);
 
-    const concurrentManifest = {
-      ...manifest,
-      metadata: { ...asObject(manifest.metadata), id: `phase5-concurrent-${suffix}`, name: "Phase 5 Concurrent" }
-    };
-    const concurrentInstallPayload = {
-      manifest: concurrentManifest,
-      source: "uploaded",
-      idempotencyKey: `concurrent-install-${suffix}`
-    };
-    const concurrentInstallResults = await Promise.all([
-      request("POST", `/api/v1/workspaces/${workspace.id}/plugins`, ownerId, concurrentInstallPayload),
-      request("POST", `/api/v1/workspaces/${workspace.id}/plugins`, ownerId, concurrentInstallPayload)
-    ]);
-    assert.deepEqual(concurrentInstallResults.map((item) => item.status).sort((a, b) => a - b), [200, 201]);
-    assert.equal(concurrentInstallResults.filter((item) => item.body.reused === true).length, 1);
-
     const changedManifest = { ...manifest, metadata: { ...asObject(manifest.metadata), name: "Changed name" } };
     result = await request("POST", `/api/v1/workspaces/${workspace.id}/plugins`, ownerId, { ...installPayload, manifest: changedManifest, source: "uploaded" });
-    assert.equal(result.status, 409, JSON.stringify(result.body));
-    assert.equal(result.body.code, "IDEMPOTENCY_CONFLICT");
-    assert.equal((await db.select({ id: auditEvents.id }).from(auditEvents).where(and(
-      eq(auditEvents.workspaceId, workspace.id),
-      eq(auditEvents.action, "plugin.conflict"),
-      eq(auditEvents.requestId, result.requestId)
-    ))).length, 1);
+    assert.equal(result.status, 403, JSON.stringify(result.body));
+    assert.equal(result.body.code, "PLUGIN_UPLOADED_DISABLED");
+
+    result = await request("POST", `/api/v1/workspaces/${workspace.id}/plugins`, ownerId, { ...installPayload, manifest: changedManifest });
+    assert.equal(result.status, 403, JSON.stringify(result.body));
+    assert.equal(result.body.code, "PLUGIN_BUILTIN_NOT_FOUND");
 
     result = await request("PUT", `/api/v1/projects/${project.id}/plugins/${installationId}`, reviewerId, { enabled: true, idempotencyKey: `reviewer-${suffix}` });
     assert.equal(result.status, 403);

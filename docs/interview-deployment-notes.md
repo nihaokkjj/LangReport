@@ -2,7 +2,7 @@
 
 > 用途：面试前回顾项目部署架构、前后端通信、故障定位和解决过程。
 >
-> 复盘时间：2026-09-03
+> 首次整理：2026-09-03；最近更新：2026-09-13
 >
 > 安全说明：本文不记录真实公网 IP、密码、Token 或私钥，示例中的地址均使用占位符。
 
@@ -421,7 +421,77 @@ ports:
 API_PROXY_ORIGIN=http://<ECS_PUBLIC_IP>:8080
 ```
 
-### 问题四：把 Markdown 链接复制到了终端
+### 问题四：安全组遗漏 8080 导致 Vercel Rewrite 返回 502
+
+#### 故障现象
+
+前端页面能够由 Vercel 正常加载，但请求 `/api/v1/projects` 时返回：
+
+```text
+502 Bad Gateway
+ROUTER_EXTERNAL_TARGET_CONNECTION_ERROR
+```
+
+绕过本机代理、直接从开发机访问 ECS 公网入口时，也没有收到有效的 HTTP 响应：
+
+```bash
+curl.exe -v --noproxy "*" --connect-timeout 10 http://<ECS_PUBLIC_IP>:8080/health
+```
+
+```text
+Connected to <ECS_PUBLIC_IP> port 8080
+Request completely sent off
+Empty reply from server
+curl: (52) Empty reply from server
+```
+
+与此同时，ECS 内部检查全部正常：
+
+- Nginx 容器状态为 `healthy`；
+- `nginx -t` 显示配置语法正确；
+- Docker 显示 `0.0.0.0:8080->80/tcp`；
+- ECS 宿主机访问 `http://127.0.0.1:8080/health` 返回 `200`；
+- Nginx 健康检查日志持续显示来自 `127.0.0.1` 的 `GET /health` 返回 `200`。
+
+这些结果证明 `Nginx → api:4000` 和 ECS 宿主机内部端口映射正常，但不能证明公网请求能够进入 ECS。容器 `healthy` 只覆盖容器内部链路，不覆盖阿里云安全组。
+
+#### 根因
+
+将项目 Nginx 从宿主机 80 端口改为 `8080:80` 后，阿里云 ECS 安全组中没有同步增加入方向 TCP 8080 规则。Vercel Rewrite 的目标虽然正确配置为 `http://<ECS_PUBLIC_IP>:8080`，但公网流量无法通过云侧网络边界到达项目 Nginx。
+
+本次环境中，安全组遗漏表现为客户端建立连接后收到 `Empty reply from server`；不能仅凭“TCP 已连接”排除安全组或云侧网络规则，应继续用 ECS 外部健康检查验证完整 HTTP 请求和响应。
+
+#### 修复
+
+在当前 ECS 实例实际关联的阿里云安全组中新增入方向规则：
+
+```text
+协议：TCP
+目的端口：8080
+授权对象：覆盖 Vercel 访问来源的允许范围
+```
+
+规则生效后，不需要修改 Nginx 配置，也不需要暴露 API 容器的 4000 端口。
+
+#### 验证
+
+按从外到内的真实调用路径执行：
+
+```bash
+curl -i http://<ECS_PUBLIC_IP>:8080/health
+curl -i https://<vercel-project>.vercel.app/api/health
+```
+
+两层健康检查均返回 `200`，随后浏览器中的 `/api/v1/projects` 不再返回 Vercel 502，前后端通信恢复。
+
+#### 可复用结论
+
+- Docker `ports` 只负责宿主机与容器之间的端口发布，不会自动修改阿里云安全组；
+- “容器健康 + 本机访问成功”不能替代 ECS 公网访问测试；
+- Vercel 的 `ROUTER_EXTERNAL_TARGET_CONNECTION_ERROR` 应优先检查外部目标的公网可达性；
+- 排查时要区分应用层、容器层、宿主机端口层、云安全组层和 Vercel Rewrite 层。
+
+### 问题五：把 Markdown 链接复制到了终端
 
 错误形式：
 
@@ -437,7 +507,7 @@ wget http://api:4000/health
 
 终端命令必须使用裸 URL。
 
-### 问题五：GitHub `git pull` 返回 Empty reply from server
+### 问题六：GitHub `git pull` 返回 Empty reply from server
 
 执行 `git pull` 时出现：
 
@@ -512,6 +582,7 @@ Vercel /api/health
 | API 容器 unhealthy | 数据库、MinIO、环境变量或 API 本身 |
 | Nginx 容器无法访问 `api:4000` | Compose 网络、服务名或 API 容器 |
 | ECS 连接超时 | 阿里云安全组、系统防火墙或公网 IP |
+| ECS 内部 `/health` 为 200，但外部请求返回 `Empty reply from server` | 优先核对当前实例关联的安全组是否开放实际映射端口；本次根因是缺少 TCP 8080 入方向规则 |
 | ECS 返回 HTML 404 | 命中了宿主机原有 Nginx，而不是项目 Nginx |
 | Vercel 返回 404 | Rewrite 未部署、Root Directory 错误或代理仍指向 80 |
 | Vercel 返回 502/504 | ECS:8080 不可达或 Vercel 代理目标错误 |
@@ -522,7 +593,7 @@ Vercel /api/health
 
 我把 LangReport 的前端部署在 Vercel，后端及 PostgreSQL、MinIO 和异步 Worker 部署在阿里云 ECS，并用 Docker Compose 管理。由于没有单独购买域名，我没有让浏览器直接跨域访问 ECS API，而是在 Next.js 中配置 `/api` 的 Rewrite，让 Vercel 作为同源代理。ECS 上用 Nginx 容器接收公网请求，再通过 Docker Compose 网络转发到 `api:4000`。
 
-部署过程中发现 ECS 宿主机已经有 Nginx 占用 80 端口，项目 Nginx 启动失败并报 `address already in use`。我通过 `ss` 和 `docker ps` 区分出端口是宿主机进程占用，随后把项目 Nginx 映射到 8080，并同步修改阿里云安全组和 Vercel 的 `API_PROXY_ORIGIN`。另外 GitHub 拉取曾出现 `Empty reply from server`，我把 HTTPS 访问和 Git 操作分开排查，最后使用 HTTP/1.1 和 `--ff-only` 成功拉取。最终通过容器内、ECS 公网和 Vercel 三层健康检查验证了通信链路。
+部署过程中发现 ECS 宿主机已经有 Nginx 占用 80 端口，项目 Nginx 启动失败并报 `address already in use`。我通过 `ss` 和 `docker ps` 区分出端口是宿主机进程占用，随后把项目 Nginx 映射到 8080，并修改 Vercel 的 `API_PROXY_ORIGIN`。首次公网验收时，Vercel 返回 `ROUTER_EXTERNAL_TARGET_CONNECTION_ERROR`，虽然容器健康且 ECS 本机 `/health` 返回 200，但公网请求仍得到空响应。分层检查后确认是安全组遗漏 TCP 8080 入方向规则；补齐规则后，ECS 公网和 Vercel 两层健康检查均恢复 200。另外 GitHub 拉取曾出现 `Empty reply from server`，我把 HTTPS 访问和 Git 操作分开排查，最后使用 HTTP/1.1 和 `--ff-only` 成功拉取。
 
 ### STAR 版本
 
@@ -530,7 +601,7 @@ Vercel /api/health
 
 **Task：** 在不影响已有网站的前提下，让 Vercel 前端稳定访问 ECS API，并保证内部服务不直接暴露。
 
-**Action：** 使用 Next.js Rewrite 实现同源 `/api` 代理；用 Docker Compose 部署 API、数据库、MinIO、Worker 和项目 Nginx；通过 `ss` 确认 80 端口冲突来源，将项目 Nginx 改映射到 8080；开放安全组 8080；配置 Vercel Production 环境变量；通过分层 curl/wget 检查定位问题。
+**Action：** 使用 Next.js Rewrite 实现同源 `/api` 代理；用 Docker Compose 部署 API、数据库、MinIO、Worker 和项目 Nginx；通过 `ss` 确认 80 端口冲突来源，将项目 Nginx 改映射到 8080；面对 Vercel 502，依次验证 API、Nginx、宿主机映射和 ECS 公网入口，最终确认安全组遗漏 TCP 8080 入方向规则并补齐；随后重新验证 Vercel Rewrite。
 
 **Result：** API 容器健康，ECS `:8080/health` 返回 200，Vercel `/api/health` 也能返回 API 健康结果，前后端通信链路打通。
 
@@ -554,12 +625,12 @@ Vercel /api/health
 - [ ] `docker compose config --services` 包含 `api`、`nginx`、Worker 和基础服务；
 - [ ] API 状态为 `healthy`；
 - [ ] 项目 Nginx 映射为 `8080:80`；
-- [ ] 阿里云安全组已开放 8080；
+- [ ] 当前 ECS 实例实际关联的阿里云安全组已开放入方向 TCP 8080，授权来源覆盖 Vercel 的访问来源；
 - [ ] 4000、5432、9000、9001 未暴露公网；
 - [ ] Vercel Root Directory 为 `apps/web`；
 - [ ] Vercel 设置了 `API_PROXY_ORIGIN=http://<ECS_PUBLIC_IP>:8080`；
 - [ ] Vercel 设置了 `NEXT_PUBLIC_API_URL=/api`；
 - [ ] Vercel 已重新部署；
-- [ ] `curl http://<ECS_PUBLIC_IP>:8080/health` 返回 200；
+- [ ] 从 ECS 之外执行 `curl http://<ECS_PUBLIC_IP>:8080/health` 返回 200；
 - [ ] `curl https://<vercel-project>.vercel.app/api/health` 返回 200；
 - [ ] 正式上线前已处理 HTTPS 和真实认证。

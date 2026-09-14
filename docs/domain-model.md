@@ -14,7 +14,7 @@ Project 属于一个 Workspace，拥有 Data Asset、Conversation、Analysis Bri
 
 ### Analysis Brief
 
-Analysis Brief 属于一个 Project，描述一次咨询分析的业务问题、受众、时间范围、指标要求和交付约束。它是生成上下文中经过确认的业务范围，不等同于一条聊天消息。
+Analysis Brief 属于一个 Project，描述一次咨询分析的业务问题、受众、时间范围、时间粒度、指标要求和交付约束。它是生成上下文中经过确认的业务范围，不等同于一条聊天消息。当前 Brief 的任一生成字段被编辑后回到 Draft；只有业务问题、受众、时间范围、时间粒度和交付形式均完整且 Confirmed 时，才能作为 Generation Cycle 输入。
 
 ### Metric Definition
 
@@ -97,13 +97,14 @@ Chart Revision 1 ── * Review Comment
 8. Workspace Memory 不能被 Project 成员静默修改；Project Memory 不能自动升级为 Workspace Memory。
 9. Plugin 必须以固定版本安装和启用；Project 不能依赖未解析版本的插件能力。
 10. 一次第一阶段 Generation Cycle 只使用一个 Data Snapshot、一个 Visual Template 版本，并生成一个主 Evidence Block。
-11. Evidence Block 中的发现/结论不能超出其 Chart Revision、Metric Definition 和数据质量信息支持的范围。
-12. 用户可见的“生成成功”必须意味着 Flint Spec 和输出产物通过必要校验；成功不等于已审核。
-13. Generation Cycle 固化一个 Model Profile、路由、提示词、Schema、数据策略和上下文投影版本；切换模型或补充澄清必须创建新的 Cycle。
-14. Generation Job 的 `planValidation` 与 `renderValidation` 分别保存状态、错误和校验器版本；前者通过不代表渲染产物可用，任一失败都不能标记生成成功。
-15. Generation Job 保存不可变的 Conversation 投影及其 `sha256` 哈希；Worker 不得以执行时的 Conversation 重新生成该投影。
-16. 只有 owner、lease token、Fencing Token 全部匹配且 Lease 未超期的 Worker 可以推进 Generation Job 或记录完成；已超期 Worker 的写入必须无效。Generation Job 到 Chart Revision 和 Evidence Block 的唯一关系提供至少一次执行下的业务幂等。
-17. Workspace Model Credential 的明文只能在 TLS 请求处理和受信任 Worker 调用期间存在；持久化、HTTP 响应、Job、审计和日志不得包含明文。若加密主密钥缺失或密文不能认证，Worker 必须失败，不能回退到另一份密钥。
+11. Generation Cycle 只能使用当前完整且 Confirmed 的 Analysis Brief；Generation Job 保存其冻结快照，之后的 Brief 编辑不改变既有 Job。
+12. Evidence Block 中的发现/结论不能超出其 Chart Revision、Metric Definition 和数据质量信息支持的范围。
+13. 用户可见的“生成成功”必须意味着 Flint Spec 和输出产物通过必要校验；成功不等于已审核。
+14. Generation Cycle 固化一个 Model Profile、路由、提示词、Schema、数据策略和上下文投影版本；切换模型或补充澄清必须创建新的 Cycle。
+15. Generation Job 的 `planValidation` 与 `renderValidation` 分别保存状态、错误和校验器版本；前者通过不代表渲染产物可用，任一失败都不能标记生成成功。
+16. Generation Job 保存不可变的 Conversation 投影及其 `sha256` 哈希；Worker 不得以执行时的 Conversation 重新生成该投影。
+17. 只有 owner、lease token、Fencing Token 全部匹配且 Lease 未超期的 Worker 可以推进 Generation Job 或记录完成；已超期 Worker 的写入必须无效。Generation Job 到 Chart Revision 和 Evidence Block 的唯一关系提供至少一次执行下的业务幂等。
+18. Workspace Model Credential 的明文只能在 TLS 请求处理和受信任 Worker 调用期间存在；持久化、HTTP 响应、Job、审计和日志不得包含明文。若加密主密钥缺失或密文不能认证，Worker 必须失败，不能回退到另一份密钥。
 
 ## 4. 状态机
 

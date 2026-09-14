@@ -5,7 +5,7 @@ import test from "node:test";
 // the pure validation/catalog boundary and intentionally do not open a connection.
 process.env.DATABASE_URL ??= "postgres://localhost:5432/langreport";
 
-const { PluginServiceError, listBuiltinPluginCatalog, validatePluginManifest } = await import("./index.js");
+const { PluginServiceError, listBuiltinPluginCatalog, validateBuiltinPluginManifest, validatePluginManifest } = await import("./index.js");
 const { builtinManifestInputs } = await import("@langreport/plugin-sdk");
 
 test("plugin service validates built-in manifests through the shared SDK", () => {
@@ -25,5 +25,13 @@ test("plugin service exposes a safe built-in catalog and stable validation error
   assert.throws(
     () => validatePluginManifest({ ...builtinManifestInputs[0], unsupported: true }),
     (error: unknown) => error instanceof PluginServiceError && error.code === "PLUGIN_UNKNOWN_FIELD"
+  );
+});
+
+test("phase 1 accepts only an exact platform-published manifest", () => {
+  assert.equal(validateBuiltinPluginManifest(builtinManifestInputs[0]).summary.pluginId, "sales-editorial");
+  assert.throws(
+    () => validateBuiltinPluginManifest({ ...builtinManifestInputs[0], metadata: { ...builtinManifestInputs[0].metadata, name: "Changed name" } }),
+    (error: unknown) => error instanceof PluginServiceError && error.code === "PLUGIN_BUILTIN_NOT_FOUND"
   );
 });

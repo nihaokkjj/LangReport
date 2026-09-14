@@ -42,6 +42,8 @@ const expectedRoutes = [
   "GET /api/v1/projects/:projectId/metric-definition",
   "POST /api/v1/projects/:projectId/metric-definitions",
   "GET /api/v1/projects/:projectId/analysis-brief",
+  "POST /api/v1/projects/:projectId/analysis-brief",
+  "PATCH /api/v1/projects/:projectId/analysis-brief",
   "GET /api/v1/projects/:projectId/evidence-blocks",
   "POST /api/v1/projects/:projectId/generation-jobs",
   "POST /api/v1/projects/:projectId/generate",

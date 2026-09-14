@@ -2,9 +2,9 @@
 
 ## 状态
 
-已接受；本 ADR 只确定目标模块关系、迁移顺序和约束，不在本轮创建新 package、移动实现或改变运行时行为。
+已接受；当前工作树已经按本 ADR 建立 `@langreport/harness`，并将中性结构化模型传输从 Model Gateway 中抽离。生产与真实供应商验收状态不由“代码已实现”自动推导。
 
-> 后续决策：[ADR 0015：用 LangGraph 编排有限的 Generation Cycle](./0015-langgraph-bounded-generation-orchestration.md) 已采用 LangGraph 作为应用层内部编排库。它只覆盖本 ADR 中“不引入 LangGraph”的限定；本 ADR 的 Harness/App 依赖方向和第一阶段排除项保持有效。
+> 后续决策：[ADR 0015：用 LangGraph 编排有限的 Generation Cycle](./0015-langgraph-bounded-generation-orchestration.md) 已采用并实现 LangGraph 作为应用层内部编排库。它只覆盖本 ADR 中“不引入 LangGraph”的限定；本 ADR 的 Harness/App 依赖方向和第一阶段排除项保持有效。
 
 ## 背景
 
@@ -21,7 +21,7 @@ LangReport 第一阶段的目标是可追溯、可审核的咨询项目图表证
 `apps/` 继续表示可部署进程，不新建一个与其混淆的业务 `app/` 目录。这里的“应用层”是逻辑层，由现有领域 package 和后续工作流模块组成。
 
 ```text
-                         目标结构（非当前物理目录状态）
+                         当前依赖方向
 
 ┌──────────────────────────────────────────────────────────────────┐
 │ apps/web · apps/api · apps/generation-worker · apps/render-worker │

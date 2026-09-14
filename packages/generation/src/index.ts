@@ -628,7 +628,7 @@ export class GenerationCycle {
     */
   }
 }
-
+//模型规划
 async function runGenerationCycleGraph(input: GenerationCycleInput, gateway: ModelGateway): Promise<GenerationCycleResult> {
   let prepared: PreparedGenerationModelContext | undefined;
   let transform: TransformResult | undefined;
@@ -782,7 +782,7 @@ class DeterministicModelGateway implements ModelGateway {
     }
   }
 }
-
+//准备模型上下文
 function buildPreparedModelContext(input: GenerationCycleInput): PreparedGenerationModelContext {
   const brief = asRecord(input.analysisBriefSnapshot);
   const metric = asRecord(input.metricDefinitionSnapshot);

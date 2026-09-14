@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import {
   closeDatabase,
+  analysisBriefs,
   conversationMessages,
   conversations,
   dataAssets,
@@ -29,7 +30,7 @@ test("message-triggered generation is single-write, idempotent and explains miss
   const userId = `phase1-message-${suffix}`;
   const [workspace] = await db.insert(workspaces).values({ name: `Phase 1 message ${suffix}` }).returning();
   await db.insert(members).values({ workspaceId: workspace.id, userId, role: "owner" });
-  async function fixture(name: string, options: { snapshot: boolean; metricCount: number }) {
+  async function fixture(name: string, options: { snapshot: boolean; metricCount: number; brief?: boolean }) {
     const [project] = await db.insert(projects).values({
       workspaceId: workspace.id,
       name: `Phase 1 ${name} ${suffix}`,
@@ -80,6 +81,20 @@ test("message-triggered generation is single-write, idempotent and explains miss
       }).returning({ id: metricDefinitions.id });
       metricIds.push(metric.id);
     }
+    if (options.brief !== false) {
+      await db.insert(analysisBriefs).values({
+        projectId: project.id,
+        conversationId: conversation.id,
+        businessQuestion: "按月份展示销售额",
+        audience: "客户管理层",
+        timeRange: "2025-01 至 2025-12",
+        timeGrain: "月",
+        outputFormat: "evidence_block",
+        status: "confirmed",
+        createdBy: userId,
+        updatedAt: new Date()
+      });
+    }
     const value = { projectId: project.id, conversationId: conversation.id, assetId: asset.id, metricIds };
     return value;
   }
@@ -88,6 +103,7 @@ test("message-triggered generation is single-write, idempotent and explains miss
   const noSnapshot = await fixture("no-snapshot", { snapshot: false, metricCount: 1 });
   const noMetric = await fixture("no-metric", { snapshot: true, metricCount: 0 });
   const multipleMetrics = await fixture("multiple-metrics", { snapshot: true, metricCount: 2 });
+  const noBrief = await fixture("no-brief", { snapshot: true, metricCount: 1, brief: false });
   const app = await buildApp({ logger: false, environment: { ...process.env, NODE_ENV: "test", APP_ENV: "test" } });
   await app.ready();
 
@@ -154,6 +170,10 @@ test("message-triggered generation is single-write, idempotent and explains miss
     result = await request(multipleMetrics.conversationId, { content: "生成销售额", generate: true, dataAssetId: multipleMetrics.assetId, clientRequestId: `multiple-${suffix}` });
     assert.equal(result.status, 201);
     assert.equal(asObject(result.body.nextAction).code, "METRIC_SELECTION_REQUIRED");
+
+    result = await request(noBrief.conversationId, { content: "生成销售额", generate: true, dataAssetId: noBrief.assetId, metricDefinitionId: noBrief.metricIds[0], clientRequestId: `no-brief-${suffix}` });
+    assert.equal(result.status, 201);
+    assert.equal(asObject(result.body.nextAction).code, "ANALYSIS_BRIEF_REQUIRED");
   } finally {
     await app.close();
     await db.delete(workspaces).where(and(eq(workspaces.id, workspace.id)));

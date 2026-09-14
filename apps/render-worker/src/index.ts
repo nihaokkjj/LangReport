@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { GenerationJobLeaseLostError, assertGenerationJobLease, chartRevisions, claimGenerationJobLease, conversationMessages, conversations, db, dataAssets, evidenceBlocks, generationJobs, projects, recoverExpiredGenerationJobLeases, startGenerationJobLeaseHeartbeat, updateGenerationJobUnderLease, withAdvisoryLock, type GenerationJobLease } from "@langreport/db";
 import { flintSpecSchema, memoryContextSchema, pluginContextSchema, pluginUsageSchema, validationRecordSchema, validationReportSchema, type FlintSpec, type ValidationRecord, type ValidationReport } from "@langreport/contracts";
 import { createDerivedRevision, createInitialRevision } from "@langreport/chart";
-import { renderChart, validateRenderedChart, FLINT_VERSION, RENDERER_VERSION } from "@langreport/flint-adapter";
+import { resolveRendererAdapter, FLINT_VERSION, RENDERER_VERSION } from "@langreport/flint-adapter";
 import { buildPluginSnapshot, PluginServiceError } from "@langreport/plugins";
 import { storageObjectKey } from "@langreport/storage";
 
@@ -120,8 +120,9 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
       : parsedPluginContext.success
       ? await buildPluginSnapshot({ workspaceId: record.workspaceId, context: parsedPluginContext.data, rendererVersion: RENDERER_VERSION, usedCapabilities: pluginUsage.success ? pluginUsage.data.usedCapabilities : undefined })
       : sourceRevision?.pluginSnapshot ?? {};
-    const rendered = await renderChart(spec);
-    const renderValidation = validateRenderedChart(rendered);
+    const renderer = resolveRendererAdapter(record.job.renderer);
+    const rendered = await renderer.render(spec);
+    const renderValidation = renderer.validate(rendered);
     const generationAudit = withValidationAudit(record.job.generationAudit, { planValidation, renderValidation });
     await setStatus(jobId, lease, "validating", {
       vegaLiteSpec: rendered.vegaLiteSpec,

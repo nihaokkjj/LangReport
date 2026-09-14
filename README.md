@@ -19,7 +19,7 @@ Consulting Project
   → Review / Export
 ```
 
-第一阶段的硬边界是：单 Project、单 Data Snapshot、单 Analysis Brief、每次 Cycle 一个主图表证据模块。支持有限的表格变换、Line/Bar/Area 主图表、项目 Visual Template、PNG/SVG/HTML 输出和异步审核；数据库/实时数据、跨文件 Join、Dashboard、实时协作、公开分享、任意服务器端代码和完整 PPT 排版暂不进入第一阶段。
+第一阶段的硬边界是：单 Project、单 Data Snapshot、单 Analysis Brief、每次 Cycle 一个主图表证据模块。当前支持有限的表格变换、Line/Bar/Area 主图表、项目 Visual Template、浏览器交互预览、Vega-Lite JSON、PNG/SVG 输出和异步审核；HTML 导出以及数据库/实时数据、跨文件 Join、Dashboard、实时协作、公开分享、任意服务器端代码和完整 PPT 排版暂不进入第一阶段。
 
 ## 文档
 
@@ -28,8 +28,8 @@ Consulting Project
 - [Agent 启动与 Loop 规范](./docs/agent-loop-spec.md)
 - [领域模型](./docs/domain-model.md)
 - [系统架构](./docs/architecture.md)
-- [多供应商模型接入实施计划（待实施）](./docs/model-gateway-implementation-plan.md)
-- [LangChain / LangGraph 选型研究（待实施）](./docs/langchain-langgraph-selection.md)
+- [多供应商模型接入实施计划（部分实施）](./docs/model-gateway-implementation-plan.md)
+- [LangChain / LangGraph 选型研究与实现状态](./docs/langchain-langgraph-selection.md)
 - [插件 Manifest](./docs/plugin-manifest.md)
 - [MVP 路线](./docs/mvp-roadmap.md)
 - [市场研究](./docs/market-research.md)

@@ -1,6 +1,6 @@
-# Plugin Manifest 设计（后续阶段）
+# Plugin Manifest 设计
 
-> 本文件描述声明式插件的未来扩展边界，不属于第一阶段产品承诺。第一阶段的 Visual Template 只能使用平台内置模板和平台允许的令牌；Project 成员不能上传或安装 Plugin Manifest。
+> Plugin Manifest 是声明式能力的版本化载体。第一阶段只接受随平台版本发布、已审核的内置 Manifest，用于模板、Theme、字段语义和追加校验规则；Workspace Owner/Admin 只能安装、撤销或恢复目录中的精确版本，Project Owner、Admin、Editor 只能启用或禁用已安装的内置能力。平台不接受上传或任意 Manifest。现有 Manifest 生命周期基础设施保留为内置能力追溯和后续阶段基础，不构成插件市场承诺。
 
 ## 1. 目标
 
@@ -8,9 +8,9 @@ Plugin Manifest 是 LangReport 的声明式扩展格式。它让管理员为 Wor
 
 Manifest 描述能力，不携带可执行服务器端代码。它不是 npm 包，也不是任意 JavaScript 的沙箱替代品。
 
-## 2. 后续能力范围
+## 2. 能力范围
 
-插件阶段计划支持以下能力：
+Manifest 当前支持以下声明式能力：
 
 - `template`：图表类型、字段要求、默认 Flint Spec 片段和使用说明
 - `theme`：可继承的 Flint ThemeSpec
@@ -19,7 +19,7 @@ Manifest 描述能力，不携带可执行服务器端代码。它不是 npm 包
 - `example`：用于模型理解和用户预览的输入/输出样例
 - `renderer`：平台已内置且允许使用的渲染后端名称
 
-插件阶段也不支持以下字段或能力：
+当前及后续声明式 Manifest 都不支持以下字段或能力：
 
 - `entrypoint`
 - `runtime`
@@ -109,27 +109,35 @@ Manifest 描述能力，不携带可执行服务器端代码。它不是 npm 包
 }
 ```
 
-## 4. 后续安装流程
+## 4. 第一阶段安装与启用流程
 
 ```text
-上传/选择 Manifest
+平台内置 Manifest 目录
         ↓
-解析格式和 Schema
+Workspace Owner / Admin 选择精确版本
         ↓
-检查禁止字段、能力和版本兼容性
+校验 Schema、能力、兼容性和内置内容哈希
         ↓
-计算内容哈希并进入待安装状态
+安装 / 撤销 / 恢复 Workspace Installation
         ↓
-Workspace Admin 安装
+Project Owner / Admin / Editor 启用精确版本
         ↓
-Project 显式启用固定版本
+生成前解析兼容能力
         ↓
-生成时纳入能力发现和校验
+Generation Job 固化 Plugin Context
+        ↓
+Chart Revision 固化 Plugin Snapshot
 ```
 
 Manifest 安装记录必须保存 `pluginId`、版本、内容哈希、安装人、安装时间、兼容的 Flint Adapter 和当前状态。
 
-## 5. 版本和兼容性
+校验接口虽然接收 Manifest 文档，但只在其 `pluginId`、版本和规范化内容哈希与平台内置目录完全一致时通过；修改过的内置 Manifest 或未知 Manifest 返回 `PLUGIN_BUILTIN_NOT_FOUND`。安装请求的 `source` 必须是 `builtin`；`uploaded` 返回 `PLUGIN_UPLOADED_DISABLED`。
+
+## 5. 后续上传扩展
+
+管理员上传、待审核状态、签名或来源信誉、恶意内容处置和插件市场不属于第一阶段。以后若开放这些能力，必须另行设计治理、权限、审核、撤回和兼容策略；不能复用当前接口绕过内置目录校验。
+
+## 6. 版本和兼容性
 
 - `apiVersion` 决定平台如何解释包络格式。
 - `metadata.version` 必须遵守 SemVer 或平台指定的等价规则。
@@ -137,13 +145,13 @@ Manifest 安装记录必须保存 `pluginId`、版本、内容哈希、安装人
 - Flint Adapter 升级后，旧版本 Revision 继续使用原始渲染元数据重新渲染或直接读取已保存产物。
 - 删除插件不会删除已有 Chart Revision；只会阻止新生成使用该插件。
 
-## 6. 能力解析
+## 7. 能力解析
 
 生成前，Generation Worker 只把当前 Project 已启用且兼容的插件能力提供给模型。解析结果必须包含来源插件和版本，写入 Chart Revision 的生成元数据。
 
 多个插件声明同一个模板或语义时，不允许静默覆盖。系统应要求管理员选择优先级，或者将冲突标记为不可用。
 
-## 7. 校验规则
+## 8. 校验规则
 
 Validator 只能使用平台提供的声明式规则，例如：
 
@@ -155,3 +163,5 @@ Validator 只能使用平台提供的声明式规则，例如：
 - 只能使用允许的 renderer
 
 复杂业务校验先作为平台能力增加，不通过插件执行任意表达式解决。
+
+插件 Validator 只能追加约束，不能替换、关闭或降低平台核心的字段、TransformPlan、Flint Spec、Renderer 和产物校验。

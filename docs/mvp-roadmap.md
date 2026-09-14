@@ -22,7 +22,7 @@
 - 一个 Generation Cycle 生成一个主 Chart Artifact 和一个 Evidence Block；
 - Chart Revision、修订、回滚、审核和评论；
 - Project Visual Template 和模板版本快照；
-- 交互式预览、PNG、SVG 和 HTML 导出。
+- 交互式预览、Vega-Lite JSON、PNG 和 SVG 导出；HTML 导出后续补齐。
 
 ### 工程交付顺序
 
@@ -73,7 +73,7 @@ Project
   → Evidence Block
   → Review
   → Approved Revision
-  → PNG / SVG / HTML
+  → Vega-Lite JSON / PNG / SVG
 ```
 
 每一个用户可见的成功结果必须能回答：

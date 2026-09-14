@@ -2,7 +2,7 @@
 
 > 用途：理解 LangReport 的 Harness/App 分层、有限 `Generation Cycle` 图编排，以及准备真实、可追问的技术面试表达。
 >
-> 事实状态（2026-09-12）：当前代码已有 `GenerationCycle`、自有 `ModelGateway`、`Generation Job`、Worker Lease / Fencing Token 和受限 TransformPlan。当前工作树出现了未提交的 M1 `@langreport/harness` 抽取改动，尚未经过计划中的完整验收或合并；LangGraph `StateGraph` 与 `Execution Assembly` 仍处于已接受的实施计划，尚未安装或上线。面试时必须按真实状态选择“设计/规划”“开发中”或“实现/上线”的时态。
+> 事实状态（2026-09-14）：当前工作树已实现 M1–M4：`@langreport/harness` 结构化模型传输、有限 LangGraph `StateGraph`、Generation Worker 的 `EvidenceGenerationWorkflow`，以及随 Job 和 Revision 固化的 `Execution Assembly`。相关离线包测试和类型检查已通过，但这不等于生产上线、真实供应商或目标数据库环境验收。面试时必须按真实证据选择“本地实现/验证”或“上线”的时态。
 
 相关决策：[ADR 0014：Harness/App seam](./adr/0014-harness-and-application-seam.md)、[ADR 0015：有限 Generation Cycle 的 LangGraph 编排](./adr/0015-langgraph-bounded-generation-orchestration.md)、[迁移实施计划](./harness-langgraph-migration-plan.md)。
 
@@ -50,7 +50,7 @@ Render Worker → Render Validation → 不可变 Chart Revision / Evidence Bloc
 
 LangGraph 只作为有限 `StateGraph` 的实现工具：节点做工作，条件边决定下一步。它不替代领域模型、数据库事务、权限校验或审计。
 
-首版计划中的节点是：
+当前实现的节点是：
 
 | 节点 | 输入与职责 | 允许的结果 |
 | --- | --- | --- |
@@ -86,7 +86,7 @@ Graph State 只放有界的派生数据：Cycle/Job 标识、输入版本哈希�
 
 ## 5. 这个模式的优点，以及实际改进了什么
 
-下表中的“改进”是实施后的可验证目标，不是当前已经取得的线上指标。
+下表中的“改进”是当前实现所提供的机制及其可验证目标，不是已经取得的线上指标。
 
 | 原来的痛点或风险 | 改造后的机制 | 可验证的改进 |
 | --- | --- | --- |
@@ -105,10 +105,10 @@ Graph State 只放有界的派生数据：Cycle/Job 标识、输入版本哈希�
 
 ## 6. 实施顺序与知识检查点
 
-1. **M1：Harness 模型传输**。理解 Provider Adapter、超时、取消、结构化输出和 `ModelInvocation` 审计；不引入 LangGraph。
-2. **M2：有限 StateGraph**。理解 State、Node、Edge、条件路由、终态映射、修复计数和无 Checkpointer 的原因。
-3. **M3：Worker 收口**。理解 Lease、Heartbeat、Fencing Token、受条件保护写入和 render handoff。
-4. **M4：Execution Assembly**。理解冻结配置、版本/哈希、历史兼容和 Revision 来源。
+1. **M1：Harness 模型传输（代码已完成）**。理解 Provider Adapter、超时、取消、结构化输出和 `ModelInvocation` 审计。
+2. **M2：有限 StateGraph（代码已完成）**。理解 State、Node、Edge、条件路由、终态映射、修复计数和无 Checkpointer 的原因。
+3. **M3：Worker 收口（代码已完成）**。理解 Lease、Heartbeat、Fencing Token、受条件保护写入和 render handoff。
+4. **M4：Execution Assembly（代码与迁移已完成）**。理解冻结配置、版本/哈希、历史兼容和 Revision 来源。
 5. **M5：未来才讨论**。只有有真实暂停/恢复需求时，学习 Checkpointer、`thread_id`、节点重放、幂等和状态迁移。
 
 每阶段的确切目标文件、命令和回退条件以 [迁移实施计划](./harness-langgraph-migration-plan.md) 为准。

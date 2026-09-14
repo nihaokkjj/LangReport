@@ -1,6 +1,6 @@
 # Phase 5：声明式插件设计与实施方案
 
-> 状态：Partially implemented（插件管理入口、能力使用追踪、Theme 渲染转换、真实 PostgreSQL/MinIO Worker-Render 链路、API/Job 集成验收、本地迁移兼容、签名 JWT 回归、本地浏览器端到端验收和隔离生产 Compose 验收已落地；真实登录网关、ECS 部署数据库和 Vercel/ECS 生产验收待完成）
+> 状态：历史工程设计，Partially implemented。第一阶段的当前发布策略已由 [第一阶段产品规格](./phase1-consulting-report.md) 和 [ADR 0016](./adr/0016-phase1-platform-owned-plugin-manifests.md) 收窄：只允许平台内置 Manifest，`uploaded` 入口禁用。本文保留的上传、审核和市场化流程仅是后续设计参考，不描述当前可用能力。
 >
 > 依据：`README.md`、`docs/mvp-roadmap.md`、`docs/phase1-consulting-report.md`、`docs/architecture.md`、`docs/domain-model.md`、`docs/plugin-manifest.md`、ADR 0005，以及当前工作树中的 Phase 3/4 实现。
 

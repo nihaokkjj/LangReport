@@ -13,7 +13,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ## 2. MVP 边界
 
-第一阶段支持咨询 Project、Project 内 Conversation、CSV/XLSX/JSON/粘贴表格、Analysis Brief、已确认 Metric Definition、有限 TransformPlan、Line/Bar/Area 主图表、Evidence Block、Visual Template、Chart Revision、Review 和浏览器交互图表/PNG/SVG/HTML 输出。
+第一阶段支持咨询 Project、Project 内 Conversation、CSV/XLSX/JSON/粘贴表格、Analysis Brief、已确认 Metric Definition、有限 TransformPlan、Line/Bar/Area 主图表、Evidence Block、Visual Template、Chart Revision、Review，以及浏览器交互预览、Vega-Lite JSON、PNG 和 SVG 输出。HTML 导出尚未实现，不属于当前验收。
 
 第一阶段不支持数据库、外部 API、实时数据源、跨文件 Join、Dashboard、实时多人编辑、Workspace 外部公开分享、用户自定义服务器端代码、插件市场、完整 PPT 排版或强监管行业合规承诺。单次 Generation Cycle 只绑定一个 Data Snapshot 和一个 Visual Template 版本，并创建一个主 Evidence Block。
 
@@ -38,7 +38,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
                                 │
                          ┌──────▼────────┐
                          │ Generation Job │
-                         │ / Render Job   │
+                         │ 生成→渲染状态   │
                          └───┬────────┬───┘
                              │        │
                   ┌──────────▼──┐ ┌──▼─────────────┐
@@ -74,7 +74,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ### Generation
 
-负责拥有 Generation Cycle 的阶段顺序、澄清/失败语义、模型调用 seam、数据执行、指标口径、Visual Template 和校验修复。公共入口是 `GenerationCycle`；当前由确定性 adapter 实现 Model Gateway 合同并包装既有规则路径，未来才接入真实供应商。首期使用 `canonical_text_context`：API 在 Job 创建时冻结 Conversation 的版本化文本投影和哈希，Worker 只消费该快照。Generation Job 将 `planValidation` 与 `renderValidation` 分列保存；前者覆盖计划/Flint Spec，后者覆盖具体 Vega-Lite、SVG、PNG 产物。Flint Spec 由经过校验的计划和固定模板确定性编译，不要求模型直接生成可执行图表规范。一次 Cycle 最多执行两轮自动修复。
+负责拥有 Generation Cycle 的阶段顺序、澄清/失败语义、模型调用 seam、数据执行、指标口径、Visual Template 和校验修复。公共入口是 `GenerationCycle`；其内部使用有限 LangGraph `StateGraph` 表达准备、规划、变换、编译、校验和最多两轮修复，对外不泄漏框架类型。Model Gateway 同时保留确定性 Adapter，并已接入百炼兼容 HTTP 路径；是否调用真实模型由冻结的 Model Route Snapshot 和 Worker 配置决定。首期使用 `canonical_text_context`：API 在 Job 创建时冻结 Conversation 的版本化文本投影和哈希，Worker 只消费该快照。Generation Job 将 `planValidation` 与 `renderValidation` 分列保存；前者覆盖计划/Flint Spec，后者覆盖具体 Vega-Lite、SVG、PNG 产物。Flint Spec 由经过校验的计划和固定模板确定性编译，不要求模型直接生成可执行图表规范。一次 Cycle 最多执行两轮自动修复。
 
 ### Chart
 
@@ -86,22 +86,22 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ### Extensions
 
-负责后续阶段 Plugin Manifest 的安装、解析、版本固定、管理员审核、Project 启用和能力发现。第一阶段只使用平台内置 Visual Template；插件执行范围由声明式能力限制。
+负责 Plugin Manifest 的目录解析、安装生命周期、版本/哈希固定、Project 启用、能力发现和 Revision 快照。第一阶段只接受平台发布的内置 Manifest：Workspace Owner/Admin 可以安装、撤销或恢复目录中的精确版本，Project Owner、Admin、Editor 可以启用或禁用已安装版本；`uploaded` 来源和任意 Manifest 均被拒绝。插件只追加模板、Theme、字段语义和校验规则，不能载入代码、替换核心校验或引入未知 Renderer。
 
 ## 5. 生成流程
 
 1. API 创建 Generation Job，并记录用户原始意图、Project、Conversation、Analysis Brief、Data Snapshot 和 Visual Template 版本。
-2. Data Worker 读取指定 Data Asset，生成 Data Snapshot 和字段画像。
-3. Generation Worker 原子领取带 Worker Lease 和 Fencing Token 的 Job，且只读取并传递 Job 已固化的 Brief、Metric Definition、Data Snapshot、Memory、Conversation projection、Visual Template 和路由信息；`GenerationCycle` 在内部构造 `PreparedModelContext`，按 `canonical_text_context` 交给 Model Gateway，不直接回放供应商私有历史字段或重新读取可变 Conversation。
-4. `GenerationCycle` 统一消费 `drafted`、`needs_clarification`、`failed` 判别结果；内部模块执行 TransformPlan、记录每一步输入/输出/空值处理/字段血缘，并确定性编译和校验 Flint Spec。
+2. API 的 Data 模块解析指定 Data Asset，生成 Data Snapshot 和字段画像；当前没有独立的 Data Worker 部署单元。
+3. Generation Worker 原子领取带 Worker Lease 和 Fencing Token 的 Job，且只读取并传递 Job 已固化的 Brief、Metric Definition、Data Snapshot、Memory、Conversation projection、Visual Template、Plugin Context、Model Route Snapshot 和 Execution Assembly；`GenerationCycle` 在内部构造 `PreparedModelContext`，按 `canonical_text_context` 交给 Model Gateway，不直接回放供应商私有历史字段或重新读取可变 Conversation。
+4. `GenerationCycle` 通过内部有限 `EvidenceGenerationGraph` 统一形成 `drafted`、`needs_clarification` 或 `failed` 结果；节点执行 TransformPlan、记录每一步输入/输出/空值处理/字段血缘，并确定性编译和校验 Flint Spec。Graph 不直接写数据库，业务提交仍由持有有效 Lease 的 Worker 完成。
 5. 系统根据通过计划校验的 TransformPlan 和固定 Visual Template 确定性编译 Flint Spec，并将结构、语义、数据字段和模板规则写入 Job 的 `planValidation`；渲染完成后将 Vega-Lite、SVG、PNG 产物检查写入独立的 `renderValidation`。
 6. 计划或渲染校验失败时最多执行两轮受控修复；模型能力降级、工具调用失败或协议不兼容时，结束当前 Cycle 并提示用户选择模型。用户补充澄清或选择新模型后创建新的 Generation Cycle，不在原 Job 上覆盖输入。
-7. Generation Worker 交接到 `rendering` 时释放租约；Render Worker 重新原子领取同一 Job，使用固定版本的 `flint-chart` 编译 Flint Spec，生成 Vega-Lite 规范和浏览器/PNG/SVG/HTML 输出。
+7. Generation Worker 交接到 `rendering` 时释放租约；Render Worker 重新原子领取同一 Job，并按 Job 中冻结的 Renderer 名称从内部 `RendererAdapter` registry 解析 Adapter。当前 registry 只注册 `vega-lite`，由固定版本的 `flint-chart` 编译 Flint Spec，生成 Vega-Lite JSON、SVG 和 PNG；HTML 尚未实现。
 8. 系统以当前、未超期 Worker Lease 的 owner、token 和 fencing token 条件写入不可变 Chart Revision 和 Evidence Block 的完成状态，保存输入、口径、计划、规范、字段血缘、Visual Template 快照、输出对象地址、校验结果和生成版本。
 
 ## 6. Flint 集成边界
 
-核心 SaaS 后端直接使用 `flint-chart`，并将其放在独立 Render Worker 中。LangReport 的 Chart Revision 保存平台包装后的 Flint 输入和对应的原生 Vega-Lite 输出；Flint 负责图表语义到渲染后端的编译，不负责 Workspace、Project、记忆、权限或审核。
+核心 SaaS 后端通过 `RendererAdapter` Interface 使用 `flint-chart`，并将实现放在独立 Render Worker 中。当前 registry 只有平台内置的 `vega-lite` Adapter；新增 Renderer 必须由平台发布并通过既有产物和校验合同接入，Plugin Manifest 只能引用已注册名称。LangReport 的 Chart Revision 保存平台包装后的 Flint 输入和对应的原生 Vega-Lite 输出；Flint 负责图表语义到渲染后端的编译，不负责 Workspace、Project、记忆、权限或审核。
 
 第一阶段不依赖远程 Flint MCP 服务。未来可增加 MCP Adapter，让外部 Agent 以同一套 Project 权限和 Chart Artifact 模型调用 LangReport。
 
@@ -135,7 +135,7 @@ Project Memory 优先于 Workspace Memory；同名指标或规则出现冲突时
 
 主题解析顺序为：图表临时设置、Project Visual Template 中的 Theme、Workspace Theme、系统默认 Theme。解析后的结果在生成 Chart Revision 时固化为 Visual Template 和 Theme 快照。
 
-Plugin Manifest 只能声明模板、Theme、语义、校验器、示例和平台已允许的渲染后端。安装时进行 Schema 校验、能力校验和哈希固定；启用时再进行 Project 级选择。任何自定义代码执行能力都不属于插件协议；第一阶段不启用用户插件安装。
+Plugin Manifest 只能声明模板、Theme、语义、校验器、示例和平台已允许的渲染后端。第一阶段的校验和安装都必须命中平台内置目录的精确内容哈希；Workspace Owner/Admin 管理安装、撤销和恢复，Project Owner、Admin、Editor 管理启用。任何自定义代码执行能力都不属于插件协议；`uploaded` 安装入口保持禁用。
 
 ## 10. 权限原则
 
@@ -147,7 +147,7 @@ Plugin Manifest 只能声明模板、Theme、语义、校验器、示例和平�
 
 ## 11. 可靠性与安全
 
-- 每个 Generation Job 和 Render Job 都必须有幂等键、状态、重试次数和错误分类。
+- 每个 Generation Job 都必须有幂等键、状态、重试次数和错误分类；渲染是同一 Job 的受租约保护阶段，不另建 Render Job 实体。
 - Worker 以至少 3 秒的可续约 Lease 领取 Job；所有状态推进、失败、交接和完成写入同时匹配 owner、lease token、fencing token 与未过期时间。租约丢失的 Worker 只能停止，不能提交数据库结果。
 - Render Worker 对同一个 Generation Job 使用 PostgreSQL advisory lock 做 single-flight 作为性能优化；正确性依赖持久化 Lease/Fencing 条件和 `generation_job_id` 上的 Revision/Evidence Block 唯一约束，未取得锁或租约的调用交给后续轮询。
 - Approved Chart Revision 不可变；任何修改都产生新 Revision。
@@ -156,9 +156,9 @@ Plugin Manifest 只能声明模板、Theme、语义、校验器、示例和平�
 - 所有跨模块查询都必须先验证 Workspace 作用域和 Project 权限。
 - 记录生成、导出、分享、记忆确认、插件安装和审核事件。
 
-## 12. Harness 与应用层的目标 seam
+## 12. Harness 与应用层的当前 seam
 
-详细决策与迁移门槛见 [ADR 0014：将受控执行 Harness 与 LangReport 应用层分离](./adr/0014-harness-and-application-seam.md)、[ADR 0015：用 LangGraph 编排有限的 Generation Cycle](./adr/0015-langgraph-bounded-generation-orchestration.md) 和 [Harness 与 LangGraph 迁移实施计划](./harness-langgraph-migration-plan.md)。本节描述目标依赖方向，不表示已经改变当前 package 结构或允许扩大第一阶段范围。
+详细决策与迁移门槛见 [ADR 0014：将受控执行 Harness 与 LangReport 应用层分离](./adr/0014-harness-and-application-seam.md)、[ADR 0015：用 LangGraph 编排有限的 Generation Cycle](./adr/0015-langgraph-bounded-generation-orchestration.md) 和 [Harness 与 LangGraph 迁移实施计划](./harness-langgraph-migration-plan.md)。M1–M4 的代码和 Schema 已存在于当前工作树；这不表示已经完成生产部署或真实供应商验收，也不扩大第一阶段范围。
 
 ```text
 apps/*（Web / API / Worker 宿主）
@@ -179,9 +179,9 @@ Harness 不得依赖 Workspace、Project、Data Snapshot、Metric Definition、T
 
 第一步只抽取已有 deterministic 与百炼 Adapter 支撑的结构化模型调用 seam。Generation Job 状态机、Worker Lease、Fencing Token、受限 TransformPlan、Flint 渲染和 Plugin Manifest 均保持在应用层。通用 Agent、用户代码 Sandbox、MCP、IM Channel 和运行中配置热加载不属于这一目标。
 
-LangGraph 已被选为后续 `GenerationCycle` 的内部、有限 `StateGraph` 实现，但 Graph State、节点与路由仍属于 `packages/generation` 的应用语义，而非 Harness。首版不启用 Checkpointer 或 `interrupt()`；`needs_clarification` 继续由 Job、Conversation 和新的 Generation Cycle 表达。当前运行时尚未安装该依赖，实施顺序和阶段门禁以迁移计划为准。
+LangGraph 已作为 `GenerationCycle` 的内部、有限 `StateGraph` 实现；Graph State、节点与路由仍属于 `packages/generation` 的应用语义，而非 Harness。当前运行时使用 `@langchain/langgraph`，但不启用持久化 Checkpointer 或 `interrupt()`；`needs_clarification` 继续由 Job、Conversation 和新的 Generation Cycle 表达。Generation Job 在创建时冻结无密钥的 Execution Assembly，并随不可变 Chart Revision 保留；完整部署验收仍以迁移计划的门禁为准。
 
-## 13. 建议的仓库结构
+## 13. 当前仓库结构
 
 ```text
 apps/
@@ -190,12 +190,19 @@ apps/
   generation-worker/    # Job 调度、Cycle 输入快照和结果持久化
   render-worker/        # flint-chart、Vega-Lite、PNG/SVG
 packages/
-  harness/              # 目标：先承载中性的结构化模型调用 Interface/Adapter
+  harness/              # 中性的结构化模型调用 Interface/Adapter
   domain/               # 领域对象和不变量
   contracts/            # API、任务和 Plugin Manifest Schema
+  generation/           # GenerationCycle 与有限 EvidenceGenerationGraph
+  model-gateway/        # 模型路由、凭据边界和业务输出映射
   data-engine/          # 受限 TransformPlan 执行器
   flint-adapter/        # LangReport 与 flint-chart 的适配边界
-  plugin-sdk/           # 声明式插件校验与能力解析
+  plugins/              # Plugin 生命周期、权限、能力解析和快照
+  plugin-sdk/           # 声明式 Manifest Schema、安全校验和内置目录
+  chart/                # Chart Revision、Evidence Block 与审核规则
+  memory/               # Memory Candidate 与分层记忆服务
+  db/                   # Drizzle Schema、迁移和数据库访问
+  storage/              # 私有对象存储 Adapter
 infra/                  # 数据库、对象存储和部署配置
 docs/
   adr/

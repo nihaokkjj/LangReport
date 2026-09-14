@@ -1,6 +1,6 @@
 # Harness 与 LangGraph 迁移实施计划
 
-> 状态：已批准的实现计划；尚未开始代码迁移。
+> 状态：M1–M4 已在当前工作树实现；相关离线包测试和类型检查已通过。生产部署、真实供应商调用与完整数据库/Worker 集成验收仍需独立确认；M5 未排期。
 >
 > 决策来源：[ADR 0014：Harness/App seam](./adr/0014-harness-and-application-seam.md)、[ADR 0015：有限 Generation Cycle 的 LangGraph 编排](./adr/0015-langgraph-bounded-generation-orchestration.md)。
 >
@@ -38,17 +38,17 @@ packages/harness
 
 ### M0：决策与文档基线
 
-状态：随本计划一并完成；不改运行时代码。
+状态：已完成，且后续 M1–M4 已进入运行时代码。
 
 - 新增 `docs/adr/0015-langgraph-bounded-generation-orchestration.md`，明确 LangGraph 的采用范围、State、节点、持久化限制和 ADR 0014 的关系。
 - 新增本计划；更新 `docs/architecture.md` 与 `docs/langchain-langgraph-selection.md` 的交叉引用和当前决策状态。
 - 保留现有研究中有关供应商适配、数据发送和 LangSmith 的证据；ADR 0015 和本计划优先于其中“是否采用 LangGraph”的条件性措辞。
 
-完成条件：文档同时说明 LangGraph 已被选为后续内部实现、当前运行时尚未安装依赖，以及它不会扩大第一阶段产品范围。
+完成条件：文档说明 LangGraph 的有限内部边界、当前实现状态，以及它不会扩大第一阶段产品范围。
 
 ### M1：建立结构化模型调用 Harness
 
-状态：进行中；当前工作树已有未提交的 `packages/harness` 与 `packages/model-gateway` M1 改动。只有完成本节验证、审阅并合并后，才可标记为完成。该阶段不引入 LangGraph。
+状态：代码已完成。`packages/harness` 已承载中性结构化模型传输，`packages/model-gateway` 已经通过该 seam 调用 deterministic / 百炼 Adapter；这不等同于真实账户或生产环境验收。
 
 目标文件：
 
@@ -72,7 +72,7 @@ pnpm typecheck
 
 ### M2：将 GenerationCycle 内部改为有限 StateGraph
 
-状态：未开始。该阶段不改数据库 Schema、HTTP 合同或 Worker 入口。
+状态：代码已完成。`@langchain/langgraph` 已锁定为运行时依赖，有限 Graph、路由与离线测试已落地；该里程碑本身未改变数据库 Schema、HTTP 合同或 Worker 公共入口。
 
 目标文件：
 
@@ -97,7 +97,7 @@ pnpm typecheck
 
 ### M3：收口 Generation Worker 的应用编排
 
-状态：未开始；须先稳定当前 `apps/generation-worker/src/index.ts` 的未提交修改。
+状态：代码已完成。`EvidenceGenerationWorkflow` 已从 Worker 入口中收口冻结输入组装和 Cycle 调用；生产 Worker、数据库和 Lease/Fencing 的完整集成验收仍需按本节门禁执行。
 
 目标文件：
 
@@ -121,7 +121,7 @@ pnpm typecheck
 
 ### M4：冻结 Execution Assembly 并写入 Revision 来源
 
-状态：未开始；须先稳定当前 `packages/contracts`、`packages/db/src/schema.ts` 和 Drizzle journal 的未提交修改。
+状态：代码与迁移已完成。Contracts、API 冻结、Generation Job / Chart Revision 字段、Worker 传递和 Drizzle `0018_execution_assembly.sql` 已落地；完整数据库迁移与 Worker 集成验收仍需在目标环境确认。
 
 目标文件：
 

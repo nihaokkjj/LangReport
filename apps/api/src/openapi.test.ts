@@ -31,6 +31,8 @@ test("serves OpenAPI JSON and a standard Swagger UI page", async () => {
     assert.ok(document.paths["/api/v1/dev/bootstrap"]?.post);
     assert.ok(document.paths["/api/v1/projects/{projectId}/data-assets/paste"]?.post);
     assert.ok(document.paths["/api/v1/projects/{projectId}/metric-definitions"]?.post);
+    assert.ok(document.paths["/api/v1/projects/{projectId}/analysis-brief"]?.post);
+    assert.ok(document.paths["/api/v1/projects/{projectId}/analysis-brief"]?.patch);
     assert.ok(document.paths["/api/v1/projects/{projectId}/generation-jobs"]?.post);
     assert.ok(document.paths["/api/v1/workspaces/{workspaceId}/model-credential"]?.get);
     assert.ok(document.paths["/api/v1/workspaces/{workspaceId}/model-credential"]?.put);

@@ -61,7 +61,7 @@ LangReport 第一阶段不是通用 BI，也不是自动替代顾问的报告生
 | 可追溯 | 每个结果关联 Data Snapshot、Metric Definition、TransformPlan、字段血缘、Flint Spec、Visual Template 版本和校验结果 |
 | 项目规范 | 提供内置模板；项目可复制模板并修改允许的视觉令牌，保存为版本 |
 | 审核 | Draft、In Review、Approved、Changes Requested；Approved 内容不可变 |
-| 输出 | 浏览器交互预览、PNG、SVG、HTML；下载固定 Revision |
+| 输出 | 浏览器交互预览、Vega-Lite JSON、PNG、SVG；下载固定 Revision。HTML 导出保留为后续能力 |
 
 ### 明确不做
 
@@ -77,6 +77,8 @@ LangReport 第一阶段不是通用 BI，也不是自动替代顾问的报告生
 - 自动把模型猜测写入 Project Memory 或 Workspace Memory；
 - 自动批准图表或自动发布客户结论；
 - 为所有行业提供通用指标语义。
+
+第一阶段可以随平台版本发布内置的声明式 Plugin Manifest，用于提供已经审核的模板、Theme、字段语义和追加校验规则。Workspace Owner/Admin 只能从平台内置目录选择并安装、撤销或恢复精确版本；Project Owner、Admin、Editor 只能启用或禁用已经安装的内置能力。Manifest 校验入口也只接受与内置目录内容哈希一致的版本；平台拒绝上传来源、任意 Manifest 和插件市场内容。现有 Manifest 的持久化、哈希和快照基础设施只服务于内置能力的可追溯性，并为后续阶段保留，不构成插件市场承诺。
 
 ## 4. 第一阶段用户流程
 
@@ -326,7 +328,7 @@ Reviewer 只能在以下内容都可见时批准：
 7. 逻辑修改会重新执行并生成新 Revision；视觉修改也会留下 Revision。
 8. 每个 Revision 都能查看 Snapshot、Metric Definition、TransformPlan、字段血缘、Flint Spec、模板版本和校验结果。
 9. Reviewer 可以评论、要求修改和批准；Approved Revision 不可修改。
-10. PNG、SVG、HTML 导出都指向固定 Revision。
+10. PNG、SVG 和 Vega-Lite JSON 导出都指向固定 Revision；HTML 导出不属于当前实现验收。
 11. 失败的生成显示原因和下一步操作，不显示成功图表。
 12. 刷新页面或重新登录后，Project、Conversation、Data Asset、Evidence Block 和 Revision 仍然存在。
 

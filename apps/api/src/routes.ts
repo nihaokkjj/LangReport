@@ -1,14 +1,14 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
-import { acceptMemoryCandidateRequestSchema, chartGenerationRequestSchema, createConversationMessageRequestSchema, createConversationRequestSchema, createMetricDefinitionRequestSchema, createProjectRequestSchema, executionAssemblySchema, memoryDeleteRequestSchema, pasteDataRequestSchema, pluginEnableRequestSchema, rejectMemoryCandidateRequestSchema, updateWorkspaceModelCredentialRequestSchema, type ModelRouteSnapshot } from "@langreport/contracts";
+import { acceptMemoryCandidateRequestSchema, chartGenerationRequestSchema, createAnalysisBriefRequestSchema, createConversationMessageRequestSchema, createConversationRequestSchema, createMetricDefinitionRequestSchema, createProjectRequestSchema, executionAssemblySchema, memoryDeleteRequestSchema, pasteDataRequestSchema, pluginEnableRequestSchema, rejectMemoryCandidateRequestSchema, updateAnalysisBriefRequestSchema, updateWorkspaceModelCredentialRequestSchema, type ModelRouteSnapshot } from "@langreport/contracts";
 import { assertChartAction, ChartServiceError, getProjectAccess, getProjectTheme, getRevision } from "@langreport/chart";
 import { analysisBriefs, auditEvents, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, db, evidenceBlocks, generationJobs, members, metricDefinitions, projectMembers, projects, workspaces, workspaceModelCredentials } from "@langreport/db";
 import { getObject } from "@langreport/storage";
 import { MemoryServiceError, acceptMemoryCandidate, createMemoryExtractionJob, deleteMemory, getConversationMemory, getMemoryContextForGeneration, listMemoryCandidates, listProjectMemory, listWorkspaceMemory, rejectMemoryCandidate, updateConversationMemory } from "@langreport/memory";
 import { projectConversationToCanonicalTextContext } from "@langreport/generation";
 import { ModelCredentialEncryptionError, ModelGatewayConfigurationError, encryptWorkspaceModelCredential, modelRouteFingerprint, resolveModelRouteSnapshot } from "@langreport/model-gateway";
-import { PluginServiceError, assertProjectThemeReference, getWorkspacePlugin, installPlugin, listBuiltinPluginCatalog, listProjectPlugins, listWorkspacePlugins, resolveProjectPluginContext, restorePluginInstallation, revokePluginInstallation, setProjectPluginBinding, validatePluginManifest } from "@langreport/plugins";
+import { PluginServiceError, assertProjectThemeReference, getWorkspacePlugin, installPlugin, listBuiltinPluginCatalog, listProjectPlugins, listWorkspacePlugins, resolveProjectPluginContext, restorePluginInstallation, revokePluginInstallation, setProjectPluginBinding, validateBuiltinPluginManifest } from "@langreport/plugins";
 import { DataAssetError, getDataAsset, inferSourceType, ingestDataAsset, listDataAssets } from "./data-assets.js";
 import { registerChartRoutes } from "./chart-routes.js";
 import { sendHttpError } from "./http-errors.js";
@@ -205,7 +205,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
   app.post<{ Params: { workspaceId: string } }>("/api/v1/workspaces/:workspaceId/plugins/validate", async (request, reply) => {
     try {
       await listWorkspacePlugins(request.params.workspaceId, userIdFromRequest(request), request.id);
-      const validation = validatePluginManifest(request.body);
+      const validation = validateBuiltinPluginManifest(request.body);
       return reply.send({ summary: validation.summary, validationReport: validation.parsed.validationReport });
     } catch (error) {
       return sendDataError(reply, error);
@@ -216,11 +216,12 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
     try {
       const body = (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>;
       if (!body.manifest || typeof body.idempotencyKey !== "string") return sendHttpError(reply, 400, "需要 manifest 和 idempotencyKey", "INVALID_INPUT");
+      if (body.source !== "builtin") return sendHttpError(reply, 403, "第一阶段只允许安装平台内置 Plugin Manifest", "PLUGIN_UPLOADED_DISABLED");
       const result = await installPlugin({
         workspaceId: request.params.workspaceId,
         userId: userIdFromRequest(request),
         manifest: body.manifest,
-        source: body.source === "builtin" ? "builtin" : "uploaded",
+        source: "builtin",
         idempotencyKey: body.idempotencyKey,
         requestId: request.id
       });
@@ -621,6 +622,66 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
     }
   });
 
+  app.post<{ Params: { projectId: string } }>("/api/v1/projects/:projectId/analysis-brief", async (request, reply) => {
+    try {
+      assertProjectId(request.params.projectId);
+      const body = createAnalysisBriefRequestSchema.parse(request.body);
+      const userId = userIdFromRequest(request);
+      await assertChartAction(request.params.projectId, userId, "create_revision");
+      const [conversation] = await db.select({ id: conversations.id }).from(conversations)
+        .where(and(eq(conversations.id, body.conversationId), eq(conversations.projectId, request.params.projectId))).limit(1);
+      if (!conversation) throw new DataAssetError("Analysis Brief 来源对话不属于当前项目");
+      assertBriefReady(body, body.status);
+      const [brief] = await db.insert(analysisBriefs).values({
+        projectId: request.params.projectId,
+        conversationId: body.conversationId,
+        businessQuestion: body.businessQuestion,
+        audience: body.audience,
+        timeRange: body.timeRange || null,
+        timeGrain: body.timeGrain || null,
+        outputFormat: body.outputFormat,
+        status: body.status,
+        createdBy: userId,
+        updatedAt: new Date()
+      }).returning();
+      return reply.code(201).send({ brief });
+    } catch (error) {
+      return sendDataError(reply, error);
+    }
+  });
+
+  app.patch<{ Params: { projectId: string } }>("/api/v1/projects/:projectId/analysis-brief", async (request, reply) => {
+    try {
+      assertProjectId(request.params.projectId);
+      const body = updateAnalysisBriefRequestSchema.parse(request.body);
+      const userId = userIdFromRequest(request);
+      await assertChartAction(request.params.projectId, userId, "create_revision");
+      const [current] = await db.select().from(analysisBriefs)
+        .where(eq(analysisBriefs.projectId, request.params.projectId))
+        .orderBy(desc(analysisBriefs.updatedAt)).limit(1);
+      if (!current) throw new DataAssetError("请先创建 Analysis Brief");
+      const editsFields = ["businessQuestion", "audience", "timeRange", "timeGrain", "outputFormat"].some((field) => Object.prototype.hasOwnProperty.call(body, field));
+      const next = {
+        businessQuestion: body.businessQuestion ?? current.businessQuestion,
+        audience: body.audience ?? current.audience,
+        timeRange: body.timeRange ?? current.timeRange ?? "",
+        timeGrain: body.timeGrain ?? current.timeGrain ?? "",
+        outputFormat: body.outputFormat ?? current.outputFormat,
+        status: editsFields ? "draft" : body.status ?? current.status
+      };
+      assertBriefReady(next, next.status);
+      const [brief] = await db.update(analysisBriefs).set({
+        ...next,
+        timeRange: next.timeRange || null,
+        timeGrain: next.timeGrain || null,
+        updatedAt: new Date()
+      }).where(eq(analysisBriefs.id, current.id)).returning();
+      return reply.send({ brief });
+    } catch (error) {
+      return sendDataError(reply, error);
+    }
+  });
+
   app.get<{ Params: { projectId: string } }>("/api/v1/projects/:projectId/evidence-blocks", async (request, reply) => {
     try {
       assertProjectId(request.params.projectId);
@@ -671,6 +732,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
     conversationProjection?: Awaited<ReturnType<typeof projectConversationForGeneration>>;
     precondition?: GenerationPrecondition;
   };
+// 冻结本次输入创建 Generation Job 时固化 Snapshot ID、Brief/Metric 快照、对话投影、主题、模型路由、记忆和幂等指纹。
 
   const createGenerationJobRecord = async (request: any, environment: NodeJS.ProcessEnv, options: GenerationJobCreationOptions = {}) => {
       assertProjectId(request.params.projectId);
@@ -686,7 +748,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
         dataAssetId: body.dataAssetId,
         metricDefinitionId: body.metricDefinitionId
       });
-      if (precondition.nextAction || !precondition.assetRecord || !precondition.metricDefinition) {
+      if (precondition.nextAction || !precondition.assetRecord || !precondition.metricDefinition || !precondition.analysisBrief) {
         throw new ChartServiceError(
           precondition.nextAction?.code ?? "GENERATION_INPUT_REQUIRED",
           precondition.nextAction?.message ?? "生成所需输入尚未准备好",
@@ -696,6 +758,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       const modelRoute = resolveModelRouteSnapshot(environment);
       const executionAssembly = freezeExecutionAssembly(modelRoute);
       const metricDefinition = precondition.metricDefinition;
+      const analysisBrief = precondition.analysisBrief;
       const projectTheme = await getProjectTheme(request.params.projectId, userId);
       const hasThemeOverride = Object.prototype.hasOwnProperty.call(rawBody, "theme");
       const hasThemeVersionOverride = Object.prototype.hasOwnProperty.call(rawBody, "themeVersion");
@@ -733,6 +796,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
           hash: conversationProjection.hash
         },
         metricDefinition: `${metricDefinition.id}:v${metricDefinition.version}`,
+        analysisBrief,
         prompt: body.prompt,
         plan: body.plan ?? null,
         theme: resolvedTheme,
@@ -764,18 +828,6 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       }
       const memoryContext = await getMemoryContextForGeneration({ projectId: request.params.projectId, conversationId, userId, prompt: body.prompt });
       const result = await db.transaction(async (tx) => {
-        const [analysisBrief] = await tx.insert(analysisBriefs).values({
-          projectId: request.params.projectId,
-          conversationId,
-          businessQuestion: body.prompt,
-          audience: "客户汇报",
-          timeRange: null,
-          timeGrain: null,
-          status: "confirmed",
-          createdBy: userId,
-          updatedAt: new Date()
-        }).returning();
-        if (!analysisBrief) throw new Error("Analysis Brief 创建失败");
         const [job] = await tx.insert(generationJobs).values({
           projectId: request.params.projectId,
           conversationId,
@@ -1013,9 +1065,12 @@ type GenerationNextAction = {
 type GenerationPrecondition = {
   assetRecord: Awaited<ReturnType<typeof findReadyAsset>>;
   metricDefinition: typeof metricDefinitions.$inferSelect | null;
+  analysisBrief: typeof analysisBriefs.$inferSelect | null;
   nextAction: GenerationNextAction | null;
 };
 
+//拦截不完整请求
+//请求必须有 ready Snapshot、已确认 Metric Definition、已确认且完整的 Analysis Brief；否则返回可操作的缺失原因。
 async function checkGenerationPreconditions(input: {
   projectId: string;
   dataAssetId?: string;
@@ -1025,6 +1080,7 @@ async function checkGenerationPreconditions(input: {
     return {
       assetRecord: null,
       metricDefinition: null,
+      analysisBrief: null,
       nextAction: prepareGenerationAction("DATA_SNAPSHOT_REQUIRED", "请先上传数据并生成可用 Data Snapshot")
     };
   }
@@ -1033,6 +1089,7 @@ async function checkGenerationPreconditions(input: {
     return {
       assetRecord: null,
       metricDefinition: null,
+      analysisBrief: null,
       nextAction: prepareGenerationAction("DATA_SNAPSHOT_REQUIRED", "请先上传数据并生成可用 Data Snapshot")
     };
   }
@@ -1044,6 +1101,7 @@ async function checkGenerationPreconditions(input: {
     return {
       assetRecord,
       metricDefinition: null,
+      analysisBrief: null,
       nextAction: prepareGenerationAction("METRIC_DEFINITION_REQUIRED", "请先确认指标口径，再发送生成请求")
     };
   }
@@ -1053,19 +1111,39 @@ async function checkGenerationPreconditions(input: {
       return {
         assetRecord,
         metricDefinition: null,
+        analysisBrief: null,
         nextAction: prepareGenerationAction("METRIC_DEFINITION_INVALID", "所选指标口径不存在、未确认或不属于当前 Project")
       };
     }
-    return { assetRecord, metricDefinition, nextAction: null };
+    return withAnalysisBriefPrecondition(input.projectId, assetRecord, metricDefinition);
   }
   if (confirmedMetrics.length > 1) {
     return {
       assetRecord,
       metricDefinition: null,
+      analysisBrief: null,
       nextAction: prepareGenerationAction("METRIC_SELECTION_REQUIRED", "当前 Project 有多个已确认指标，请明确选择一个指标口径")
     };
   }
-  return { assetRecord, metricDefinition: confirmedMetrics[0] ?? null, nextAction: null };
+  return withAnalysisBriefPrecondition(input.projectId, assetRecord, confirmedMetrics[0] ?? null);
+}
+
+async function withAnalysisBriefPrecondition(projectId: string, assetRecord: Awaited<ReturnType<typeof findReadyAsset>>, metricDefinition: typeof metricDefinitions.$inferSelect | null): Promise<GenerationPrecondition> {
+  const [analysisBrief] = await db.select().from(analysisBriefs)
+    .where(eq(analysisBriefs.projectId, projectId)).orderBy(desc(analysisBriefs.updatedAt)).limit(1);
+  if (!analysisBrief) return { assetRecord, metricDefinition, analysisBrief: null, nextAction: prepareGenerationAction("ANALYSIS_BRIEF_REQUIRED", "请先填写并确认 Analysis Brief，再发送生成请求") };
+  if (analysisBrief.status !== "confirmed" || !isBriefComplete(analysisBrief)) {
+    return { assetRecord, metricDefinition, analysisBrief: null, nextAction: prepareGenerationAction("ANALYSIS_BRIEF_REQUIRED", "请补全并确认 Analysis Brief 的业务问题、受众、时间范围、时间粒度和交付形式") };
+  }
+  return { assetRecord, metricDefinition, analysisBrief, nextAction: null };
+}
+
+function isBriefComplete(brief: Pick<typeof analysisBriefs.$inferSelect, "businessQuestion" | "audience" | "timeRange" | "timeGrain" | "outputFormat">): boolean {
+  return [brief.businessQuestion, brief.audience, brief.timeRange, brief.timeGrain, brief.outputFormat].every((value) => typeof value === "string" && value.trim().length > 0);
+}
+
+function assertBriefReady(brief: Pick<typeof analysisBriefs.$inferSelect, "businessQuestion" | "audience" | "timeRange" | "timeGrain" | "outputFormat">, status: "draft" | "confirmed"): void {
+  if (status === "confirmed" && !isBriefComplete(brief)) throw new DataAssetError("确认 Analysis Brief 前需填写业务问题、受众、时间范围、时间粒度和交付形式");
 }
 
 function prepareGenerationAction(code: string, message: string): GenerationNextAction {

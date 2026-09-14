@@ -16,6 +16,28 @@ export type RenderedChart = {
   png: Buffer;
 };
 
+export type RendererAdapter = {
+  id: string;
+  version: string;
+  render(spec: FlintSpec): Promise<RenderedChart>;
+  validate(rendered: RenderedChart): ValidationRecord;
+};
+
+const vegaLiteRenderer: RendererAdapter = {
+  id: "vega-lite",
+  version: RENDERER_VERSION,
+  render: renderChart,
+  validate: validateRenderedChart
+};
+
+const platformRendererAdapters = [vegaLiteRenderer] as const;
+
+export function resolveRendererAdapter(id: string): RendererAdapter {
+  const renderer = platformRendererAdapters.find((candidate) => candidate.id === id);
+  if (!renderer) throw new Error(`平台未注册渲染器：${id}`);
+  return renderer;
+}
+
 /**
  * Validate the concrete render artifacts independently from Flint Spec plan
  * validation. This is deliberately limited to the files this adapter owns.

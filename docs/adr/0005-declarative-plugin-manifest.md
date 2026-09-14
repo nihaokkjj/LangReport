@@ -9,3 +9,5 @@ MVP 插件只能通过版本固定的 Plugin Manifest 声明图表模板、Theme
 ## Consequences
 
 插件协议需要 Schema 版本、能力校验、哈希固定和兼容性检查。新增渲染器由平台发布；用户扩展优先通过声明式能力完成，受控代码执行属于未来独立的安全产品能力。
+
+第一阶段的发布来源和操作权限由 [ADR 0016](./0016-phase1-platform-owned-plugin-manifests.md) 收窄：只允许平台内置目录中的精确 Manifest，拒绝 `uploaded` 来源和任意 Manifest；声明式、安全与可追溯原则保持不变。

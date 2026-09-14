@@ -249,6 +249,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * evaluates JavaScript or SQL from a plan, which keeps model output inside a
  * deliberately auditable set of operations.
  */
+//执行数据变换
 export function executeTransformPlan(planInput: TransformPlan, sourceRows: DataRow[]): TransformResult {
   const plan = transformPlanSchema.parse(planInput);
   let rows = sourceRows.map((row) => ({ ...row }));

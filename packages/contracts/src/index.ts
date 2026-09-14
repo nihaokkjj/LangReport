@@ -443,6 +443,25 @@ export const createMetricDefinitionRequestSchema = z.object({
   filterRule: z.string().trim().max(500).optional()
 });
 
+const analysisBriefFieldsSchema = z.object({
+  businessQuestion: z.string().trim().max(4000),
+  audience: z.string().trim().max(200),
+  timeRange: z.string().trim().max(200),
+  timeGrain: z.string().trim().max(80),
+  outputFormat: z.string().trim().max(200)
+}).strict();
+
+export const createAnalysisBriefRequestSchema = analysisBriefFieldsSchema.extend({
+  conversationId: z.string().uuid(),
+  status: z.enum(["draft", "confirmed"]).default("draft")
+}).strict();
+
+export const updateAnalysisBriefRequestSchema = analysisBriefFieldsSchema.partial().extend({
+  status: z.enum(["draft", "confirmed"]).optional()
+}).strict().refine((value) => Object.keys(value).length > 0, {
+  message: "至少需要一个 Analysis Brief 字段"
+});
+
 export const createWorkspaceRequestSchema = z.object({
   name: z.string().trim().min(1).max(80)
 });
@@ -474,6 +493,8 @@ export type ChartEditPatch = z.infer<typeof chartEditPatchSchema>;
 export type ChartRevisionCommand = z.infer<typeof chartRevisionCommandSchema>;
 export type ReviewNote = z.infer<typeof reviewNoteSchema>;
 export type CreateCommentRequest = z.infer<typeof createCommentRequestSchema>;
+export type CreateAnalysisBriefRequest = z.infer<typeof createAnalysisBriefRequestSchema>;
+export type UpdateAnalysisBriefRequest = z.infer<typeof updateAnalysisBriefRequestSchema>;
 export type ProjectThemeInput = z.infer<typeof projectThemeSchema>;
 export type CreateShareRequest = z.infer<typeof createShareRequestSchema>;
 export type UpdateWorkspaceModelCredentialRequest = z.infer<typeof updateWorkspaceModelCredentialRequestSchema>;

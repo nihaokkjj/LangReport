@@ -2,9 +2,11 @@
 
 ## 状态
 
-已接受；实现尚未开始。
+已接受；当前工作树已实现。
 
-本 ADR 细化并部分覆盖 [ADR 0014](./0014-harness-and-application-seam.md) 中“本轮不引入 LangGraph”的限定：LangGraph 现在被选为后续实现有限 `Generation Cycle` 的内部编排库。ADR 0014 的 Harness/App 依赖方向、第一阶段产品边界和其他排除项保持不变。
+`@langchain/langgraph` 已作为 `packages/generation` 的运行时依赖，`GenerationCycle.run()` 内部调用有限 `EvidenceGenerationGraph`。首版仍不启用持久化 Checkpointer 或 `interrupt()`；生产部署、真实模型和数据库链路的验收状态应与代码实现状态分开描述。
+
+本 ADR 细化并部分覆盖 [ADR 0014](./0014-harness-and-application-seam.md) 中“本轮不引入 LangGraph”的限定：LangGraph 已用于有限 `Generation Cycle` 的内部编排。ADR 0014 的 Harness/App 依赖方向、第一阶段产品边界和其他排除项保持不变。
 
 ## 背景
 

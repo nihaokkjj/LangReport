@@ -1,7 +1,7 @@
 # LangChain / LangGraph 选型研究
 
-> 状态：M1-A 已采用百炼千问原生 HTTP 基线；[ADR 0015](./adr/0015-langgraph-bounded-generation-orchestration.md) 已选择 LangGraph 作为后续有限 `Generation Cycle` 的内部编排实现，但它仍不是当前运行时依赖。具体阶段、目标文件与门禁见 [Harness 与 LangGraph 迁移实施计划](./harness-langgraph-migration-plan.md)。核对日期：2026-09-06；架构决策更新：2026-09-12。
-> 本文核对 JavaScript / TypeScript 官方文档和 TypeScript 源码；没有安装依赖、调用真实模型或运行框架集成测试。源码链接指向研究时的 `main`，实施时必须锁定发行版本并重新验证。
+> 状态：本文保留 2026-09-06 的选型研究证据；截至 2026-09-14，M1-A 百炼兼容 HTTP 基线、`@langreport/harness` 和有限 LangGraph `Generation Cycle` 已进入当前工作树，具体边界与验收状态见 [ADR 0015](./adr/0015-langgraph-bounded-generation-orchestration.md) 和 [迁移实施计划](./harness-langgraph-migration-plan.md)。真实供应商与生产部署验收仍应单独确认。
+> 研究当时只核对 JavaScript / TypeScript 官方文档和 TypeScript 源码，没有安装依赖、调用真实模型或运行框架集成测试；下文保留这段研究历史。当前实现已经锁定依赖并完成离线验证，不能把研究时态当作当前代码事实。
 
 > 说明：本文中将 LangGraph 视为“后续选项”的条件性建议保留为研究历史；是否采用及其业务边界以 ADR 0015 为准。供应商适配、数据最小化、审计、取消和依赖锁定的核对结论仍然有效。
 
@@ -10,10 +10,10 @@
 Outcome：为咨询顾问的一次 Generation Cycle 选择多供应商调用与后续编排方案。
 Aggregate：Project 内的 Generation Job / Generation Cycle；仍只使用一个 Data Snapshot，生成一个主 Chart Artifact / Evidence Block。
 In scope：给出百炼千问、DeepSeek、OpenAI 的 LangChain 适配方案、失败记录、预算和数据发送边界。
-Out of scope：本轮不安装框架、不更换 Worker、不启用外部追踪、不改变记忆确认和 Review 规则。
-Proof：交叉检查既有文档、入口和官方 TS API；具体模型能力必须在实施阶段用固定样例验证。
+Out of scope（研究时）：不安装框架、不更换 Worker、不启用外部追踪、不改变记忆确认和 Review 规则。
+Proof（研究时）：交叉检查既有文档、入口和官方 TS API；具体模型能力仍必须用固定样例和目标环境验证。
 
-当前 Worker 同步调用 [`generateArtifacts()`](../apps/generation-worker/src/index.ts)，生成模块仍用规则理解问题和创建计划；仓库尚未声明 LangChain / LangGraph 依赖。调用层应放进既定 [Model Gateway 方案](./model-gateway-implementation-plan.md)，外部框架类型保持在 Gateway 内部。
+研究时 Worker 同步调用 `generateArtifacts()`，仓库尚未声明 LangChain / LangGraph 依赖。当前代码已经改为由 [`EvidenceGenerationWorkflow`](../apps/generation-worker/src/evidence-generation-workflow.ts) 调用 `GenerationCycle`，并在 `packages/generation` 内部使用 LangGraph；外部框架类型仍不泄漏到 API、Web 或 Worker 公共合同。
 
 本项目已确认的首期运行边界是：只生成 `chart-plan`，首期历史上下文策略为 `canonical_text_context`。Conversation 保存用户可见历史；Generation Cycle 固化 Data Snapshot、Analysis Brief、Metric Definition、Theme、路由和提示词版本；未来 LangGraph checkpoint 只保存执行恢复状态。模型切换发生在当前 run 完成后，并在同一 Conversation 下创建新的 Generation Cycle；切换不会改写旧消息或旧 Cycle。
 

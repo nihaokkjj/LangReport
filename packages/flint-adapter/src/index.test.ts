@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DESIGN_CHART_COLORS, DESIGN_FONT_FAMILIES, renderChart, toFlintAssemblyInput, validateRenderedChart } from "./index.js";
+import { DESIGN_CHART_COLORS, DESIGN_FONT_FAMILIES, renderChart, resolveRendererAdapter, toFlintAssemblyInput, validateRenderedChart } from "./index.js";
 import { validateFlintTemplatePayload, validateFlintThemePayload } from "./validation.js";
 
 const spec = {
@@ -49,4 +49,11 @@ test("adapter payload validation rejects unknown fields and accepts the builtin 
   assert.equal(validateFlintTemplatePayload({ chartType: "Line Chart", unsupported: true })[0]?.path, "unsupported");
   assert.deepEqual(validateFlintThemePayload({ extends: "economist", ink: { series: { single: "#2563EB" } } }), []);
   assert.equal(validateFlintThemePayload({ extends: "economist", unsupported: true })[0]?.path, "unsupported");
+});
+
+test("platform renderer registry resolves only the built-in Vega-Lite adapter", () => {
+  const renderer = resolveRendererAdapter("vega-lite");
+  assert.equal(renderer.version, "vega-lite-svg-v1");
+  assert.equal(renderer.render, renderChart);
+  assert.throws(() => resolveRendererAdapter("untrusted-renderer"), /平台未注册渲染器/);
 });

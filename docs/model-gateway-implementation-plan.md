@@ -1,10 +1,10 @@
 # 多供应商模型接入实施计划
 
-状态：M0-A/B/C/D/E/F 与确定性 Generation Cycle seam 已实施；M1-A 已实施百炼千问 OpenAI 兼容 Chat Completions 的原生 HTTP 基线，M1 的真实账户验收、字段映射完善和 Web 呈现仍待实施。用户已确认首批供应商为百炼千问、DeepSeek、OpenAI。模拟传输测试不等同于真实账户验证。核对日期：2026-09-06。
+状态：这是按里程碑维护的实施计划。M0-A/B/C/D/E/F、确定性 Generation Cycle seam 与 M1-A 百炼兼容 HTTP 基线已实施；此后又落地了 `@langreport/harness` 和有限 LangGraph 编排，当前事实以 ADR 0014/0015 与 [迁移计划](./harness-langgraph-migration-plan.md) 为准。M1 的真实账户验收、其余供应商、字段映射完善和 Web 呈现仍待实施。模拟传输测试不等同于真实账户验证。原核对日期：2026-09-06；状态更新：2026-09-14。
 
 目标：顾问在一个 Project 内使用一个 Data Snapshot 和已确认的 Analysis Brief、Metric Definition，经任一已启用模型生成一个可追溯的 Draft Evidence Block。切换模型不改变数据计算、字段血缘、图表校验和审核规则。
 
-主要领域边界为 Generation Cycle / Generation Job。范围遵循 [第一阶段产品规格](./phase1-consulting-report.md)；术语遵循 [CONTEXT](../CONTEXT.md)；执行限制遵循 [Agent Loop 规范](./agent-loop-spec.md)。统一网关及数据最小化沿用 [ADR 0006](./adr/0006-data-minimization-and-model-gateway.md)。M1-A 将百炼千问原生 HTTP Adapter 接在既有 `GenerationCycle` seam 内；不安装 LangChain 或 LangGraph、不自动故障切换。真实供应商调用只在明确启用 `GENERATION_MODE=llm` 且 Worker 持有密钥时发生。
+主要领域边界为 Generation Cycle / Generation Job。范围遵循 [第一阶段产品规格](./phase1-consulting-report.md)；术语遵循 [CONTEXT](../CONTEXT.md)；执行限制遵循 [Agent Loop 规范](./agent-loop-spec.md)。统一网关及数据最小化沿用 [ADR 0006](./adr/0006-data-minimization-and-model-gateway.md)。M1-A 当时将百炼兼容 HTTP Adapter 接在既有 `GenerationCycle` seam 内；当前结构化传输已经下沉至 Harness，LangGraph 仅用于 Generation 内部有限编排，且仍不自动故障切换。真实供应商调用只在明确启用 `GENERATION_MODE=llm` 且 Worker 持有密钥时发生。
 
 已确认的首期策略：模型切换由用户发起，不自动故障切换；能力降级或工具调用失败时向用户展示原因和可选模型，用户选择后创建新的 Generation Cycle。首期上下文策略固定为 `canonical_text_context`，只向目标模型发送规范化的 Brief、指标和必要的脱敏文本，不直接回放供应商私有历史字段。用户补充澄清信息后也创建新的 Generation Cycle；原 Cycle 的输入、模型和失败原因保持不变。
 
@@ -49,7 +49,7 @@ flowchart TD
     M --> N[Chart Revision 与 Draft Evidence Block]
 ```
 
-首版新增 `packages/model-gateway` 工作区包，使用进程内库，不新增独立网关服务。业务生成策略留在 `packages/generation`；网关只负责供应商通信、能力和策略执行。当前建议优先评估 LangChain TypeScript 模型组件作为两个协议适配器的内部实现，对无法完整支持的供应商参数保留受控 SDK/HTTP 路径；业务代码不导入框架或供应商 SDK 类型。关闭各层隐式重试，由网关统一计数。具体收益、准入测试和 LangGraph 引入条件见 [LangChain / LangGraph 选型研究](./langchain-langgraph-selection.md)。这一建议尚未改变运行代码。
+`packages/model-gateway` 使用进程内库，不新增独立网关服务。业务生成策略留在 `packages/generation`；网关保留凭据、路由和业务输出映射，中性 HTTP 传输由 `packages/harness` 承载。当前没有为了统一协议而引入 LangChain 高层 Agent 或供应商 SDK 类型；有限 LangGraph 已只在 `packages/generation` 内部使用。各层隐式重试保持受控，调用预算和审计由既有合同约束。研究依据和演进边界见 [LangChain / LangGraph 选型研究](./langchain-langgraph-selection.md)。
 
 明确分开以下四种工程配置，它们不新增 Project 业务实体：
 

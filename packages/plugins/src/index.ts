@@ -72,6 +72,14 @@ export function validatePluginManifest(input: unknown, options?: ParseManifestOp
   }
 }
 
+/** Phase 1 only accepts the exact, platform-published manifests in its built-in catalog. */
+export function validateBuiltinPluginManifest(input: unknown, options?: ParseManifestOptions): PluginValidationResult {
+  const result = validatePluginManifest(input, options);
+  const builtin = loadBuiltinManifests().find((candidate) => candidate.contentHash === result.parsed.contentHash);
+  if (!builtin) throw new PluginServiceError("PLUGIN_BUILTIN_NOT_FOUND", "第一阶段只能使用平台内置目录中的精确插件版本", 403);
+  return result;
+}
+
 export function listBuiltinPluginCatalog(): Array<Record<string, unknown>> {
   return loadBuiltinManifests().map((parsed) => ({
     pluginId: parsed.pluginId,
@@ -95,15 +103,14 @@ export async function installPlugin(input: {
 }) {
   return withPluginFailureAudit({ workspaceId: input.workspaceId, actorId: input.userId, operation: "install", requestId: input.requestId }, async () => {
     await assertWorkspaceAdmin(input.workspaceId, input.userId);
-    const source = input.source ?? "uploaded";
-    const parsed = validatePluginManifest(input.manifest, {
+    const source = input.source ?? "builtin";
+    if (source !== "builtin") {
+      throw new PluginServiceError("PLUGIN_UPLOADED_DISABLED", "第一阶段不支持上传 Plugin Manifest", 403);
+    }
+    const parsed = validateBuiltinPluginManifest(input.manifest, {
       flintAdapterVersion: DEFAULT_FLINT_ADAPTER_VERSION,
       supportedRenderers: [DEFAULT_RENDERER]
     }).parsed;
-    if (source === "builtin") {
-      const builtin = loadBuiltinManifests().find((candidate) => candidate.contentHash === parsed.contentHash);
-      if (!builtin) throw new PluginServiceError("PLUGIN_BUILTIN_NOT_FOUND", "只能安装平台内置目录中的精确插件版本", 400);
-    }
 
     return db.transaction(async (tx) => {
     await tx.select({ id: workspaces.id }).from(workspaces)
