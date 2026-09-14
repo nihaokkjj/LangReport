@@ -4,7 +4,7 @@
 
 目标：顾问在一个 Project 内使用一个 Data Snapshot 和已确认的 Analysis Brief、Metric Definition，经任一已启用模型生成一个可追溯的 Draft Evidence Block。切换模型不改变数据计算、字段血缘、图表校验和审核规则。
 
-主要领域边界为 Generation Cycle / Generation Job。范围遵循 [第一阶段产品规格](./phase1-consulting-report.md)；术语遵循 [CONTEXT](../CONTEXT.md)；执行限制遵循 [Agent Loop 规范](./agent-loop-spec.md)。统一网关及数据最小化沿用 [ADR 0006](./adr/0006-data-minimization-and-model-gateway.md)。M1-A 当时将百炼兼容 HTTP Adapter 接在既有 `GenerationCycle` seam 内；当前结构化传输已经下沉至 Harness，LangGraph 仅用于 Generation 内部有限编排，且仍不自动故障切换。真实供应商调用只在明确启用 `GENERATION_MODE=llm` 且 Worker 持有密钥时发生。
+主要领域边界为 Generation Cycle / Generation Job。范围遵循 [第一阶段产品规格](../product/phase1-consulting-report.md)；术语遵循 [CONTEXT](../../CONTEXT.md)；执行限制遵循 [Agent Loop 规范](../agent/agent-loop-spec.md)。统一网关及数据最小化沿用 [ADR 0006](../adr/0006-data-minimization-and-model-gateway.md)。M1-A 当时将百炼兼容 HTTP Adapter 接在既有 `GenerationCycle` seam 内；当前结构化传输已经下沉至 Harness，LangGraph 仅用于 Generation 内部有限编排，且仍不自动故障切换。真实供应商调用只在明确启用 `GENERATION_MODE=llm` 且 Worker 持有密钥时发生。
 
 已确认的首期策略：模型切换由用户发起，不自动故障切换；能力降级或工具调用失败时向用户展示原因和可选模型，用户选择后创建新的 Generation Cycle。首期上下文策略固定为 `canonical_text_context`，只向目标模型发送规范化的 Brief、指标和必要的脱敏文本，不直接回放供应商私有历史字段。用户补充澄清信息后也创建新的 Generation Cycle；原 Cycle 的输入、模型和失败原因保持不变。
 
@@ -12,19 +12,19 @@
 
 | 位置 | 已有行为 | 实施时需要补齐 |
 | --- | --- | --- |
-| [Web](../apps/web/app/page.tsx) `generateEvidence` | 创建 Generation Job 并轮询 | 澄清状态、允许选择的模型配置、实际使用模型与失败原因 |
-| [API](../apps/api/src/routes.ts) `createGenerationJob` | 固定 Snapshot、指标、Brief、主题等输入 | 模型路由快照、明确的指标选择与 Brief 确认；当前自动创建的 Brief 缺少时间信息却被标记 confirmed |
-| [Generation Worker](../apps/generation-worker/src/index.ts) | 读取 Snapshot 并持久化 Cycle 结果 | 继续补齐真实网关调用、Worker 租约和调用记录 |
-| [Generation](../packages/generation/src/index.ts) `GenerationCycle` | 通过确定性 adapter 包装关键词意图、规则计划、计算、Flint Spec、最多两轮规则修复 | 替换 adapter 为真实 Model Gateway，并保留明确的输出字段映射和统一修复预算 |
-| [Contracts](../packages/contracts/src/index.ts) | Zod 定义 TransformPlan / Flint Spec | 模型决策 Schema、模型选择请求与可展示状态 |
-| [DB](../packages/db/src/schema.ts) | 保存业务输入、生成结果、Cycle 审计和 `needs_clarification` 状态 | 真实调用记录、执行租约和 fencing token |
+| [Web](../../apps/web/app/page.tsx) `generateEvidence` | 创建 Generation Job 并轮询 | 澄清状态、允许选择的模型配置、实际使用模型与失败原因 |
+| [API](../../apps/api/src/routes.ts) `createGenerationJob` | 固定 Snapshot、指标、Brief、主题等输入 | 模型路由快照、明确的指标选择与 Brief 确认；当前自动创建的 Brief 缺少时间信息却被标记 confirmed |
+| [Generation Worker](../../apps/generation-worker/src/index.ts) | 读取 Snapshot 并持久化 Cycle 结果 | 继续补齐真实网关调用、Worker 租约和调用记录 |
+| [Generation](../../packages/generation/src/index.ts) `GenerationCycle` | 通过确定性 adapter 包装关键词意图、规则计划、计算、Flint Spec、最多两轮规则修复 | 替换 adapter 为真实 Model Gateway，并保留明确的输出字段映射和统一修复预算 |
+| [Contracts](../../packages/contracts/src/index.ts) | Zod 定义 TransformPlan / Flint Spec | 模型决策 Schema、模型选择请求与可展示状态 |
+| [DB](../../packages/db/src/schema.ts) | 保存业务输入、生成结果、Cycle 审计和 `needs_clarification` 状态 | 真实调用记录、执行租约和 fencing token |
 
 还需处理四个会影响生成正确性的事实：
 
 - `analysisBriefSnapshot`、`metricDefinitionSnapshot`、`memoryContext` 现在由 Worker 传入 `GenerationCycle`；Worker 优先消费 Job 已固化的 Memory，缺失时只为历史 Job 做兼容性检索，防止正常排队任务受项目记忆变化影响。
 - 当前 API 选取项目最新 confirmed 指标。接入后需要解析用户明确选择的指标；有多个候选且无法唯一对应时澄清，不能以“最新”代替业务相关性。
 - `generateFlintSpec` 偏向第一项指标和 `${measure}_sum` 字段。模型返回不同输出名或要求把同比作为纵轴时，需要显式传入经校验的图表字段映射，避免重新猜测。
-- [Render Worker](../apps/render-worker/src/index.ts) 的 `buildFinding` 使用预览数据。截断预览不能用于断言全量最大值或总数据点数；首批接入应由完整变换结果计算事实摘要，再生成确定性发现文本。
+- [Render Worker](../../apps/render-worker/src/index.ts) 的 `buildFinding` 使用预览数据。截断预览不能用于断言全量最大值或总数据点数；首批接入应由完整变换结果计算事实摘要，再生成确定性发现文本。
 
 产品规格的语义操作名称与执行契约分层处理：当前执行器支持 `filter / derive / aggregate / sort / limit`，产品规格还要求选择、重命名、转换类型等能力。生成提示词只暴露本次验证可执行的操作。未支持的操作返回可解释结果；后续通过显式编译映射或版本化扩展契约实现，不能宣称所有第一阶段变换已完成。
 

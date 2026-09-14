@@ -4,7 +4,7 @@
 >
 > 事实状态（2026-09-14）：当前工作树已实现 M1–M4：`@langreport/harness` 结构化模型传输、有限 LangGraph `StateGraph`、Generation Worker 的 `EvidenceGenerationWorkflow`，以及随 Job 和 Revision 固化的 `Execution Assembly`。相关离线包测试和类型检查已通过，但这不等于生产上线、真实供应商或目标数据库环境验收。面试时必须按真实证据选择“本地实现/验证”或“上线”的时态。
 
-相关决策：[ADR 0014：Harness/App seam](./adr/0014-harness-and-application-seam.md)、[ADR 0015：有限 Generation Cycle 的 LangGraph 编排](./adr/0015-langgraph-bounded-generation-orchestration.md)、[迁移实施计划](./harness-langgraph-migration-plan.md)。
+相关决策：[ADR 0014：Harness/App seam](../adr/0014-harness-and-application-seam.md)、[ADR 0015：有限 Generation Cycle 的 LangGraph 编排](../adr/0015-langgraph-bounded-generation-orchestration.md)、[迁移实施计划](./harness-langgraph-migration-plan.md)。
 
 ## 1. 这个问题到底在解决什么
 
@@ -163,7 +163,7 @@ Graph State 只放有界的派生数据：Cycle/Job 标识、输入版本哈希�
 
 ## 9. 延伸阅读
 
-- [Harness/App 架构决策](./adr/0014-harness-and-application-seam.md)
-- [LangGraph 有限编排决策](./adr/0015-langgraph-bounded-generation-orchestration.md)
+- [Harness/App 架构决策](../adr/0014-harness-and-application-seam.md)
+- [LangGraph 有限编排决策](../adr/0015-langgraph-bounded-generation-orchestration.md)
 - [具体迁移计划](./harness-langgraph-migration-plan.md)
 - [LangChain / LangGraph 选型研究](./langchain-langgraph-selection.md)

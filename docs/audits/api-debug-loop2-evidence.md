@@ -20,7 +20,7 @@ API 在非生产环境自动提供合法的 OpenAPI 3.0.3 文档和标准 Swagge
 - `apps/api/src/swagger.ts`：提供标准 Swagger UI 页面壳；
 - `apps/api/src/server.ts`：仅负责启动应用；
 - `apps/api/src/openapi.test.ts`：覆盖文档、Swagger、必验接口和生产隐藏行为；
-- `docs/api-debug-route-inventory.md`：同步 62 条实际路由声明及内部入口。
+- `docs/audits/api-debug-route-inventory.md`：同步 62 条实际路由声明及内部入口。
 
 ## Acceptance items passed
 

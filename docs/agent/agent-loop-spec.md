@@ -11,9 +11,9 @@ Agent 按以下顺序加载上下文：
 1. 根目录 `AGENTS.md`：工作纪律、产品总边界和 UI 特殊要求；
 2. 根目录 `CONTEXT.md`：业务术语和领域对象；
 3. 与任务分支匹配的文档：
-   - 咨询项目产品范围：`docs/phase1-consulting-report.md`；
-   - 生成、数据、Worker 或系统边界：`docs/architecture.md`；
-   - 聚合、不变量或状态机：`docs/domain-model.md`；
+   - 咨询项目产品范围：`docs/product/phase1-consulting-report.md`；
+   - 生成、数据、Worker 或系统边界：`docs/architecture/architecture.md`；
+   - 聚合、不变量或状态机：`docs/architecture/domain-model.md`；
    - 模板、记忆或插件变更：对应 ADR 和设计文档；
    - UI 页面、组件、样式或交互：完整读取 `DESIGN.md`。
 
@@ -123,9 +123,9 @@ START
 完成前更新必要的文档：
 
 - 新领域词汇写入 `CONTEXT.md`；
-- 第一阶段范围或验收变化写入 `docs/phase1-consulting-report.md`；
-- 状态机、不变量或领域关系变化写入 `docs/domain-model.md`；
-- 技术边界变化写入 `docs/architecture.md`；
+- 第一阶段范围或验收变化写入 `docs/product/phase1-consulting-report.md`；
+- 状态机、不变量或领域关系变化写入 `docs/architecture/domain-model.md`；
+- 技术边界变化写入 `docs/architecture/architecture.md`；
 - 难以逆转的真实取舍写入 ADR。
 
 开发 Loop 的完成条件：Outcome 已实现，Proof 已通过，受影响的不变量已检查，文档不再描述旧行为，且 `git diff` 只包含本轮相关变化。

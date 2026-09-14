@@ -11,6 +11,7 @@
     "db:verify": "pnpm --filter @langreport/db db:verify",
     "db:push": "pnpm --filter @langreport/db db:push",
     "db:studio": "pnpm --filter @langreport/db db:studio",
+    "docs:check": "node scripts/docs-check.mjs",
     "phase5:smoke": "node scripts/phase5-production-smoke.mjs",
     "phase5:e2e": "node scripts/phase5-production-e2e.mjs",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",

@@ -16,7 +16,7 @@ Project Memory / Workspace Memory（已确认长期事实）
 Generation Job / Chart Revision
 ```
 
-阶段 4 的核心原则来自 `docs/architecture.md`、`docs/domain-model.md` 和 ADR 0004：
+阶段 4 的核心原则来自 `docs/architecture/architecture.md`、`docs/architecture/domain-model.md` 和 ADR 0004：
 
 - 未确认的候选不能参与长期记忆检索。
 - Project Memory 优先于 Workspace Memory，但冲突必须展示来源，不能静默覆盖。

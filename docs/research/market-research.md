@@ -114,12 +114,12 @@ LangReport 采用受限 TransformPlan、独立 Worker、数据最小化和声明
 
 相关仓库文件：
 
-- [README.md](../README.md)
-- [系统架构](architecture.md)
-- [MVP 路线](mvp-roadmap.md)
-- [Web 页面](../apps/web/app/page.tsx)
-- [图表契约](../packages/contracts/src/index.ts)
-- [Flint 适配器](../packages/flint-adapter/src/index.ts)
+- [README.md](../../README.md)
+- [系统架构](../architecture/architecture.md)
+- [MVP 路线](../product/mvp-roadmap.md)
+- [Web 页面](../../apps/web/app/page.tsx)
+- [图表契约](../../packages/contracts/src/index.ts)
+- [Flint 适配器](../../packages/flint-adapter/src/index.ts)
 
 ## 建议的切入方式
 

@@ -2,7 +2,7 @@
 
 > 状态：M1–M4 已在当前工作树实现；相关离线包测试和类型检查已通过。生产部署、真实供应商调用与完整数据库/Worker 集成验收仍需独立确认；M5 未排期。
 >
-> 决策来源：[ADR 0014：Harness/App seam](./adr/0014-harness-and-application-seam.md)、[ADR 0015：有限 Generation Cycle 的 LangGraph 编排](./adr/0015-langgraph-bounded-generation-orchestration.md)。
+> 决策来源：[ADR 0014：Harness/App seam](../adr/0014-harness-and-application-seam.md)、[ADR 0015：有限 Generation Cycle 的 LangGraph 编排](../adr/0015-langgraph-bounded-generation-orchestration.md)。
 >
 > 学习与面试表达见：[Harness / App + LangGraph 架构学习与面试笔记](./harness-langgraph-architecture-notes.md)。
 
@@ -41,7 +41,7 @@ packages/harness
 状态：已完成，且后续 M1–M4 已进入运行时代码。
 
 - 新增 `docs/adr/0015-langgraph-bounded-generation-orchestration.md`，明确 LangGraph 的采用范围、State、节点、持久化限制和 ADR 0014 的关系。
-- 新增本计划；更新 `docs/architecture.md` 与 `docs/langchain-langgraph-selection.md` 的交叉引用和当前决策状态。
+- 新增本计划；更新 `docs/architecture/architecture.md` 与 `docs/generation/langchain-langgraph-selection.md` 的交叉引用和当前决策状态。
 - 保留现有研究中有关供应商适配、数据发送和 LangSmith 的证据；ADR 0015 和本计划优先于其中“是否采用 LangGraph”的条件性措辞。
 
 完成条件：文档说明 LangGraph 的有限内部边界、当前实现状态，以及它不会扩大第一阶段产品范围。

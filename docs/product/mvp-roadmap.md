@@ -6,7 +6,7 @@
 
 > 咨询顾问上传客户销售数据，用自然语言提出一个分析问题，确认指标口径，生成一个可编辑、可追溯、符合项目视觉规范的图表证据模块，经过审核后导出固定版本。
 
-第一阶段产品规格和限制以 [phase1-consulting-report.md](./phase1-consulting-report.md) 为准；Agent 的开发启动和 Loop 行为以 [agent-loop-spec.md](./agent-loop-spec.md) 为准。
+第一阶段产品规格和限制以 [phase1-consulting-report.md](./phase1-consulting-report.md) 为准；Agent 的开发启动和 Loop 行为以 [agent-loop-spec.md](../agent/agent-loop-spec.md) 为准。
 
 ## 第一阶段范围
 

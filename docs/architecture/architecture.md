@@ -2,7 +2,7 @@
 
 ## 1. 目标
 
-LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 Analysis Brief，可靠地转化成可审核的图表证据模块。完整产品边界见 [phase1-consulting-report.md](./phase1-consulting-report.md)。系统必须同时满足以下要求：
+LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 Analysis Brief，可靠地转化成可审核的图表证据模块。完整产品边界见 [phase1-consulting-report.md](../product/phase1-consulting-report.md)。系统必须同时满足以下要求：
 
 - 数据来源和转换过程可追溯
 - 图表规范和渲染结果可复现
@@ -158,7 +158,7 @@ Plugin Manifest 只能声明模板、Theme、语义、校验器、示例和平�
 
 ## 12. Harness 与应用层的当前 seam
 
-详细决策与迁移门槛见 [ADR 0014：将受控执行 Harness 与 LangReport 应用层分离](./adr/0014-harness-and-application-seam.md)、[ADR 0015：用 LangGraph 编排有限的 Generation Cycle](./adr/0015-langgraph-bounded-generation-orchestration.md) 和 [Harness 与 LangGraph 迁移实施计划](./harness-langgraph-migration-plan.md)。M1–M4 的代码和 Schema 已存在于当前工作树；这不表示已经完成生产部署或真实供应商验收，也不扩大第一阶段范围。
+详细决策与迁移门槛见 [ADR 0014：将受控执行 Harness 与 LangReport 应用层分离](../adr/0014-harness-and-application-seam.md)、[ADR 0015：用 LangGraph 编排有限的 Generation Cycle](../adr/0015-langgraph-bounded-generation-orchestration.md) 和 [Harness 与 LangGraph 迁移实施计划](../generation/harness-langgraph-migration-plan.md)。M1–M4 的代码和 Schema 已存在于当前工作树；这不表示已经完成生产部署或真实供应商验收，也不扩大第一阶段范围。
 
 ```text
 apps/*（Web / API / Worker 宿主）

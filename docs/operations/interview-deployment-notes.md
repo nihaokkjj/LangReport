@@ -81,7 +81,7 @@ Vercel 再在服务端把这些请求转发到 ECS。
 
 ## 4. 前端通信配置
 
-配置文件是 [apps/web/next.config.ts](../apps/web/next.config.ts)。
+配置文件是 [apps/web/next.config.ts](../../apps/web/next.config.ts)。
 
 核心 Rewrite 规则：
 
@@ -150,7 +150,7 @@ Vercel 不配置数据库地址、MinIO 地址、数据库密码或对象存储�
 
 ## 6. Docker Compose 配置
 
-生产 Compose 文件是 [infra/docker-compose.prod.yml](../infra/docker-compose.prod.yml)。
+生产 Compose 文件是 [infra/docker-compose.prod.yml](../../infra/docker-compose.prod.yml)。
 
 API 不直接暴露公网端口，只在 Docker 网络中提供：
 
@@ -172,7 +172,7 @@ ports:
 ECS:8080 → Nginx 容器:80 → api:4000
 ```
 
-Nginx 配置是 [infra/nginx/nginx.conf](../infra/nginx/nginx.conf)：
+Nginx 配置是 [infra/nginx/nginx.conf](../../infra/nginx/nginx.conf)：
 
 ```nginx
 server {
@@ -210,7 +210,7 @@ server {
 - `apps/web/next.config.ts`；
 - `apps/web/app/page.tsx` 中的同源 API 地址处理；
 - `.env.example`；
-- `docs/deploy-ecs.md`。
+- `docs/operations/deploy-ecs.md`。
 
 确认改动后，将对应代码推送到 GitHub，Vercel 才能读取新的前端配置。
 

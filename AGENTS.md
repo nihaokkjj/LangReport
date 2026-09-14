@@ -4,7 +4,7 @@
 
 LangReport 当前只优先实现“咨询项目报告”这一条垂直闭环。产品承诺是：把客户提供的表格和分析问题转换为可追溯、可审核、符合项目视觉规范的图表证据模块。
 
-每次任务开始前，先读取 [CONTEXT.md](./CONTEXT.md) 和 [docs/phase1-consulting-report.md](./docs/phase1-consulting-report.md)。涉及 Agent 启动或循环、生成状态、自动修复、数据访问、记忆写入或模板启用时，再读取 [docs/agent-loop-spec.md](./docs/agent-loop-spec.md)。这些文档分别是业务词汇、第一阶段产品边界和执行限制的唯一参考。
+每次任务开始前，先读取 [CONTEXT.md](./CONTEXT.md) 和 [第一阶段产品规格](./docs/product/phase1-consulting-report.md)。涉及 Agent 启动或循环、生成状态、自动修复、数据访问、记忆写入或模板启用时，再读取 [Agent 启动与 Loop 规范](./docs/agent/agent-loop-spec.md)。这些文档分别是业务词汇、第一阶段产品边界和执行限制的唯一参考。
 
 第一阶段的默认边界：一个 Workspace 内的一个 Project、一个 Data Snapshot、一个 Analysis Brief、一次 Generation Cycle 生成一个主 Chart Artifact/Evidence Block；生成结果必须能回溯到数据快照、指标口径、TransformPlan、Flint Spec、主题版本和修订记录。
 

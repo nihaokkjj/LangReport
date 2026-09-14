@@ -1,10 +1,10 @@
 # Phase 5：声明式插件设计与实施方案
 
-> 状态：历史工程设计，Partially implemented。第一阶段的当前发布策略已由 [第一阶段产品规格](./phase1-consulting-report.md) 和 [ADR 0016](./adr/0016-phase1-platform-owned-plugin-manifests.md) 收窄：只允许平台内置 Manifest，`uploaded` 入口禁用。本文保留的上传、审核和市场化流程仅是后续设计参考，不描述当前可用能力。
+> 状态：历史工程设计，Partially implemented。第一阶段的当前发布策略已由 [第一阶段产品规格](../product/phase1-consulting-report.md) 和 [ADR 0016](../adr/0016-phase1-platform-owned-plugin-manifests.md) 收窄：只允许平台内置 Manifest，`uploaded` 入口禁用。本文保留的上传、审核和市场化流程仅是后续设计参考，不描述当前可用能力。
 >
-> 依据：`README.md`、`docs/mvp-roadmap.md`、`docs/phase1-consulting-report.md`、`docs/architecture.md`、`docs/domain-model.md`、`docs/plugin-manifest.md`、ADR 0005，以及当前工作树中的 Phase 3/4 实现。
+> 依据：`README.md`、`docs/product/mvp-roadmap.md`、`docs/product/phase1-consulting-report.md`、`docs/architecture/architecture.md`、`docs/architecture/domain-model.md`、`docs/plugins/plugin-manifest.md`、ADR 0005，以及当前工作树中的 Phase 3/4 实现。
 
-本文件定义 Phase 5 的生命周期、存储、权限、能力解析和生成链路接入。Manifest 的字段语义和示例以 [`docs/plugin-manifest.md`](./plugin-manifest.md) 为唯一事实源；本文不重新定义一套 Manifest 格式。
+本文件定义 Phase 5 的生命周期、存储、权限、能力解析和生成链路接入。Manifest 的字段语义和示例以 [`docs/plugins/plugin-manifest.md`](../plugins/plugin-manifest.md) 为唯一事实源；本文不重新定义一套 Manifest 格式。
 
 ## 1. 阶段目标
 

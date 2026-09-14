@@ -32,7 +32,7 @@
 - `apps/api/src/openapi.test.ts`：增加 Generation Job 异步状态、失败字段和追溯字段的 OpenAPI 契约测试；
 - `apps/api/src/chart-routes.ts`：修正审核状态接口返回值，确保提交/批准操作返回事务更新后的 Revision；
 - `packages/chart/src/index.ts`：将非法 Revision 状态转换映射为稳定的 400 业务错误；
-- `docs/api-debug-loop4-evidence.md`：记录本轮验收范围、证据和环境限制。
+- `docs/audits/api-debug-loop4-evidence.md`：记录本轮验收范围、证据和环境限制。
 
 ## Acceptance status
 

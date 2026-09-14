@@ -65,9 +65,9 @@
 
 证据：
 
-- [apps/api/src/routes.ts](../apps/api/src/routes.ts) 的 Project 查询、创建和 Workspace 权限代码。
-- [apps/web/app/page.tsx](../apps/web/app/page.tsx) 的 Project 选择器和创建入口。
-- [packages/domain/src/index.test.ts](../packages/domain/src/index.test.ts) 通过了角色和 Revision 权限测试。
+- [apps/api/src/routes.ts](../../apps/api/src/routes.ts) 的 Project 查询、创建和 Workspace 权限代码。
+- [apps/web/app/page.tsx](../../apps/web/app/page.tsx) 的 Project 选择器和创建入口。
+- [packages/domain/src/index.test.ts](../../packages/domain/src/index.test.ts) 通过了角色和 Revision 权限测试。
 
 未完成：
 
@@ -89,8 +89,8 @@
 
 证据：
 
-- [packages/data-engine/src/index.ts](../packages/data-engine/src/index.ts)：解析、画像和受限执行器。
-- [apps/api/src/data-assets.ts](../apps/api/src/data-assets.ts)：对象存储、Snapshot 创建和 50 MB 限制。
+- [packages/data-engine/src/index.ts](../../packages/data-engine/src/index.ts)：解析、画像和受限执行器。
+- [apps/api/src/data-assets.ts](../../apps/api/src/data-assets.ts)：对象存储、Snapshot 创建和 50 MB 限制。
 - `data-engine` 测试通过：**2/2**。
 
 结论：图表数值的输入不是前端固定的 `sampleCsv`；`sampleCsv` 只是 Web 侧“使用示例”按钮的可选演示数据入口。
@@ -113,9 +113,9 @@
 
 证据：
 
-- [apps/web/app/page.tsx](../apps/web/app/page.tsx)：`sendMessage` 与 `generateEvidence` 是两个独立动作。
-- [apps/api/src/routes.ts](../apps/api/src/routes.ts)：创建 Job 时固化 Conversation projection。
-- [packages/generation/src/context-projection.test.ts](../packages/generation/src/context-projection.test.ts) 已纳入 Generation 测试。
+- [apps/web/app/page.tsx](../../apps/web/app/page.tsx)：`sendMessage` 与 `generateEvidence` 是两个独立动作。
+- [apps/api/src/routes.ts](../../apps/api/src/routes.ts)：创建 Job 时固化 Conversation projection。
+- [packages/generation/src/context-projection.test.ts](../../packages/generation/src/context-projection.test.ts) 已纳入 Generation 测试。
 
 ### 4. Analysis Brief 和 Metric Definition
 
@@ -129,7 +129,7 @@
 
 发现的问题：
 
-- [apps/api/src/routes.ts](../apps/api/src/routes.ts) 创建 Generation Job 时，用用户 prompt 生成 Analysis Brief，但固定写入 `audience: "客户汇报"`、`timeRange: null`、`timeGrain: null`，同时写入 `status: "confirmed"`。
+- [apps/api/src/routes.ts](../../apps/api/src/routes.ts) 创建 Generation Job 时，用用户 prompt 生成 Analysis Brief，但固定写入 `audience: "客户汇报"`、`timeRange: null`、`timeGrain: null`，同时写入 `status: "confirmed"`。
 - 这意味着一个没有时间范围和时间粒度的 Brief 可能被当成已确认输入，违反“缺少必要信息时应澄清”的第一阶段规则。
 - 生成时按 Project 内最新 confirmed 指标排序取一条，而不是由用户明确选择指标。
 
@@ -148,13 +148,13 @@
 
 证据：
 
-- [apps/generation-worker/src/index.ts](../apps/generation-worker/src/index.ts)：领取、处理、失败和交接 Render Worker。
-- [apps/render-worker/src/index.ts](../apps/render-worker/src/index.ts)：渲染阶段 Lease 和幂等处理。
-- [packages/db/scripts/verify-migrations.mjs](../packages/db/scripts/verify-migrations.mjs) 通过，迁移包含 `0016_workspace_model_credentials.sql`。
+- [apps/generation-worker/src/index.ts](../../apps/generation-worker/src/index.ts)：领取、处理、失败和交接 Render Worker。
+- [apps/render-worker/src/index.ts](../../apps/render-worker/src/index.ts)：渲染阶段 Lease 和幂等处理。
+- [packages/db/scripts/verify-migrations.mjs](../../packages/db/scripts/verify-migrations.mjs) 通过，迁移包含 `0016_workspace_model_credentials.sql`。
 
 验证限制：
 
-- [apps/generation-worker/src/worker.integration.test.ts](../apps/generation-worker/src/worker.integration.test.ts) 本轮结果为 **1 skipped**，不是通过。
+- [apps/generation-worker/src/worker.integration.test.ts](../../apps/generation-worker/src/worker.integration.test.ts) 本轮结果为 **1 skipped**，不是通过。
 - Docker 本轮无法连接，无法确认真实 PostgreSQL、对象存储和两个 Worker 的联合运行。
 
 ### 6. Deterministic Generation：当前最明确的 Demo 部分
@@ -176,7 +176,7 @@
 
 证据：
 
-- [packages/generation/src/index.ts](../packages/generation/src/index.ts) 的 `DeterministicModelGateway`。
+- [packages/generation/src/index.ts](../../packages/generation/src/index.ts) 的 `DeterministicModelGateway`。
 - 同文件的 `materializeArtifacts` 调用 `executeTransformPlan(plan, input.rows)`。
 - Generation 测试通过：**13/13**，其中包含澄清、非法输出、上下文投影、模型调用摘要和审计测试。
 
@@ -201,9 +201,9 @@
 
 证据：
 
-- [packages/model-gateway/src/index.ts](../packages/model-gateway/src/index.ts)。
+- [packages/model-gateway/src/index.ts](../../packages/model-gateway/src/index.ts)。
 - Model Gateway 测试通过：**5/5**。
-- [docs/model-gateway-implementation-plan.md](./model-gateway-implementation-plan.md) 明确写明真实账户验收仍待实施，模拟传输测试不等于真实账户验证。
+- [docs/generation/model-gateway-implementation-plan.md](../generation/model-gateway-implementation-plan.md) 明确写明真实账户验收仍待实施，模拟传输测试不等于真实账户验证。
 
 ### 8. TransformPlan 和数据引擎
 
@@ -233,7 +233,7 @@ filter / derive / aggregate / sort / limit
 
 证据：
 
-- [packages/flint-adapter/src/index.ts](../packages/flint-adapter/src/index.ts)。
+- [packages/flint-adapter/src/index.ts](../../packages/flint-adapter/src/index.ts)。
 - Flint Adapter 测试通过：**5/5**，包含真实渲染产物存在性和签名校验。
 
 未完成：

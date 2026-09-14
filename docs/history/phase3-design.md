@@ -1,10 +1,10 @@
 # Phase 3：Chart Artifact 和异步协作设计
 
-> 状态：工程设计参考；第一阶段仅启用其中满足 `phase1-consulting-report.md` 的能力
+> 状态：工程设计参考；第一阶段仅启用其中满足 `docs/product/phase1-consulting-report.md` 的能力
 >
-> 依据：`README.md`、`docs/mvp-roadmap.md`、`docs/architecture.md`、`docs/domain-model.md`、ADR 0002/0003，以及当前工作树中的实现。
+> 依据：`README.md`、`docs/product/mvp-roadmap.md`、`docs/architecture/architecture.md`、`docs/architecture/domain-model.md`、ADR 0002/0003，以及当前工作树中的实现。
 
-> 实施说明：本文记录 Chart Artifact、Revision 和异步协作的工程方案。它不扩大第一阶段的产品范围；完整的第一阶段验收以 `phase1-consulting-report.md` 为准。生产化上线前仍需补充数据库行锁/更强的并发控制、正式身份认证、对象存储生命周期策略和更完整的集成测试。
+> 实施说明：本文记录 Chart Artifact、Revision 和异步协作的工程方案。它不扩大第一阶段的产品范围；完整的第一阶段验收以 `docs/product/phase1-consulting-report.md` 为准。生产化上线前仍需补充数据库行锁/更强的并发控制、正式身份认证、对象存储生命周期策略和更完整的集成测试。
 
 ## 1. 目标和边界
 

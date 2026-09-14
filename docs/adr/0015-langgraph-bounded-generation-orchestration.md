@@ -14,7 +14,7 @@ LangReport 的第一阶段有一个固定、可审核的生成闭环：一个 `G
 
 当前 `GenerationCycle` 已是应用层的公共深模块；`Generation Worker` 负责 `Generation Job` 的领取、`Worker Lease`、`Fencing Token`、冻结输入读取、凭据解密、状态提交和渲染交接。两者不能因引入框架而失去各自的领域责任。
 
-DeerFlow 将 LangGraph 用于开放式 Agent 的模型、工具、中间件、子 Agent 与长期线程状态组装。LangReport 只借鉴其“纯参数工厂由宿主组装”的依赖方向，不引入通用 Agent、任意工具、MCP、Sandbox 或 IM Channel。关于框架和供应商适配的研究证据保留在 [LangChain / LangGraph 选型研究](../langchain-langgraph-selection.md)。
+DeerFlow 将 LangGraph 用于开放式 Agent 的模型、工具、中间件、子 Agent 与长期线程状态组装。LangReport 只借鉴其“纯参数工厂由宿主组装”的依赖方向，不引入通用 Agent、任意工具、MCP、Sandbox 或 IM Channel。关于框架和供应商适配的研究证据保留在 [LangChain / LangGraph 选型研究](../generation/langchain-langgraph-selection.md)。
 
 ## 决策
 
@@ -89,4 +89,4 @@ Graph State 仅保存有界、可审计的运行数据：Job/Cycle 标识、输�
 - 静态依赖检查证明 Harness 不导入 `generation`、`db`、`data-engine`、`chart`、`memory`、Flint 或数据库 Schema；
 - 对新增 Execution Assembly 验证不包含密钥、原始数据或供应商原始正文，且历史 Revision 明确标记为 legacy，而不伪造运行信息。
 
-详细阶段、目标文件、验证命令和迁移前置条件见 [Harness 与 LangGraph 迁移实施计划](../harness-langgraph-migration-plan.md)。
+详细阶段、目标文件、验证命令和迁移前置条件见 [Harness 与 LangGraph 迁移实施计划](../generation/harness-langgraph-migration-plan.md)。

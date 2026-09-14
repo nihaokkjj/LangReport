@@ -1,6 +1,6 @@
 # LangChain / LangGraph 选型研究
 
-> 状态：本文保留 2026-09-06 的选型研究证据；截至 2026-09-14，M1-A 百炼兼容 HTTP 基线、`@langreport/harness` 和有限 LangGraph `Generation Cycle` 已进入当前工作树，具体边界与验收状态见 [ADR 0015](./adr/0015-langgraph-bounded-generation-orchestration.md) 和 [迁移实施计划](./harness-langgraph-migration-plan.md)。真实供应商与生产部署验收仍应单独确认。
+> 状态：本文保留 2026-09-06 的选型研究证据；截至 2026-09-14，M1-A 百炼兼容 HTTP 基线、`@langreport/harness` 和有限 LangGraph `Generation Cycle` 已进入当前工作树，具体边界与验收状态见 [ADR 0015](../adr/0015-langgraph-bounded-generation-orchestration.md) 和 [迁移实施计划](./harness-langgraph-migration-plan.md)。真实供应商与生产部署验收仍应单独确认。
 > 研究当时只核对 JavaScript / TypeScript 官方文档和 TypeScript 源码，没有安装依赖、调用真实模型或运行框架集成测试；下文保留这段研究历史。当前实现已经锁定依赖并完成离线验证，不能把研究时态当作当前代码事实。
 
 > 说明：本文中将 LangGraph 视为“后续选项”的条件性建议保留为研究历史；是否采用及其业务边界以 ADR 0015 为准。供应商适配、数据最小化、审计、取消和依赖锁定的核对结论仍然有效。
@@ -13,7 +13,7 @@ In scope：给出百炼千问、DeepSeek、OpenAI 的 LangChain 适配方案、�
 Out of scope（研究时）：不安装框架、不更换 Worker、不启用外部追踪、不改变记忆确认和 Review 规则。
 Proof（研究时）：交叉检查既有文档、入口和官方 TS API；具体模型能力仍必须用固定样例和目标环境验证。
 
-研究时 Worker 同步调用 `generateArtifacts()`，仓库尚未声明 LangChain / LangGraph 依赖。当前代码已经改为由 [`EvidenceGenerationWorkflow`](../apps/generation-worker/src/evidence-generation-workflow.ts) 调用 `GenerationCycle`，并在 `packages/generation` 内部使用 LangGraph；外部框架类型仍不泄漏到 API、Web 或 Worker 公共合同。
+研究时 Worker 同步调用 `generateArtifacts()`，仓库尚未声明 LangChain / LangGraph 依赖。当前代码已经改为由 [`EvidenceGenerationWorkflow`](../../apps/generation-worker/src/evidence-generation-workflow.ts) 调用 `GenerationCycle`，并在 `packages/generation` 内部使用 LangGraph；外部框架类型仍不泄漏到 API、Web 或 Worker 公共合同。
 
 本项目已确认的首期运行边界是：只生成 `chart-plan`，首期历史上下文策略为 `canonical_text_context`。Conversation 保存用户可见历史；Generation Cycle 固化 Data Snapshot、Analysis Brief、Metric Definition、Theme、路由和提示词版本；未来 LangGraph checkpoint 只保存执行恢复状态。模型切换发生在当前 run 完成后，并在同一 Conversation 下创建新的 Generation Cycle；切换不会改写旧消息或旧 Cycle。
 
@@ -127,7 +127,7 @@ M1-A 先采用 **项目自有 Model Gateway + 原生 HTTP + 现有有限 Worker 
 | LangGraph + 自有 Gateway（内部可用 LangChain） | 显式节点、分支、持久化恢复和执行历史，适合增长后的生成流程 | 需要设计 Checkpoint、业务状态同步、节点重放和版本迁移；在明确需要恢复/分支能力时引入 |
 | LangChain 高层 Agent | 适合模型自行决定工具调用顺序的任务 | 首阶段生成顺序、操作集合与修复次数已由产品约束，当前无需自动工具循环 |
 
-这个判断来自当前代码与产品约束，而非模型质量基准。现有 [generateArtifacts](../packages/generation/src/index.ts) 已包含顺序生成、执行和有限修复；[Generation Worker](../apps/generation-worker/src/index.ts) 负责领取任务与阶段状态；[Render Worker](../apps/render-worker/src/index.ts) 独立渲染和生成 Revision。暂未实测引入框架后的耗时、费用和依赖开销，不能把统一接口等同于质量提升或成本下降。
+这个判断来自当前代码与产品约束，而非模型质量基准。现有 [generateArtifacts](../../packages/generation/src/index.ts) 已包含顺序生成、执行和有限修复；[Generation Worker](../../apps/generation-worker/src/index.ts) 负责领取任务与阶段状态；[Render Worker](../../apps/render-worker/src/index.ts) 独立渲染和生成 Revision。暂未实测引入框架后的耗时、费用和依赖开销，不能把统一接口等同于质量提升或成本下降。
 
 如果团队本轮决定优先建设“Worker 重启后从已完成阶段恢复”，可以直接选择 LangGraph + LangChain 模型组件，但恢复与幂等测试应进入首个交付。仅为了支持三家模型，LangGraph 并非必要依赖。
 
@@ -136,10 +136,10 @@ M1-A 先采用 **项目自有 Model Gateway + 原生 HTTP + 现有有限 Worker 
 继续使用 [多供应商接入计划](./model-gateway-implementation-plan.md) 的 Connection / Protocol / Model Profile / Task Route 和统一 ModelRequest / ModelResult。此次建议只改变 Gateway 内部实现选项，不将 LangChain 类型扩散到领域对象。Model Profile、HistoryAdapter、提示词、Schema、数据策略和执行器都必须有版本；这些版本随 Generation Cycle 固化。
 
 - 拟新增的 `packages/model-gateway`：将 LangChain 客户端、消息构造与结构化输出封装在内部。对外只暴露本地合同，负责脱敏、允许的目的地、模型能力、预算和调用记录。
-- [Generation](../packages/generation/src/index.ts)：调用 Gateway 获得计划，先做独立的模型计划结构/业务校验，再使用现有受限执行器和校验器。校验后再组装真实数据与固定主题；渲染完成后执行独立的渲染产物校验。
-- [Generation Worker](../apps/generation-worker/src/index.ts)：继续原子领取任务、检查权限与固定版本、推进数据库状态。选择 LangGraph 时由它调用编译后的工作流。
-- [API](../apps/api/src/routes.ts)、[HTTP 契约](../packages/contracts/src/http.ts)、[Web](../apps/web/app/page.tsx)：继续面向 Generation Job、澄清问题和 Revision，不暴露模型厂商响应或 Graph 内部对象。`localStorage` 只能保存界面偏好，服务端负责校验 Profile、当前 run 和 Project 授权。
-- [Memory](../packages/memory/src/index.ts)：使用现有 Candidate 确认流程。Checkpoint 或聊天消息历史不会自动成为 Project Memory。
+- [Generation](../../packages/generation/src/index.ts)：调用 Gateway 获得计划，先做独立的模型计划结构/业务校验，再使用现有受限执行器和校验器。校验后再组装真实数据与固定主题；渲染完成后执行独立的渲染产物校验。
+- [Generation Worker](../../apps/generation-worker/src/index.ts)：继续原子领取任务、检查权限与固定版本、推进数据库状态。选择 LangGraph 时由它调用编译后的工作流。
+- [API](../../apps/api/src/routes.ts)、[HTTP 契约](../../packages/contracts/src/http.ts)、[Web](../../apps/web/app/page.tsx)：继续面向 Generation Job、澄清问题和 Revision，不暴露模型厂商响应或 Graph 内部对象。`localStorage` 只能保存界面偏好，服务端负责校验 Profile、当前 run 和 Project 授权。
+- [Memory](../../packages/memory/src/index.ts)：使用现有 Candidate 确认流程。Checkpoint 或聊天消息历史不会自动成为 Project Memory。
 - Render Worker：继续拥有渲染和业务 Revision 写入；执行图完成不代表 Evidence Block 已成功生成。
 
 依赖采用 Node.js / TypeScript 路线，与现有仓库一致。首轮只在 Gateway 包评估 `@langchain/core`、`@langchain/openai` 及需要的供应商包；核对锁定版本与项目 Zod/ESM/TypeScript 的兼容性。启用 LangGraph 时再增加 `@langchain/langgraph` 和生产 Checkpointer；不需要为此另建 Python 服务或接入托管 Agent 平台。
@@ -204,7 +204,7 @@ Graph State 保持小且可序列化，只保存 Snapshot ID、上下文/计划/
 
 ### 人工参与遵循现有领域规则
 
-LangGraph 的 interrupt/resume 适合需要人工输入的工作流，但当前 [Agent Loop 规范](./agent-loop-spec.md) 明确要求：Needs Clarification 后，用户补充信息创建新的 Generation Cycle。因此本项目的澄清路径应保存问题并结束原图；新的确认输入进入新的 Job 和图实例。模型降级、工具调用失败和不兼容历史同样通过用户可操作的提示结束当前 Cycle，不能在同一 Cycle 内偷偷改变模型。
+LangGraph 的 interrupt/resume 适合需要人工输入的工作流，但当前 [Agent Loop 规范](../agent/agent-loop-spec.md) 明确要求：Needs Clarification 后，用户补充信息创建新的 Generation Cycle。因此本项目的澄清路径应保存问题并结束原图；新的确认输入进入新的 Job 和图实例。模型降级、工具调用失败和不兼容历史同样通过用户可操作的提示结束当前 Cycle，不能在同一 Cycle 内偷偷改变模型。
 
 Review 继续针对固定 Evidence Block / Chart Revision，由现有 Reviewer 权限、状态转移和审计处理。首版不把审核包进一个长时间挂起的生成图。以后需要在不改变固定输入的前提下暂停某个执行动作时，再设计 interrupt 的恢复授权和过期规则。
 
