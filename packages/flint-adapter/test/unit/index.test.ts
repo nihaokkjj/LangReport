@@ -39,6 +39,14 @@ test("render validation records concrete Vega-Lite, SVG, and PNG artifacts indep
   assert.deepEqual(invalid.errors.map((error) => error.code), ["RENDER_VEGA_LITE_EMPTY", "RENDER_SVG_INVALID", "RENDER_PNG_INVALID"]);
 });
 
+test("render validation explains every missing artifact before a Chart Revision can be drafted", () => {
+  const invalid = validateRenderedChart({ vegaLiteSpec: {}, svg: "", png: Buffer.alloc(0) });
+
+  assert.equal(invalid.status, "failed");
+  assert.deepEqual(invalid.errors.map((error) => error.code), ["RENDER_VEGA_LITE_EMPTY", "RENDER_SVG_EMPTY", "RENDER_PNG_EMPTY"]);
+  assert.deepEqual(invalid.errors.map((error) => error.path), ["vegaLiteSpec", "svg", "png"]);
+});
+
 test("default theme accepts adapter overrides without inventing a Flint preset", () => {
   const input = toFlintAssemblyInput({ ...spec, theme: "default", themeConfig: { ink: { series: { single: "#2563EB" } } } });
   assert.deepEqual(input.theme_spec, { ink: { series: { single: "#2563EB" } } });

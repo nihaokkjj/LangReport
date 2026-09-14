@@ -146,6 +146,42 @@ test("normalizes auth, rate-limit, timeout, empty, and malformed model responses
   }
 });
 
+test("normalizes provider failures without retaining credential-like provider text", async () => {
+  const route = resolveModelRouteSnapshot(baseEnvironment, capturedAt);
+  const providerSentinel = "sk-provider-error-must-not-leak";
+  const gateway = createBailianQwenGateway(route, { BAILIAN_API_KEY: "worker-secret" }, async () => jsonResponse({
+    error: {
+      message: `authentication failed for ${providerSentinel}`,
+      provider_debug: "raw provider body must remain private"
+    }
+  }, 401));
+
+  const result = await gateway.generateStructured(runtimeRequest("invocation-redaction", route.routeSnapshotId));
+
+  assert.equal(result.status, "error");
+  if (result.status !== "error") return;
+  assert.equal(result.code, "MODEL_AUTH_FAILED");
+  assert.equal(result.message, "百炼鉴权失败");
+  assert.equal(JSON.stringify(result).includes(providerSentinel), false);
+  assert.equal(JSON.stringify(result).includes("raw provider body must remain private"), false);
+});
+
+test("normalizes transport failures without retaining raw network exception text", async () => {
+  const route = resolveModelRouteSnapshot(baseEnvironment, capturedAt);
+  const transportSentinel = "Bearer transport-secret-must-not-leak";
+  const gateway = createBailianQwenGateway(route, { BAILIAN_API_KEY: "worker-secret" }, async () => {
+    throw new Error(`socket reset while sending ${transportSentinel}`);
+  });
+
+  const result = await gateway.generateStructured(runtimeRequest("invocation-transport-redaction", route.routeSnapshotId));
+
+  assert.equal(result.status, "error");
+  if (result.status !== "error") return;
+  assert.equal(result.code, "MODEL_PROVIDER_UNAVAILABLE");
+  assert.equal(result.message, "百炼网络请求失败");
+  assert.equal(JSON.stringify(result).includes(transportSentinel), false);
+});
+
 test("uses Harness deadline cancellation while retaining the existing timeout audit result", async () => {
   const route = resolveModelRouteSnapshot(baseEnvironment, capturedAt);
   let requestWasAborted = false;

@@ -1,0 +1,6 @@
+[
+  { "outputColumn": "月份", "sourceColumns": ["月份"], "directInputColumns": ["月份"], "operation": "source", "stepIndex": -1 },
+  { "outputColumn": "区域", "sourceColumns": ["区域"], "directInputColumns": ["区域"], "operation": "source", "stepIndex": -1 },
+  { "outputColumn": "销售额_sum", "sourceColumns": ["销售额"], "directInputColumns": ["销售额"], "operation": "aggregate:sum", "stepIndex": 0 },
+  { "outputColumn": "销售额_yoy", "sourceColumns": ["销售额"], "directInputColumns": ["销售额_sum"], "operation": "derive:percent_change", "stepIndex": 1 }
+]

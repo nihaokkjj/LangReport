@@ -1,0 +1,9 @@
+{
+  "name": "销售额同比",
+  "meaning": "按区域汇总每个自然月销售额，并与上年同月比较",
+  "formula": "(本月销售额 - 上年同月销售额) / ABS(上年同月销售额)",
+  "unit": "%",
+  "timeRule": "按自然月分组；同比匹配前 12 个月；缺少基期时返回空值",
+  "filterRule": null,
+  "status": "confirmed"
+}

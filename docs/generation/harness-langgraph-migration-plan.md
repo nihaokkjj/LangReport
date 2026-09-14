@@ -77,9 +77,9 @@ pnpm typecheck
 目标文件：
 
 - 修改 `packages/generation/package.json`，增加 `@langchain/langgraph` 及其实现所需的锁定 peer dependency；更新工作区锁文件；
-- 新增 `packages/generation/src/evidence-generation-graph/state.ts`、`nodes.ts`、`routes.ts`、`graph.ts`，以及 `test/unit/evidence-generation-graph/graph.test.ts`；
+- 新增 `packages/generation/src/evidence-generation-graph/state.ts`、`nodes.ts`、`routes.ts`、`graph.ts`；初始内部 graph 测试已在 T3 由公开 `test/unit/index.test.ts` 的 `GenerationCycle` 修复预算测试替代；
 - 修改 `packages/generation/src/index.ts`，让 `GenerationCycle.run()` 调用 Graph 并保持现有返回类型；
-- 修改 `packages/generation/package.json` 的 test 脚本，将 Graph 测试加入现有离线基线。
+- 修改 `packages/generation/package.json` 的 test 脚本，将公开 `GenerationCycle` 行为测试加入现有离线基线。
 
 实现：Graph 工厂接受冻结 `GenerationCycleInput` 与已组装 Port；以 `checkpointer: false` 编译。图严格执行 `prepare → plan → transform → compile → validate`，并仅在 `repairCount < 2` 时进入 `repair → transform`。Graph 结束于 `ready_for_render`、`needs_clarification` 或 `failed`，再映射为当前 `GenerationCycleResult`。
 

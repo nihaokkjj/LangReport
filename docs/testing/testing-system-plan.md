@@ -110,7 +110,7 @@ tests/canary/
 - E2E：只断言浏览器中可观察的用户行为和固定 Chart Revision 导出。
 - Canary：一个真实 Generation Job、一次供应商请求，以及不含密钥和原始供应商正文的 Model Invocation 审计。
 
-不新增针对 LangGraph 内部节点、私有方法或内部调用次数的行为测试。[现有 graph 测试](../../packages/generation/test/unit/evidence-generation-graph/graph.test.ts)只能在公开 `GenerationCycle` 行为得到等价覆盖后替换或删除。
+不新增针对 LangGraph 内部节点、私有方法或内部调用次数的行为测试。T3 已以[公开 `GenerationCycle` 修复预算测试](../../packages/generation/test/unit/index.test.ts)替代并删除私有 graph 测试。
 
 ### 三层门禁
 
@@ -205,6 +205,8 @@ Playwright 首期只保留一个 spec，覆盖：
 - 围绕公开边界逐个测试先行补齐 Data Engine、Generation、Domain、Chart、Model Gateway 和 Flint Adapter 的成功、失败、边界与不变量。
 - 优先证明 Data Snapshot 不变、TransformPlan/字段血缘确定、修复预算有界、Approved Chart Revision 不可变、Model Invocation 脱敏，以及渲染校验失败可解释。
 - 阶段末记录五个核心 package 的分支覆盖基线并启用不回退门槛。
+
+当前已启用的 T3 基线见 [coverage-baselines.md](./coverage-baselines.md)。
 
 ### T4：隔离的 Postgres/MinIO 集成门禁
 

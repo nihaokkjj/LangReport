@@ -10,7 +10,7 @@
     "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
     "build": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test test/unit/index.test.ts",
-    "test:coverage": "tsx --test --experimental-test-coverage test/unit/index.test.ts"
+    "test:coverage": "tsx --test --experimental-test-coverage --test-coverage-include=src/** --test-coverage-branches=81 test/unit/index.test.ts"
   },
   "dependencies": {
     "@langreport/contracts": "workspace:*"

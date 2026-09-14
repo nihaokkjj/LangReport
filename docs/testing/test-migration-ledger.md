@@ -1,6 +1,6 @@
 # 测试迁移台账
 
-> 阶段：T2
+> 阶段：T2（T3 更新）
 >
 > 规则：所有既有行为测试均保留；本台账只记录路径和执行层级变化，不把移动本身视为行为替代。
 
@@ -24,7 +24,7 @@
 | `packages/generation/src/context-projection.test.ts` | `packages/generation/test/unit/context-projection.test.ts` | unit | 保留 Conversation 投影行为；默认离线运行。 |
 | `packages/generation/src/index.test.ts` | `packages/generation/test/unit/index.test.ts` | unit | 保留 `GenerationCycle` 公开行为；默认离线运行。 |
 | `packages/generation/src/model-baseline.test.ts` | `packages/generation/test/unit/model-baseline.test.ts` | unit | 保留匿名区域销售基线行为；默认离线运行。 |
-| `packages/generation/src/evidence-generation-graph/graph.test.ts` | `packages/generation/test/unit/evidence-generation-graph/graph.test.ts` | unit | 保留既有内部 graph 覆盖，不新增同类测试；待 T3 公开 `GenerationCycle` 覆盖等价后再评估替换。 |
+| `packages/generation/src/evidence-generation-graph/graph.test.ts` | `packages/generation/test/unit/index.test.ts` | unit | T3 删除私有 LangGraph 节点测试；由公开 `GenerationCycle.run` 的两次修复预算、终态和审计断言等价替代。 |
 | `packages/harness/src/structured-model.test.ts` | `packages/harness/test/unit/structured-model.test.ts` | unit | 保留结构化模型 Harness 行为；默认离线运行。 |
 | `packages/memory/src/index.test.ts` | `packages/memory/test/unit/index.test.ts` | unit | 保留确定性 Memory Candidate 行为；默认离线运行。 |
 | `packages/model-gateway/src/index.test.ts` | `packages/model-gateway/test/unit/index.test.ts` | unit | 保留注入 fake fetch 的 Model Gateway 行为；默认离线运行。 |

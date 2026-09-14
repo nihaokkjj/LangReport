@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  ChartDomainError,
   applyChartEditPatch,
   buildMemoryContext,
   canPerformChartAction,
@@ -32,6 +33,17 @@ const spec: FlintSpec = {
 test("only legal revision transitions are accepted", () => {
   assert.equal(transitionRevision("draft", "in_review"), "in_review");
   assert.throws(() => transitionRevision("approved", "draft"), /不能从 approved 变为 draft/);
+});
+
+test("an Approved Chart Revision cannot re-enter an editable workflow", () => {
+  assert.equal(transitionRevision("approved", "archived"), "archived");
+  for (const status of ["draft", "in_review", "changes_requested"] as const) {
+    assert.throws(() => transitionRevision("approved", status), (error: unknown) => {
+      assert.ok(error instanceof ChartDomainError);
+      assert.equal(error.code, "INVALID_STATE_TRANSITION");
+      return true;
+    });
+  }
 });
 
 test("viewer is read-only and editor can create a revision", () => {

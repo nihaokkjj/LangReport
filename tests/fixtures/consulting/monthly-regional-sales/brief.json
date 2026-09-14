@@ -1,0 +1,8 @@
+{
+  "businessQuestion": "按月份展示各区域销售额、同比变化和异常区域，并说明计算口径与数据限制",
+  "audience": "客户汇报",
+  "timeRange": "2025-01 至 2026-03",
+  "timeGrain": "month",
+  "outputFormat": "evidence_block",
+  "status": "confirmed"
+}

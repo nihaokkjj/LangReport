@@ -1,6 +1,29 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import test from "node:test";
-import { executeTransformPlan } from "../../src/index.js";
+import { fileURLToPath } from "node:url";
+import type { TransformPlan } from "@langreport/contracts";
+import {
+  DataParseError,
+  TransformExecutionError,
+  detectSourceType,
+  executeTransformPlan,
+  parseData,
+  type DataRow,
+  type FieldLineage
+} from "../../src/index.js";
+
+const fixtureDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../tests/fixtures/consulting/monthly-regional-sales");
+
+type ExpectedTransformFixture = {
+  plan: TransformPlan;
+  rows: DataRow[];
+};
+
+function readFixture<T>(name: string): T {
+  return JSON.parse(readFileSync(resolve(fixtureDirectory, name), "utf8")) as T;
+}
 
 test("monthly YoY uses the prior calendar year across the year boundary", () => {
   const result = executeTransformPlan({
@@ -64,4 +87,48 @@ test("a missing month is not synthesized as a zero row", () => {
     { 月份: "2026-03", 销售额_sum: 120 }
   ]);
   assert.equal(result.rows.some((row) => row["月份"] === "2026-02"), false);
+});
+
+test("a CSV Data Snapshot remains immutable while its fixed TransformPlan reproduces rows and field lineage", () => {
+  const table = parseData({
+    sourceType: detectSourceType("monthly-regional-sales.csv", "text/csv"),
+    bytes: readFileSync(resolve(fixtureDirectory, "sales.csv"))
+  });
+  const expected = readFixture<ExpectedTransformFixture>("expected-transform.json");
+  const expectedLineage = readFixture<FieldLineage[]>("expected-lineage.json");
+  const snapshotBeforeTransform = structuredClone(table.rows);
+  table.rows.forEach((row) => Object.freeze(row));
+  Object.freeze(table.rows);
+
+  const result = executeTransformPlan(expected.plan, table.rows);
+
+  assert.deepEqual(table.columns, ["月份", "区域", "销售额"]);
+  assert.deepEqual(table.profiles.map(({ name, inferredType, nullCount, distinctCount }) => ({ name, inferredType, nullCount, distinctCount })), [
+    { name: "月份", inferredType: "date", nullCount: 0, distinctCount: 6 },
+    { name: "区域", inferredType: "string", nullCount: 0, distinctCount: 2 },
+    { name: "销售额", inferredType: "number", nullCount: 0, distinctCount: 15 }
+  ]);
+  assert.deepEqual(table.rows, snapshotBeforeTransform);
+  assert.deepEqual(result.rows, expected.rows);
+  assert.deepEqual(result.lineage, expectedLineage);
+  assert.deepEqual(result.steps.map(({ kind, inputRowCount, outputRowCount }) => ({ kind, inputRowCount, outputRowCount })), [
+    { kind: "aggregate", inputRowCount: 24, outputRowCount: 12 },
+    { kind: "derive", inputRowCount: 12, outputRowCount: 12 },
+    { kind: "sort", inputRowCount: 12, outputRowCount: 12 }
+  ]);
+});
+
+test("unsupported source types and missing TransformPlan fields fail with an actionable boundary error", () => {
+  assert.throws(() => detectSourceType("monthly-regional-sales.parquet"), DataParseError);
+  assert.throws(() => executeTransformPlan({
+    version: "v1",
+    rationale: "验证字段边界",
+    steps: [{ kind: "filter", column: "不存在", operator: "eq", value: "x" }],
+    expectedColumns: ["月份"]
+  }, [{ 月份: "2026-01" }]), (error: unknown) => {
+    assert.ok(error instanceof TransformExecutionError);
+    assert.equal(error.stepIndex, 0);
+    assert.match(error.message, /第 1 步缺少字段：不存在/);
+    return true;
+  });
 });

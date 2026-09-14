@@ -9,6 +9,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
 const testOwners = [
   "apps/api",
   "apps/generation-worker",
+  "packages/chart",
   "packages/contracts",
   "packages/data-engine",
   "packages/domain",
@@ -37,12 +38,19 @@ const migrationLedgerEntries = {
   "packages/generation/src/context-projection.test.ts": "packages/generation/test/unit/context-projection.test.ts",
   "packages/generation/src/index.test.ts": "packages/generation/test/unit/index.test.ts",
   "packages/generation/src/model-baseline.test.ts": "packages/generation/test/unit/model-baseline.test.ts",
-  "packages/generation/src/evidence-generation-graph/graph.test.ts": "packages/generation/test/unit/evidence-generation-graph/graph.test.ts",
+  "packages/generation/src/evidence-generation-graph/graph.test.ts": "packages/generation/test/unit/index.test.ts",
   "packages/harness/src/structured-model.test.ts": "packages/harness/test/unit/structured-model.test.ts",
   "packages/memory/src/index.test.ts": "packages/memory/test/unit/index.test.ts",
   "packages/model-gateway/src/index.test.ts": "packages/model-gateway/test/unit/index.test.ts",
   "packages/plugin-sdk/src/index.test.ts": "packages/plugin-sdk/test/unit/index.test.ts",
   "packages/plugins/src/index.test.ts": "packages/plugins/test/unit/index.test.ts"
+};
+const coreBranchCoverageBaselines = {
+  "packages/data-engine": 64,
+  "packages/generation": 75,
+  "packages/domain": 81,
+  "packages/chart": 75,
+  "packages/model-gateway": 73
 };
 
 function repositoryPath(path) {
@@ -108,11 +116,18 @@ test("default package tests include only unit tests and contain no skips", () =>
   }
 });
 
-test("coverage reports use the native Node test runner without a threshold", () => {
+test("coverage reports use the native Node runner and enforce each core package's branch baseline", () => {
   const unitTestFiles = normalizedRepositoryPaths((path) => /^(?:apps|packages)\/[^/]+\/test\/unit\/.+\.test\.ts$/.test(path));
   for (const owner of new Set(unitTestFiles.map(ownerOf))) {
     const scripts = readJson(`${owner}/package.json`).scripts;
-    assert.match(scripts["test:coverage"] ?? "", /--experimental-test-coverage/);
+    const coverage = scripts["test:coverage"] ?? "";
+    assert.match(coverage, /--experimental-test-coverage/);
+    if (owner in coreBranchCoverageBaselines) {
+      assert.match(coverage, /--test-coverage-include=src\/\*\*/);
+      assert.match(coverage, new RegExp(`--test-coverage-branches=${coreBranchCoverageBaselines[owner]}`));
+    } else {
+      assert.doesNotMatch(coverage, /--test-coverage-branches=/);
+    }
   }
 });
 

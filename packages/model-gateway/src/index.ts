@@ -217,7 +217,7 @@ export class BailianQwenGateway implements ModelGateway {
       return this.failure(request, startedAt, "MODEL_TIMEOUT", "百炼请求在 Generation Cycle 截止时间内未完成", true);
     }
     if (transport.kind === "transport_error") {
-      return this.failure(request, startedAt, "MODEL_PROVIDER_UNAVAILABLE", `百炼网络请求失败：${transport.message}`, true);
+      return this.failure(request, startedAt, "MODEL_PROVIDER_UNAVAILABLE", "百炼网络请求失败", true);
     }
 
     const payload = transport.payload;
@@ -450,15 +450,14 @@ function responseFormatFor<T>(route: ModelRouteSnapshot, request: RuntimeModelRe
 function errorForStatus(status: number, error: unknown): { code: ModelErrorCode; message: string; retryable: boolean } {
   const detail = asRecord(error);
   const providerMessage = textValue(detail?.message);
-  const suffix = providerMessage ? `：${providerMessage.slice(0, 500)}` : "";
-  if (status === 401 || status === 403) return { code: "MODEL_AUTH_FAILED", message: `百炼鉴权失败${suffix}`, retryable: false };
-  if (status === 429) return { code: "MODEL_RATE_LIMITED", message: `百炼限流${suffix}`, retryable: true };
-  if (status === 408 || status === 504) return { code: "MODEL_TIMEOUT", message: `百炼请求超时${suffix}`, retryable: true };
-  if (status >= 500) return { code: "MODEL_PROVIDER_UNAVAILABLE", message: `百炼服务暂不可用${suffix}`, retryable: true };
+  if (status === 401 || status === 403) return { code: "MODEL_AUTH_FAILED", message: "百炼鉴权失败", retryable: false };
+  if (status === 429) return { code: "MODEL_RATE_LIMITED", message: "百炼限流", retryable: true };
+  if (status === 408 || status === 504) return { code: "MODEL_TIMEOUT", message: "百炼请求超时", retryable: true };
+  if (status >= 500) return { code: "MODEL_PROVIDER_UNAVAILABLE", message: "百炼服务暂不可用", retryable: true };
   if (status === 400 && /response_format|json_schema|enable_thinking|unsupported/i.test(providerMessage ?? "")) {
-    return { code: "MODEL_CAPABILITY_UNSUPPORTED", message: `百炼 Profile 不支持当前结构化输出配置${suffix}`, retryable: false };
+    return { code: "MODEL_CAPABILITY_UNSUPPORTED", message: "百炼 Profile 不支持当前结构化输出配置", retryable: false };
   }
-  return { code: "MODEL_REQUEST_INVALID", message: `百炼拒绝请求${suffix}`, retryable: false };
+  return { code: "MODEL_REQUEST_INVALID", message: "百炼拒绝请求", retryable: false };
 }
 
 function usageFromPayload(value: unknown) {
@@ -486,7 +485,6 @@ function textValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function providerErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message.trim()) return `${fallback}：${error.message.slice(0, 500)}`;
+function providerErrorMessage(_error: unknown, fallback: string): string {
   return fallback;
 }

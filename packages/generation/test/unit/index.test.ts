@@ -1,8 +1,30 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import test from "node:test";
-import { loadBuiltinManifests } from "@langreport/plugin-sdk";
-import type { ModelGateway, RuntimeModelRequest, ModelResult } from "@langreport/contracts";
-import { GenerationCycle, projectConversationToCanonicalTextContext } from "../../src/index.js";
+import { fileURLToPath } from "node:url";
+import { loadBuiltinManifests, parseManifest } from "@langreport/plugin-sdk";
+import { parseData, type DataRow, type FieldLineage } from "@langreport/data-engine";
+import type { ModelGateway, RuntimeModelRequest, ModelResult, TransformPlan } from "@langreport/contracts";
+import { GenerationCycle, projectConversationToCanonicalTextContext, validateGenerationRevision } from "../../src/index.js";
+
+const fixtureDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../tests/fixtures/consulting/monthly-regional-sales");
+
+type ExpectedTransformFixture = {
+  plan: TransformPlan;
+  rows: DataRow[];
+};
+
+function readFixture<T>(name: string): T {
+  return JSON.parse(readFileSync(resolve(fixtureDirectory, name), "utf8")) as T;
+}
+
+function readSalesSnapshot() {
+  return parseData({
+    sourceType: "csv",
+    bytes: readFileSync(resolve(fixtureDirectory, "sales.csv"))
+  });
+}
 
 const cycleInput = {
   cycle: {
@@ -186,4 +208,110 @@ test("Generation Cycle 将破损的 Model Gateway envelope 归一为 failed", as
   assert.equal(result.status, "failed");
   if (result.status !== "failed") return;
   assert.equal(result.error.code, "MODEL_OUTPUT_INVALID");
+});
+
+test("Generation Cycle deterministically turns one frozen sales Snapshot into a validated draft with fixed TransformPlan lineage", async () => {
+  const snapshot = readSalesSnapshot();
+  const sourceRowsBeforeCycle = structuredClone(snapshot.rows);
+  const brief = readFixture<Record<string, unknown>>("brief.json");
+  const metricDefinition = readFixture<Record<string, unknown>>("metric-definition.json");
+  const expected = readFixture<ExpectedTransformFixture>("expected-transform.json");
+  const expectedLineage = readFixture<FieldLineage[]>("expected-lineage.json");
+
+  const result = await new GenerationCycle().run({
+    cycle: {
+      workspaceId: "workspace-fixture",
+      projectId: "project-fixture",
+      generationJobId: "job-fixture",
+      invocationId: "invocation-fixture",
+      routeSnapshotId: "deterministic-route-fixture",
+      budget: { deadlineAt: Date.now() + 30_000, maxOutputTokens: 1_024 }
+    },
+    analysisBriefSnapshot: brief,
+    metricDefinitionSnapshot: metricDefinition,
+    prompt: String(brief.businessQuestion),
+    profiles: snapshot.profiles,
+    rows: snapshot.rows
+  });
+
+  assert.equal(result.status, "drafted");
+  if (result.status !== "drafted") return;
+  assert.deepEqual(snapshot.rows, sourceRowsBeforeCycle);
+  assert.deepEqual(result.artifacts.transform.rows, expected.rows);
+  assert.deepEqual(result.artifacts.transform.lineage, expectedLineage);
+  assert.equal(result.artifacts.flintSpec.chartSpec.chartType, "Line Chart");
+  assert.equal(result.artifacts.validation.valid, true);
+  assert.equal(result.artifacts.repairCount, 0);
+  assert.equal(result.audit.planValidation.status, "passed");
+  assert.equal(result.audit.renderValidation.status, "pending");
+});
+
+test("Generation Cycle stops after two public repair attempts when a fixed validator remains unsatisfied", async () => {
+  const [builtin] = loadBuiltinManifests();
+  assert.ok(builtin);
+  if (!builtin) return;
+  const manifestInput = structuredClone(builtin.manifest);
+  manifestInput.metadata.id = "repair-budget-guard";
+  manifestInput.validators = [{
+    id: "requires-unavailable-role",
+    rules: [{
+      kind: "required-role",
+      role: "unavailable-role",
+      severity: "error",
+      message: "测试 Validator 要求不存在的角色"
+    }]
+  }];
+  const blockingPlugin = parseManifest(manifestInput);
+  const snapshot = readSalesSnapshot();
+  const brief = readFixture<Record<string, unknown>>("brief.json");
+  const metricDefinition = readFixture<Record<string, unknown>>("metric-definition.json");
+
+  const result = await new GenerationCycle().run({
+    cycle: {
+      workspaceId: "workspace-fixture",
+      projectId: "project-fixture",
+      generationJobId: "job-repair-budget",
+      invocationId: "invocation-repair-budget",
+      routeSnapshotId: "deterministic-route-fixture",
+      budget: { deadlineAt: Date.now() + 30_000, maxOutputTokens: 1_024 }
+    },
+    analysisBriefSnapshot: brief,
+    metricDefinitionSnapshot: metricDefinition,
+    prompt: String(brief.businessQuestion),
+    profiles: snapshot.profiles,
+    rows: snapshot.rows,
+    pluginManifests: [blockingPlugin]
+  });
+
+  assert.equal(result.status, "failed");
+  if (result.status !== "failed") return;
+  assert.equal(result.error.code, "MODEL_BUDGET_EXCEEDED");
+  assert.equal(result.audit.repairCount, 2);
+  assert.equal(result.audit.planValidation.status, "failed");
+  assert.ok(result.audit.planValidation.errors.some((issue) => issue.code === "PLUGIN_REQUIRED_ROLE_MISSING"));
+  assert.equal(result.audit.stages.find((stage) => stage.name === "validating")?.status, "failed");
+});
+
+test("Generation revision validation returns field-specific errors instead of a draftable result", () => {
+  const validation = validateGenerationRevision({
+    version: "v1",
+    data: { values: [{ 月份: "2026-01" }] },
+    semanticTypes: { 月份: "Month", 销售额_sum: "Quantity" },
+    chartSpec: {
+      chartType: "Line Chart",
+      title: "缺少指标字段",
+      encodings: {
+        x: { field: "月份", type: "temporal" },
+        y: { field: "销售额_sum", type: "quantitative" }
+      },
+      baseSize: { width: 920, height: 520 }
+    },
+    theme: "economist",
+    themeVersion: "v1",
+    themeConfig: {}
+  });
+
+  assert.equal(validation.valid, false);
+  assert.ok(validation.issues.some((issue) => issue.code === "DATA_FIELD_MISSING"));
+  assert.ok(validation.issues.some((issue) => issue.code === "VISUAL_RULE_FAILED"));
 });
