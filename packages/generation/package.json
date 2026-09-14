@@ -6,7 +6,9 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "tsx --test src/index.test.ts src/model-baseline.test.ts src/context-projection.test.ts src/evidence-generation-graph/graph.test.ts",
+    "test": "tsx --test test/unit/index.test.ts test/unit/model-baseline.test.ts test/unit/context-projection.test.ts test/unit/evidence-generation-graph/graph.test.ts",
+    "test:coverage": "tsx --test --experimental-test-coverage test/unit/index.test.ts test/unit/model-baseline.test.ts test/unit/context-projection.test.ts test/unit/evidence-generation-graph/graph.test.ts",
+    "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc --noEmit -p tsconfig.json"
   },

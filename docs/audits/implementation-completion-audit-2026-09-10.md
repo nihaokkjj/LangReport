@@ -67,7 +67,7 @@
 
 - [apps/api/src/routes.ts](../../apps/api/src/routes.ts) 的 Project 查询、创建和 Workspace 权限代码。
 - [apps/web/app/page.tsx](../../apps/web/app/page.tsx) 的 Project 选择器和创建入口。
-- [packages/domain/src/index.test.ts](../../packages/domain/src/index.test.ts) 通过了角色和 Revision 权限测试。
+- [packages/domain/test/unit/index.test.ts](../../packages/domain/test/unit/index.test.ts) 通过了角色和 Revision 权限测试。
 
 未完成：
 
@@ -115,7 +115,7 @@
 
 - [apps/web/app/page.tsx](../../apps/web/app/page.tsx)：`sendMessage` 与 `generateEvidence` 是两个独立动作。
 - [apps/api/src/routes.ts](../../apps/api/src/routes.ts)：创建 Job 时固化 Conversation projection。
-- [packages/generation/src/context-projection.test.ts](../../packages/generation/src/context-projection.test.ts) 已纳入 Generation 测试。
+- [packages/generation/test/unit/context-projection.test.ts](../../packages/generation/test/unit/context-projection.test.ts) 已纳入 Generation 测试。
 
 ### 4. Analysis Brief 和 Metric Definition
 
@@ -154,7 +154,7 @@
 
 验证限制：
 
-- [apps/generation-worker/src/worker.integration.test.ts](../../apps/generation-worker/src/worker.integration.test.ts) 本轮结果为 **1 skipped**，不是通过。
+- [apps/generation-worker/test/integration/worker.integration.test.ts](../../apps/generation-worker/test/integration/worker.integration.test.ts) 本轮结果为 **1 skipped**，不是通过。
 - Docker 本轮无法连接，无法确认真实 PostgreSQL、对象存储和两个 Worker 的联合运行。
 
 ### 6. Deterministic Generation：当前最明确的 Demo 部分
@@ -367,7 +367,7 @@ Demo 信号：
 
 当前失败：
 
-- `packages/contracts/src/http.test.ts` 的“路由契约覆盖当前全部路由”失败：测试期望 **63** 条，实际路由契约为 **65** 条。
+- `packages/contracts/test/unit/http.test.ts` 的“路由契约覆盖当前全部路由”失败：测试期望 **63** 条，实际路由契约为 **65** 条。
 - 新增的 `GET/PUT /api/v1/workspaces/:workspaceId/model-credential` 已进入 `routeContracts`，但测试中的 `expectedRoutes` 没有同步更新。
 - 这不是模型业务逻辑失败，但说明接口契约基线没有跟上当前代码，不能把 API 契约模块标记为全绿。
 
@@ -438,7 +438,7 @@ Demo 信号：
 
 ### P1：同步接口契约测试
 
-将两个模型凭据路由加入 `packages/contracts/src/http.test.ts` 的 expected route 基线，并重新跑 OpenAPI/contract suite。
+将两个模型凭据路由加入 `packages/contracts/test/unit/http.test.ts` 的 expected route 基线，并重新跑 OpenAPI/contract suite。
 
 ### P1：补齐产品规格声明的输出和变换能力
 

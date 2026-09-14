@@ -6,7 +6,7 @@
 >
 > 当前路由声明：60 个
 
-本清单以 `packages/contracts/src/http.ts` 的 `routeContracts` 为契约来源，以 `apps/api/src/http-contracts.test.ts` 验证 Fastify 实际注册结果。API 启动时若发现代码路由没有对应契约，会直接失败，避免新增接口绕过契约基线。Loop 2 新增的文档入口也纳入契约注册，但不会作为业务接口重复展示在 OpenAPI paths 中。
+本清单以 `packages/contracts/src/http.ts` 的 `routeContracts` 为契约来源，以 `apps/api/test/unit/http-contracts.test.ts` 验证 Fastify 实际注册结果。API 启动时若发现代码路由没有对应契约，会直接失败，避免新增接口绕过契约基线。Loop 2 新增的文档入口也纳入契约注册，但不会作为业务接口重复展示在 OpenAPI paths 中。
 
 ## 路由状态
 

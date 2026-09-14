@@ -52,8 +52,8 @@ packages/harness
 
 目标文件：
 
-- 新增 `packages/harness/package.json`、`tsconfig.json`、`src/index.ts`、`src/structured-model.ts`、`src/structured-model.test.ts`；
-- 修改 `packages/model-gateway/package.json`、`src/index.ts`、`src/index.test.ts`；
+- 新增 `packages/harness/package.json`、`tsconfig.json`、`src/index.ts`、`src/structured-model.ts`、`test/unit/structured-model.test.ts`；
+- 修改 `packages/model-gateway/package.json`、`src/index.ts`、`test/unit/index.test.ts`；
 - 更新工作区锁文件；为 Harness 加入不反向导入应用层的依赖检查。
 
 实现：将百炼/兼容 HTTP 的请求发送、超时、取消、结构化响应归一化和中性传输错误置于 Harness。`model-gateway` 保留 Workspace Credential 解密、Model Route Snapshot 校验、LangReport chart-plan Prompt、输出合同、本地 Zod 解析及 `ModelInvocation` 映射。
@@ -77,7 +77,7 @@ pnpm typecheck
 目标文件：
 
 - 修改 `packages/generation/package.json`，增加 `@langchain/langgraph` 及其实现所需的锁定 peer dependency；更新工作区锁文件；
-- 新增 `packages/generation/src/evidence-generation-graph/state.ts`、`nodes.ts`、`routes.ts`、`graph.ts`、`graph.test.ts`；
+- 新增 `packages/generation/src/evidence-generation-graph/state.ts`、`nodes.ts`、`routes.ts`、`graph.ts`，以及 `test/unit/evidence-generation-graph/graph.test.ts`；
 - 修改 `packages/generation/src/index.ts`，让 `GenerationCycle.run()` 调用 Graph 并保持现有返回类型；
 - 修改 `packages/generation/package.json` 的 test 脚本，将 Graph 测试加入现有离线基线。
 
@@ -103,7 +103,7 @@ pnpm typecheck
 
 - 新增 `apps/generation-worker/src/evidence-generation-workflow.ts`；
 - 修改 `apps/generation-worker/src/index.ts`，仅保留轮询、Lease 领取/心跳、依赖组装、调用和受条件保护的提交；
-- 修改 `apps/generation-worker/src/worker.integration.test.ts`。
+- 修改 `apps/generation-worker/test/integration/worker.integration.test.ts`。
 
 实现：`EvidenceGenerationWorkflow` 从已领取 Job 组装冻结输入、Theme/Plugin Context 和已构造的 `ModelGateway`，调用 `GenerationCycle`，再将结果映射为 Worker 的状态提交。`processEditJob` 保持独立，直到它有与首次生成相同的深度和不变量；不为目录统一而混合两条流程。
 
@@ -125,7 +125,7 @@ pnpm typecheck
 
 目标文件：
 
-- 修改 `packages/contracts/src/index.ts`、`http.ts`、`http.test.ts`，增加无密钥 `ExecutionAssembly` Schema 和只读 DTO；
+- 修改 `packages/contracts/src/index.ts`、`http.ts`、`test/unit/http.test.ts`，增加无密钥 `ExecutionAssembly` Schema 和只读 DTO；
 - 修改 `packages/db/src/schema.ts`，由 Drizzle 在当前迁移序号之后生成 `generation_jobs.execution_assembly` 与 `chart_revisions.execution_assembly` 的增量迁移、snapshot 和 journal 更新；
 - 修改 `apps/api/src/routes.ts`，在 Job 创建时冻结 Assembly；
 - 修改 `apps/generation-worker/src/evidence-generation-workflow.ts`、`apps/render-worker/src/index.ts` 和相应集成测试，使 Assembly 随 Job 进入不可变 Revision。

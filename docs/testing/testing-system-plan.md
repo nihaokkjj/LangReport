@@ -24,8 +24,8 @@ Proof: Markdown 差异检查、链接目标检查、工作树范围检查
 
 - 根 [package.json](../../package.json) 固定 Node.js `>=22` 和 pnpm `11.19.0`，已有 `build`、`typecheck`，但没有根 `test`、覆盖率或 lint 命令。
 - 当前测试统一使用 Node.js 内置 `node:test`、`node:assert/strict`，由各 workspace 的 `tsx --test` 脚本执行。例如 [API package.json](../../apps/api/package.json)、[Generation package.json](../../packages/generation/package.json)和 [Data Engine package.json](../../packages/data-engine/package.json)。
-- 测试文件当前与生产源码混放在 `src/`。仓库共有 22 个 `*.test.ts` 文件；递归执行 `pnpm -r --if-present test` 的盘点结果为 88 通过、1 失败、3 跳过。
-- 唯一红测位于 [apps/api/src/auth.test.ts](../../apps/api/src/auth.test.ts)：篡改 JWT 的断言失败。API 测试脚本已通过 `--test-concurrency=1` 串行执行，见 [apps/api/package.json](../../apps/api/package.json)。
+- 盘点时测试文件与生产源码混放在 `src/`。仓库共有 22 个 `*.test.ts` 文件；递归执行 `pnpm -r --if-present test` 的盘点结果为 88 通过、1 失败、3 跳过。
+- 当时唯一红测位于 [apps/api/test/unit/auth.test.ts](../../apps/api/test/unit/auth.test.ts)：篡改 JWT 的断言失败。API 测试脚本已通过 `--test-concurrency=1` 串行执行，见 [apps/api/package.json](../../apps/api/package.json)。
 - `pnpm -r --if-present run typecheck --incremental false` 的盘点结果为 17 个 workspace 全部通过。
 - 当前没有 lint 工具链。本测试计划不引入 lint，也不把格式或规则迁移夹带进测试建设。
 
@@ -33,13 +33,13 @@ Proof: Markdown 差异检查、链接目标检查、工作树范围检查
 
 | 类型 | 已有覆盖 | 具体依据 |
 | --- | --- | --- |
-| 离线单元/组件测试 | 数据解析与 TransformPlan、Generation Cycle、生成上下文、领域状态与权限、contracts、Flint 渲染、Model Gateway、内置插件和 memory | [Data Engine 测试](../../packages/data-engine/src/index.test.ts)、[Generation 测试](../../packages/generation/src/index.test.ts)、[Domain 测试](../../packages/domain/src/index.test.ts)、[Flint Adapter 测试](../../packages/flint-adapter/src/index.test.ts)、[Model Gateway 测试](../../packages/model-gateway/src/index.test.ts) |
-| API 组件测试 | 认证、HTTP 合同、错误映射、Data Asset、OpenAPI；通过 Fastify `app.inject` 运行 | [apps/api/src/auth.test.ts](../../apps/api/src/auth.test.ts)、[apps/api/src/http-contracts.test.ts](../../apps/api/src/http-contracts.test.ts)、[apps/api/src/data-assets.test.ts](../../apps/api/src/data-assets.test.ts) |
-| 集成测试 | 消息触发 Generation Job 的前置条件与幂等；插件安装、Binding、Theme、撤销/恢复与审计；Generation Worker 的数据库工作流 | [message-generation.integration.test.ts](../../apps/api/src/message-generation.integration.test.ts)、[plugins.integration.test.ts](../../apps/api/src/plugins.integration.test.ts)、[worker.integration.test.ts](../../apps/generation-worker/src/worker.integration.test.ts) |
+| 离线单元/组件测试 | 数据解析与 TransformPlan、Generation Cycle、生成上下文、领域状态与权限、contracts、Flint 渲染、Model Gateway、内置插件和 memory | [Data Engine 测试](../../packages/data-engine/test/unit/index.test.ts)、[Generation 测试](../../packages/generation/test/unit/index.test.ts)、[Domain 测试](../../packages/domain/test/unit/index.test.ts)、[Flint Adapter 测试](../../packages/flint-adapter/test/unit/index.test.ts)、[Model Gateway 测试](../../packages/model-gateway/test/unit/index.test.ts) |
+| API 组件测试 | 认证、HTTP 合同、错误映射、Data Asset、OpenAPI；通过 Fastify `app.inject` 运行 | [apps/api/test/unit/auth.test.ts](../../apps/api/test/unit/auth.test.ts)、[apps/api/test/unit/http-contracts.test.ts](../../apps/api/test/unit/http-contracts.test.ts)、[apps/api/test/unit/data-assets.test.ts](../../apps/api/test/unit/data-assets.test.ts) |
+| 集成测试 | 消息触发 Generation Job 的前置条件与幂等；插件安装、Binding、Theme、撤销/恢复与审计；Generation Worker 的数据库工作流 | [message-generation.integration.test.ts](../../apps/api/test/integration/message-generation.integration.test.ts)、[plugins.integration.test.ts](../../apps/api/test/integration/plugins.integration.test.ts)、[worker.integration.test.ts](../../apps/generation-worker/test/integration/worker.integration.test.ts) |
 | 浏览器 E2E | 无 Playwright 配置，也没有浏览器测试 | [apps/web/package.json](../../apps/web/package.json)没有测试脚本；仓库不存在 `playwright.config.*` |
 | 远端部署检查 | 有需要真实部署地址和认证信息的 API smoke/E2E 脚本，但没有浏览器行为、独立 canary 授权或调用费用门槛 | [phase5-production-smoke.mjs](../../scripts/phase5-production-smoke.mjs)、[phase5-production-e2e.mjs](../../scripts/phase5-production-e2e.mjs) |
 
-当前 Model Gateway 测试通过注入假的 `fetch` 验证供应商请求与错误归一化，仍属于离线测试；它不是一次真实供应商调用，见 [packages/model-gateway/src/index.test.ts](../../packages/model-gateway/src/index.test.ts)。
+当前 Model Gateway 测试通过注入假的 `fetch` 验证供应商请求与错误归一化，仍属于离线测试；它不是一次真实供应商调用，见 [packages/model-gateway/test/unit/index.test.ts](../../packages/model-gateway/test/unit/index.test.ts)。
 
 ### 现有门禁与隔离
 
@@ -110,7 +110,7 @@ tests/canary/
 - E2E：只断言浏览器中可观察的用户行为和固定 Chart Revision 导出。
 - Canary：一个真实 Generation Job、一次供应商请求，以及不含密钥和原始供应商正文的 Model Invocation 审计。
 
-不新增针对 LangGraph 内部节点、私有方法或内部调用次数的行为测试。[现有 graph 测试](../../packages/generation/src/evidence-generation-graph/graph.test.ts)只能在公开 `GenerationCycle` 行为得到等价覆盖后替换或删除。
+不新增针对 LangGraph 内部节点、私有方法或内部调用次数的行为测试。[现有 graph 测试](../../packages/generation/test/unit/evidence-generation-graph/graph.test.ts)只能在公开 `GenerationCycle` 行为得到等价覆盖后替换或删除。
 
 ### 三层门禁
 
@@ -189,7 +189,7 @@ Playwright 首期只保留一个 spec，覆盖：
 
 ### T1：恢复可信红绿基线
 
-- 以 [JWT 篡改红测](../../apps/api/src/auth.test.ts)为现成失败测试，定位原因并做最小修复。
+- 以 [JWT 篡改红测](../../apps/api/test/unit/auth.test.ts)为现成失败测试，定位原因并做最小修复。
 - 本阶段不迁移测试目录，也不扩展认证功能。
 - 完成标志：现有默认 package 测试没有失败；三个集成测试仍按现状分类，不把跳过误报为已覆盖。
 

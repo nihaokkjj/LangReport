@@ -6,7 +6,9 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "tsx --test src/index.test.ts",
+    "test": "tsx --test test/unit/index.test.ts",
+    "test:coverage": "tsx --test --experimental-test-coverage test/unit/index.test.ts",
+    "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc --noEmit -p tsconfig.json"
   },

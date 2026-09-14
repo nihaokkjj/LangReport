@@ -6,7 +6,9 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "provision:production": "tsx src/provision-production.ts",
-    "test": "tsx --test --test-concurrency=1 src/auth.test.ts src/http-contracts.test.ts src/http-errors.test.ts src/data-assets.test.ts src/openapi.test.ts src/plugins.integration.test.ts src/message-generation.integration.test.ts",
+    "test": "tsx --test --test-concurrency=1 test/unit/auth.test.ts test/unit/http-contracts.test.ts test/unit/http-errors.test.ts test/unit/data-assets.test.ts test/unit/openapi.test.ts",
+    "test:coverage": "tsx --test --experimental-test-coverage --test-concurrency=1 test/unit/auth.test.ts test/unit/http-contracts.test.ts test/unit/http-errors.test.ts test/unit/data-assets.test.ts test/unit/openapi.test.ts",
+    "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc --noEmit -p tsconfig.json"
   },

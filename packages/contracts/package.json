@@ -8,8 +8,10 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
     "build": "tsc --noEmit -p tsconfig.json",
-    "test": "tsx --test src/http.test.ts src/model.test.ts"
+    "test": "tsx --test test/unit/http.test.ts test/unit/model.test.ts",
+    "test:coverage": "tsx --test --experimental-test-coverage test/unit/http.test.ts test/unit/model.test.ts"
   },
   "dependencies": {
     "zod": "4.5.4"

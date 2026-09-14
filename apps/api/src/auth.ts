@@ -81,7 +81,7 @@ function verifyJwt(token: string, secret: string, environment: AuthEnvironment):
     if (typeof payload.sub !== "string" || !payload.sub.trim()) return null;
     const expectedSignature = createHmac("sha256", secret).update(`${encodedHeader}.${encodedPayload}`).digest();
     const actualSignature = Buffer.from(encodedSignature, "base64url");
-    if (expectedSignature.length !== actualSignature.length || !timingSafeEqual(expectedSignature, actualSignature)) return null;
+    if (actualSignature.toString("base64url") !== encodedSignature || expectedSignature.length !== actualSignature.length || !timingSafeEqual(expectedSignature, actualSignature)) return null;
 
     const now = Math.floor(Date.now() / 1000);
     if (typeof payload.exp === "number" && now >= payload.exp) return null;

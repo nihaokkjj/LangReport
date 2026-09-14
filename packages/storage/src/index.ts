@@ -2,7 +2,9 @@ import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } fro
 import { config } from "dotenv";
 import { resolve } from "node:path";
 
-config({ path: resolve(process.cwd(), "../../.env") });
+if (process.env.LANGREPORT_OFFLINE_TEST !== "1") {
+  config({ path: resolve(process.cwd(), "../../.env") });
+}
 
 const bucket = process.env.S3_BUCKET ?? "langreport";
 const endpoint = process.env.S3_ENDPOINT ?? "http://localhost:9000";

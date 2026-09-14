@@ -4,7 +4,9 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { resolve } from "node:path";
 import * as schema from "./schema.js";
 
-config({ path: resolve(process.cwd(), "../../.env") });
+if (process.env.LANGREPORT_OFFLINE_TEST !== "1") {
+  config({ path: resolve(process.cwd(), "../../.env") });
+}
 
 const configuredDatabaseUrl = process.env.DATABASE_URL;
 

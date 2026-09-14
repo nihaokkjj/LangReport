@@ -7,8 +7,10 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
     "build": "tsc --noEmit -p tsconfig.json",
-    "test": "tsx --test src/index.test.ts"
+    "test": "tsx --test test/unit/index.test.ts",
+    "test:coverage": "tsx --test --experimental-test-coverage test/unit/index.test.ts"
   },
   "dependencies": {
     "@langreport/chart": "workspace:*",

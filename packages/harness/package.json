@@ -6,8 +6,10 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "tsx --test src/structured-model.test.ts",
-    "check:dependencies": "tsx --test --test-name-pattern=\"does not depend on LangReport application packages\" src/structured-model.test.ts",
+    "test": "tsx --test test/unit/structured-model.test.ts",
+    "test:coverage": "tsx --test --experimental-test-coverage test/unit/structured-model.test.ts",
+    "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "check:dependencies": "tsx --test --test-name-pattern=\"does not depend on LangReport application packages\" test/unit/structured-model.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc --noEmit -p tsconfig.json"
   },
