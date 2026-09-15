@@ -4,6 +4,8 @@ node_modules/
 *.tsbuildinfo
 dist/
 coverage/
+**/test-results/
+**/playwright-report/
 .turbo/
 drizzle/
 # Keep the Phase 3 database migrations versionable while preserving older local-only snapshots.

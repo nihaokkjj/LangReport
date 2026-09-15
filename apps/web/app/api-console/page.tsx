@@ -665,6 +665,7 @@ export default function ApiConsolePage() {
     setScenario({ ...initialScenarioState(), phase: "running" });
     setNotice(null);
     let projectId = "";
+    let conversationId = "";
     let assetId = "";
     let successJobId = "";
     try {
@@ -689,9 +690,17 @@ export default function ApiConsolePage() {
       updateScenarioStep("project", "passed", `HTTP ${projectsResult.status} · 已确认可访问`);
 
       updateScenarioStep("data", "running", "粘贴区域销售月度示例数据");
+      const conversationResult = await requestScenario(entries, "createConversation", { projectId }, {
+        title: "Loop 4 销售分析对话"
+      });
+      rememberScenarioRequest(conversationResult.requestId);
+      const conversation = isRecord(conversationResult.payload.conversation) ? conversationResult.payload.conversation : null;
+      if (!conversation || typeof conversation.id !== "string") throw new Error("Conversation 创建失败");
+      conversationId = conversation.id;
       const dataResult = await requestScenario(entries, "pasteDataAsset", { projectId }, {
         name: "loop4-sales.csv",
-        content: scenarioSalesCsv
+        content: scenarioSalesCsv,
+        conversationId
       });
       rememberScenarioRequest(dataResult.requestId);
       const asset = isRecord(dataResult.payload.asset) ? dataResult.payload.asset : null;
@@ -716,6 +725,7 @@ export default function ApiConsolePage() {
 
       const idempotencyKey = `api-console-loop4-${Date.now()}`;
       const generationInput = {
+        conversationId,
         dataAssetId: assetId,
         prompt: "按月份展示各区域销售额、同比变化和异常区域",
         renderer: "vega-lite",
@@ -805,12 +815,14 @@ export default function ApiConsolePage() {
       updateScenarioStep("failure", "running", "粘贴缺少数值字段的数据，验证 failed Job");
       const failureDataResult = await requestScenario(entries, "pasteDataAsset", { projectId }, {
         name: "loop4-failure.csv",
-        content: scenarioFailureCsv
+        content: scenarioFailureCsv,
+        conversationId
       });
       rememberScenarioRequest(failureDataResult.requestId);
       const failureAsset = isRecord(failureDataResult.payload.asset) ? failureDataResult.payload.asset : null;
       if (!failureAsset || typeof failureAsset.id !== "string") throw new Error("失败场景数据资产创建失败");
       const failureJobResult = await requestScenario(entries, "createGenerationJob", { projectId }, {
+        conversationId,
         dataAssetId: failureAsset.id,
         prompt: "验证缺少数值指标时生成任务应失败",
         renderer: "vega-lite",

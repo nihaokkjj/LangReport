@@ -5,7 +5,7 @@ import { flintSpecSchema, memoryContextSchema, pluginContextSchema, pluginUsageS
 import { createDerivedRevision, createInitialRevision } from "@langreport/chart";
 import { resolveRendererAdapter, FLINT_VERSION, RENDERER_VERSION } from "@langreport/flint-adapter";
 import { buildPluginSnapshot, PluginServiceError } from "@langreport/plugins";
-import { storageObjectKey } from "@langreport/storage";
+import { renderOutputObjectKey } from "@langreport/storage";
 
 const workerName = "render-worker";
 const pollIntervalMs = Number(process.env.RENDER_POLL_INTERVAL_MS ?? 1000);
@@ -141,12 +141,11 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
     const outputBase = {
       workspaceId: record.workspaceId,
       projectId: record.job.projectId,
-      assetId: record.job.dataAssetId,
-      kind: "output" as const
+      assetId: record.job.dataAssetId
     };
-    const vegaLiteKey = storageObjectKey({ ...outputBase, filename: `${jobId}.vega-lite.json` });
-    const svgKey = storageObjectKey({ ...outputBase, filename: `${jobId}.svg` });
-    const pngKey = storageObjectKey({ ...outputBase, filename: `${jobId}.png` });
+    const vegaLiteKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.vega-lite.json` });
+    const svgKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.svg` });
+    const pngKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.png` });
     const { putObject } = await import("@langreport/storage");
     await putObject({ key: vegaLiteKey, body: JSON.stringify(rendered.vegaLiteSpec), contentType: "application/json" });
     await putObject({ key: svgKey, body: rendered.svg, contentType: "image/svg+xml" });

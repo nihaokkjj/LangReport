@@ -53,11 +53,11 @@ export async function deleteObject(key: string): Promise<void> {
   await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
-export function storageObjectKey(input: {
+/** Render outputs are kept under the project asset for revision export lookup. */
+export function renderOutputObjectKey(input: {
   workspaceId: string;
   projectId: string;
   assetId: string;
-  kind: "source" | "normalized" | "output";
   filename: string;
 }): string {
   return [
@@ -67,7 +67,7 @@ export function storageObjectKey(input: {
     input.projectId,
     "data-assets",
     input.assetId,
-    input.kind,
+    "output",
     input.filename.replace(/[^a-zA-Z0-9._-]/g, "_")
   ].join("/");
 }

@@ -36,7 +36,7 @@ Proof: Markdown 差异检查、链接目标检查、工作树范围检查
 | 离线单元/组件测试 | 数据解析与 TransformPlan、Generation Cycle、生成上下文、领域状态与权限、contracts、Flint 渲染、Model Gateway、内置插件和 memory | [Data Engine 测试](../../packages/data-engine/test/unit/index.test.ts)、[Generation 测试](../../packages/generation/test/unit/index.test.ts)、[Domain 测试](../../packages/domain/test/unit/index.test.ts)、[Flint Adapter 测试](../../packages/flint-adapter/test/unit/index.test.ts)、[Model Gateway 测试](../../packages/model-gateway/test/unit/index.test.ts) |
 | API 组件测试 | 认证、HTTP 合同、错误映射、Data Asset、OpenAPI；通过 Fastify `app.inject` 运行 | [apps/api/test/unit/auth.test.ts](../../apps/api/test/unit/auth.test.ts)、[apps/api/test/unit/http-contracts.test.ts](../../apps/api/test/unit/http-contracts.test.ts)、[apps/api/test/unit/data-assets.test.ts](../../apps/api/test/unit/data-assets.test.ts) |
 | 集成测试 | 消息触发 Generation Job 的前置条件与幂等；插件安装、Binding、Theme、撤销/恢复与审计；Generation Worker 的数据库工作流 | [message-generation.integration.test.ts](../../apps/api/test/integration/message-generation.integration.test.ts)、[plugins.integration.test.ts](../../apps/api/test/integration/plugins.integration.test.ts)、[worker.integration.test.ts](../../apps/generation-worker/test/integration/worker.integration.test.ts) |
-| 浏览器 E2E | 无 Playwright 配置，也没有浏览器测试 | [apps/web/package.json](../../apps/web/package.json)没有测试脚本；仓库不存在 `playwright.config.*` |
+| 浏览器 E2E | Playwright Chromium 单 spec，桌面与 390px 移动视口；API 边界由测试内确定性路由夹具响应 | [apps/web/test/e2e/consulting-report.spec.ts](../../apps/web/test/e2e/consulting-report.spec.ts)、[apps/web/playwright.config.ts](../../apps/web/playwright.config.ts) |
 | 远端部署检查 | 有需要真实部署地址和认证信息的 API smoke/E2E 脚本，但没有浏览器行为、独立 canary 授权或调用费用门槛 | [phase5-production-smoke.mjs](../../scripts/phase5-production-smoke.mjs)、[phase5-production-e2e.mjs](../../scripts/phase5-production-e2e.mjs) |
 
 当前 Model Gateway 测试通过注入假的 `fetch` 验证供应商请求与错误归一化，仍属于离线测试；它不是一次真实供应商调用，见 [packages/model-gateway/test/unit/index.test.ts](../../packages/model-gateway/test/unit/index.test.ts)。
@@ -97,7 +97,7 @@ tests/canary/
 | --- | --- | --- |
 | `pnpm test` | PR 必跑的离线、确定性测试 | 无网络、无数据库、无对象存储、无真实凭据 |
 | `pnpm test:integration` | 使用专用 Postgres/MinIO 的集成测试 | 仅测试 Compose 资源 |
-| `pnpm test:e2e` | Playwright 确定性核心链路 | staging 的确定性模型路线，不调用真实供应商 |
+| `pnpm test:e2e` | Playwright 确定性核心链路 | 本地 Web harness 的确定性 API 路由，不调用真实模型或供应商 |
 | `pnpm test:canary` | 显式授权的真实供应商 canary | 受保护 staging Environment 和限额凭据 |
 | `pnpm test:coverage` | 离线测试覆盖率报告/门槛 | 无外部依赖 |
 
@@ -169,7 +169,7 @@ Playwright 首期只保留一个 spec，覆盖：
   → 导出固定 Chart Revision
 ```
 
-只运行 Chromium，覆盖桌面视口和 390px 移动视口；使用语义断言，截图仅在失败时保存，不使用像素快照，`workers=1`、`retries=0`。该链路使用确定性模型路线，不使用真实供应商。
+只运行 Chromium，覆盖桌面视口和 390px 移动视口；使用语义断言，截图仅在失败时保存，不使用像素快照，`workers=1`、`retries=0`。该链路使用测试内确定性 API 路由夹具，不启动真实模型或供应商。
 
 真实供应商 canary 使用 GitHub `staging-canary` Environment，禁止 fork 或普通 PR 获得 secret。每周一次并允许发布前手动运行；每次只用匿名合成数据创建一个 Generation Job，最多一次供应商请求，`maxOutputTokens=1024`，总 deadline 30 秒。月度费用上限为人民币 10 元；达到上限后停止计划任务并创建或更新告警 Issue。canary 不自动重试，不读取生产客户数据，不输出密钥、隐藏推理或供应商原始正文。
 
@@ -218,6 +218,7 @@ Playwright 首期只保留一个 spec，覆盖：
 
 - 先提交唯一的用户链路 spec，使其在缺少 E2E harness 时失败，再补齐最小 staging 测试入口。
 - 仅覆盖已约定的销售 CSV 到固定 Chart Revision 导出，不增加第二条业务链路、视觉像素回归或真实模型调用。
+- 验收完成：`pnpm test:e2e` 在 Chromium 桌面与 390px 移动视口各运行同一 spec；夹具拒绝未声明的外部请求。
 
 ### T6：受保护的 staging canary
 

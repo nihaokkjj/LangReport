@@ -8,7 +8,7 @@ import {
   routeContracts,
   routeSchema
 } from "../../src/http.js";
-import { createConversationMessageRequestSchema } from "../../src/index.js";
+import { createConversationMessageRequestSchema, pasteDataRequestSchema } from "../../src/index.js";
 
 const expectedRoutes = [
   "GET /health",
@@ -156,6 +156,11 @@ test("generation message contract carries the single-send inputs and allows prec
   assert.ok(contract?.responses[200]);
 });
 
+test("data uploads require a Conversation source", () => {
+  assert.throws(() => pasteDataRequestSchema.parse({ name: "sales.csv", content: "a,b\n1,2" }));
+  assert.deepEqual(pasteDataRequestSchema.parse({ name: "sales.csv", content: "a,b\n1,2", conversationId: "00000000-0000-4000-8000-000000000001" }).conversationId, "00000000-0000-4000-8000-000000000001");
+});
+
 test("OpenAPI document is generated from the route contracts", () => {
   const document = createOpenApiDocument({ serverUrl: "http://localhost:4000" });
 
@@ -186,12 +191,14 @@ test("OpenAPI document is generated from the route contracts", () => {
 
   const pasteOperation = document.paths["/api/v1/projects/{projectId}/data-assets/paste"]?.post as Record<string, any>;
   assert.equal(pasteOperation.requestBody.content["application/json"].schema.type, "object");
+  assert.ok(pasteOperation.requestBody.content["application/json"].schema.required.includes("conversationId"));
   assert.ok(pasteOperation.parameters.some((parameter: any) => parameter.name === "projectId" && parameter.in === "path" && parameter.required === true));
   assert.ok(pasteOperation.responses["400"].content["application/json"].schema.properties.error);
 
   const uploadOperation = document.paths["/api/v1/projects/{projectId}/data-assets/upload"]?.post as Record<string, any>;
   assert.ok(uploadOperation.requestBody.content["multipart/form-data"]);
   assert.equal(uploadOperation.requestBody.content["multipart/form-data"].schema.properties.file.format, "binary");
+  assert.deepEqual(uploadOperation.requestBody.content["multipart/form-data"].schema.required, ["file", "conversationId"]);
 
   for (const pathItem of Object.values(document.paths)) {
     for (const operation of Object.values(pathItem)) {

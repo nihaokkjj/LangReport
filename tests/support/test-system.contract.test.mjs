@@ -9,6 +9,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
 const testOwners = [
   "apps/api",
   "apps/generation-worker",
+  "apps/web",
   "packages/chart",
   "packages/contracts",
   "packages/data-engine",
@@ -91,7 +92,7 @@ test("the root exposes only explicit offline test commands and checks test TypeS
 test("all TypeScript tests live in an agreed package-owned directory", () => {
   const testFiles = normalizedRepositoryPaths((path) => path.endsWith(".test.ts"));
   assert.ok(testFiles.length > 0);
-  const allowed = /^(?:apps|packages)\/[^/]+\/test\/(?:unit|integration)\/.+\.test\.ts$/;
+  const allowed = /^(?:apps|packages)\/[^/]+\/test\/(?:unit|integration|e2e)\/.+\.test\.ts$/;
   assert.deepEqual(testFiles.filter((path) => !allowed.test(path)), []);
 });
 

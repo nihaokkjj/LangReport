@@ -9,6 +9,7 @@
     "test": "node scripts/test-offline.mjs",
     "test:coverage": "node scripts/test-offline.mjs --coverage",
     "test:integration": "node scripts/test-integration.mjs",
+    "test:e2e": "pnpm --filter @langreport/web test:e2e",
     "db:generate": "pnpm --filter @langreport/db db:generate",
     "db:migrate": "pnpm --filter @langreport/db db:migrate",
     "db:verify": "pnpm --filter @langreport/db db:verify",

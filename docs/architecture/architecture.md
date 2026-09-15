@@ -122,7 +122,7 @@ workspaces/{workspaceId}/projects/{projectId}/conversations/{conversationId}/use
 workspaces/{workspaceId}/projects/{projectId}/conversations/{conversationId}/user-data/uploads/{assetId}/snapshots/{snapshotId}.json
 ```
 
-`Data Asset.sourceConversationId` 只记录来源和隔离目录，不改变 Data Asset 仍归 Project 所有的关系；历史或项目级导入继续使用兼容路径。Snapshot 对象名包含 Snapshot ID，避免后续解析覆盖已被 Chart Revision 引用的输入。
+新建 Data Asset 必须绑定来源 Conversation；`sourceConversationId` 用于目录隔离和来源审计，但 Data Asset 的所有权仍归 Project。Snapshot 对象名包含 Snapshot ID，避免后续解析覆盖已被 Chart Revision 引用的输入。旧的项目级上传路径不再由应用生成或兼容读取，历史对象可以在部署时清理。
 
 第一阶段的模型读取链路仍由 Generation Worker 控制：Worker 根据 Generation Job 固化的 `snapshotId` 读取 `normalizedObjectKey`，校验快照内容后只向 Model Gateway 传递必要的字段画像、受限行数据和 Conversation 上下文投影。对象路径不会进入模型上下文，也不开放任意 `read_file`、`grep` 或 `glob`；若未来需要工具式文件阅读，必须另行实现带 Workspace/Project/Conversation 权限和路径白名单的受控工具。
 

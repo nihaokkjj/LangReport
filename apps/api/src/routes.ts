@@ -331,6 +331,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       const bytes = await part.toBuffer();
       if (part.file.truncated) return sendHttpError(reply, 413, "文件不能超过 50 MB", "PAYLOAD_TOO_LARGE");
       const sourceConversationId = multipartTextField(part.fields as Record<string, unknown>, "conversationId");
+      if (!sourceConversationId) throw new DataAssetError("上传数据必须指定 Conversation");
 
       const asset = await ingestDataAsset({
         projectId: request.params.projectId,
