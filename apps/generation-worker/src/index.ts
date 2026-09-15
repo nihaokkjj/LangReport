@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { GenerationCycle, validateCanonicalTextContextProjection, validateGenerationRevision } from "@langreport/generation";
 import { GenerationJobLeaseLostError, assertGenerationJobLease, claimGenerationJobLease, db, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, generationJobs, memoryExtractionJobs, projects, recoverExpiredGenerationJobLeases, startGenerationJobLeaseHeartbeat, updateGenerationJobUnderLease, workspaceModelCredentials, type GenerationJobLease, type GenerationJobStatus } from "@langreport/db";
 import { getObject } from "@langreport/storage";
-import type { ColumnProfile, DataRow } from "@langreport/data-engine";
 import { applyRevisionPatch } from "@langreport/chart";
 import { chartEditPatchSchema, flintSpecSchema, memoryContextSchema, modelRouteSnapshotSchema, pluginUsageSchema, themePresetSchema, type ModelRouteSnapshot, type TransformPlan, type ValidationRecord, type ValidationReport } from "@langreport/contracts";
 import { getMemoryContextForGeneration, processMemoryExtractionJob } from "@langreport/memory";
@@ -12,6 +11,7 @@ import { pluginContextSchema } from "@langreport/contracts";
 import { PluginServiceError, resolvePluginContextForWorkspace } from "@langreport/plugins";
 import { resolveThemePayload } from "@langreport/plugin-sdk";
 import { EvidenceGenerationWorkflow } from "./evidence-generation-workflow.js";
+import { loadFrozenSnapshot, SnapshotAccessError, type FrozenSnapshotInput } from "./snapshot-access.js";
 
 const workerName = "generation-worker";
 const pollIntervalMs = Number(process.env.GENERATION_POLL_INTERVAL_MS ?? 1000);
@@ -75,11 +75,33 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
       return;
     }
     await setStatus(jobId, lease, "profiling", { errorCode: null, errorMessage: null });
+
+    let frozenSnapshot: FrozenSnapshotInput;
+    try {
+      frozenSnapshot = await loadFrozenSnapshot({
+        job: {
+          projectId: job.job.projectId,
+          conversationId: job.job.conversationId,
+          dataAssetId: job.job.dataAssetId,
+          snapshotId: job.job.snapshotId
+        },
+        asset: job.asset,
+        snapshot: job.snapshot,
+        workspaceId: job.workspaceId,
+        readSnapshot: getObject
+      });
+    } catch (error) {
+      if (error instanceof SnapshotAccessError) {
+        await failJob(jobId, lease, error.code, error.message);
+        return;
+      }
+      throw error;
+    }
+
     const workflowResult = await new EvidenceGenerationWorkflow(workspaceApiKeyForGeneration).run({
       job: job.job,
-      snapshot: job.snapshot,
-      workspaceId: job.workspaceId,
-      readSnapshot: getObject
+      snapshot: frozenSnapshot,
+      workspaceId: job.workspaceId
     });
     if (workflowResult.status === "failed") {
       await failJob(jobId, lease, workflowResult.failure.code, workflowResult.failure.message);

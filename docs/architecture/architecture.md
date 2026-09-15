@@ -92,7 +92,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 1. API 创建 Generation Job，并记录用户原始意图、Project、Conversation、Analysis Brief、Data Snapshot 和 Visual Template 版本。
 2. API 的 Data 模块解析指定 Data Asset，生成 Data Snapshot 和字段画像；当前没有独立的 Data Worker 部署单元。
-3. Generation Worker 原子领取带 Worker Lease 和 Fencing Token 的 Job，且只读取并传递 Job 已固化的 Brief、Metric Definition、Data Snapshot、Memory、Conversation projection、Visual Template、Plugin Context、Model Route Snapshot 和 Execution Assembly；`GenerationCycle` 在内部构造 `PreparedModelContext`，按 `canonical_text_context` 交给 Model Gateway，不直接回放供应商私有历史字段或重新读取可变 Conversation。
+3. Generation Worker 原子领取带 Worker Lease 和 Fencing Token 的 Job。进入 `GenerationCycle` 前，Worker 通过 `Snapshot access module` 校验 `Generation Job → Data Snapshot → Data Asset → Project` 关系、来源 Conversation 和当前 Conversation-scoped canonical object key，再读取并验证快照 payload。该 module 只向 Workflow 返回 `rows`、`profiles` 以及 Snapshot/Asset 标识；原始 `Buffer`、JSON 解析细节和 object key 不跨 seam 泄漏。之后 Worker 只传递 Job 已固化的 Brief、Metric Definition、Data Snapshot、Memory、Conversation projection、Visual Template、Plugin Context、Model Route Snapshot 和 Execution Assembly；`GenerationCycle` 在内部构造 `PreparedModelContext`，按 `canonical_text_context` 交给 Model Gateway，不直接回放供应商私有历史字段或重新读取可变 Conversation。
 4. `GenerationCycle` 通过内部有限 `EvidenceGenerationGraph` 统一形成 `drafted`、`needs_clarification` 或 `failed` 结果；节点执行 TransformPlan、记录每一步输入/输出/空值处理/字段血缘，并确定性编译和校验 Flint Spec。Graph 不直接写数据库，业务提交仍由持有有效 Lease 的 Worker 完成。
 5. 系统根据通过计划校验的 TransformPlan 和固定 Visual Template 确定性编译 Flint Spec，并将结构、语义、数据字段和模板规则写入 Job 的 `planValidation`；渲染完成后将 Vega-Lite、SVG、PNG 产物检查写入独立的 `renderValidation`。
 6. 计划或渲染校验失败时最多执行两轮受控修复；模型能力降级、工具调用失败或协议不兼容时，结束当前 Cycle 并提示用户选择模型。用户补充澄清或选择新模型后创建新的 Generation Cycle，不在原 Job 上覆盖输入。
@@ -124,7 +124,7 @@ workspaces/{workspaceId}/projects/{projectId}/conversations/{conversationId}/use
 
 新建 Data Asset 必须绑定来源 Conversation；`sourceConversationId` 用于目录隔离和来源审计，但 Data Asset 的所有权仍归 Project。Snapshot 对象名包含 Snapshot ID，避免后续解析覆盖已被 Chart Revision 引用的输入。旧的项目级上传路径不再由应用生成或兼容读取，历史对象可以在部署时清理。
 
-第一阶段的模型读取链路仍由 Generation Worker 控制：Worker 根据 Generation Job 固化的 `snapshotId` 读取 `normalizedObjectKey`，校验快照内容后只向 Model Gateway 传递必要的字段画像、受限行数据和 Conversation 上下文投影。对象路径不会进入模型上下文，也不开放任意 `read_file`、`grep` 或 `glob`；若未来需要工具式文件阅读，必须另行实现带 Workspace/Project/Conversation 权限和路径白名单的受控工具。
+第一阶段的模型读取链路仍由 Generation Worker 控制：Worker 先通过 `Snapshot access module` 从 `workspaceId`、Project、来源 Conversation、Data Asset 和 Snapshot ID 重建 canonical `normalizedObjectKey`，拒绝旧项目级路径、关系不一致或缺失来源 Conversation 的记录，然后读取并验证 JSON payload。读取失败使用 `SNAPSHOT_RELATION_INVALID`、`SNAPSHOT_KEY_INVALID`、`SNAPSHOT_OBJECT_NOT_FOUND`、`SNAPSHOT_PAYLOAD_INVALID` 或 `SNAPSHOT_READ_FAILED` 等可审计错误码；只有经过验证的字段画像和行数据才会传给 Model Gateway。对象路径不会进入模型上下文，也不开放任意 `read_file`、`grep` 或 `glob`；若未来需要工具式文件阅读，必须另行实现带 Workspace/Project/Conversation 权限和路径白名单的受控工具。
 
 ### 任务队列
 

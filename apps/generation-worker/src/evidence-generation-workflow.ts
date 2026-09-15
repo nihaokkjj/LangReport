@@ -1,13 +1,12 @@
 import { GenerationCycle, validateCanonicalTextContextProjection, type GenerationCycleResult } from "@langreport/generation";
-import type { ColumnProfile, DataRow } from "@langreport/data-engine";
 import { executionAssemblySchema, memoryContextSchema, modelRouteSnapshotSchema, pluginContextSchema, themePresetSchema, type ModelRouteSnapshot, type TransformPlan } from "@langreport/contracts";
 import { getMemoryContextForGeneration } from "@langreport/memory";
 import { createBailianQwenGateway, ModelCredentialEncryptionError, ModelGatewayConfigurationError, resolveModelRouteSnapshot } from "@langreport/model-gateway";
 import { PluginServiceError, resolvePluginContextForWorkspace } from "@langreport/plugins";
 import { resolveThemePayload } from "@langreport/plugin-sdk";
+import type { FrozenSnapshotInput } from "./snapshot-access.js";
 
 type ClaimedJob = { id: string; projectId: string; conversationId: string; createdBy: string; attemptCount: number; prompt: string; memoryContext: unknown; conversationProjection: unknown; pluginContext: unknown; themeConfig: unknown; modelRoute: unknown; executionAssembly: unknown; theme: unknown; themeVersion: string; analysisBriefSnapshot: unknown; metricDefinitionSnapshot: unknown; transformPlan: unknown };
-type Snapshot = { normalizedObjectKey: string; schema: unknown };
 export type EvidenceGenerationWorkflowFailure = { code: string; message: string };
 export type EvidenceGenerationWorkflowResult = { status: "completed"; cycleResult: GenerationCycleResult; memoryContext: unknown } | { status: "failed"; failure: EvidenceGenerationWorkflowFailure };
 
@@ -15,11 +14,10 @@ export type EvidenceGenerationWorkflowResult = { status: "completed"; cycleResul
 export class EvidenceGenerationWorkflow {
   constructor(private readonly workspaceApiKeyForGeneration: (workspaceId: string) => Promise<string | undefined>) {}
 
-  async run(input: { job: ClaimedJob; snapshot: Snapshot; workspaceId: string; readSnapshot: (key: string) => Promise<Buffer> }): Promise<EvidenceGenerationWorkflowResult> {
+  async run(input: { job: ClaimedJob; snapshot: FrozenSnapshotInput; workspaceId: string }): Promise<EvidenceGenerationWorkflowResult> {
     try {
-      const payload = JSON.parse((await input.readSnapshot(input.snapshot.normalizedObjectKey)).toString("utf8")) as { rows: DataRow[] };
-      const profiles = input.snapshot.schema as ColumnProfile[];
-      if (!Array.isArray(payload.rows) || !Array.isArray(profiles)) throw new Error("Data Snapshot 内容无效");
+      const rows = input.snapshot.rows;
+      const profiles = input.snapshot.profiles;
       const parsedMemory = memoryContextSchema.safeParse(input.job.memoryContext);
       const memoryContext = parsedMemory.success ? parsedMemory.data : await getMemoryContextForGeneration({ projectId: input.job.projectId, conversationId: input.job.conversationId, userId: input.job.createdBy, prompt: input.job.prompt });
       let conversationProjection;
@@ -46,7 +44,7 @@ export class EvidenceGenerationWorkflow {
       const budget = { deadlineAt: Date.now() + 30_000, maxOutputTokens: 2_000 };
       return { status: "completed", memoryContext, cycleResult: await cycle.run({
         cycle: { workspaceId: input.workspaceId, projectId: input.job.projectId, generationJobId: input.job.id, invocationId: `${input.job.id}:${input.job.attemptCount + 1}`, routeSnapshotId: route.routeSnapshotId, budget },
-        prompt: input.job.prompt, profiles, rows: payload.rows, analysisBriefSnapshot: asRecord(input.job.analysisBriefSnapshot), metricDefinitionSnapshot: asRecord(input.job.metricDefinitionSnapshot), conversationProjection,
+        prompt: input.job.prompt, profiles, rows, analysisBriefSnapshot: asRecord(input.job.analysisBriefSnapshot), metricDefinitionSnapshot: asRecord(input.job.metricDefinitionSnapshot), conversationProjection,
         theme: themePresetSchema.parse(input.job.theme), themeVersion: input.job.themeVersion, themeConfig, pluginThemeRef, memoryContext, pluginManifests,
         plan: isTransformPlan(input.job.transformPlan) ? input.job.transformPlan : undefined, requestedProfile: route.profileId, effectiveProfile: route.profileId,
         requestedOptions: { ...route.requestedOptions, maxOutputTokens: budget.maxOutputTokens }, effectiveOptions: { ...route.effectiveOptions, maxOutputTokens: budget.maxOutputTokens }

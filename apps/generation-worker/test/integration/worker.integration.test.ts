@@ -28,7 +28,7 @@ import {
   revokePluginInstallation,
   setProjectPluginBinding
 } from "@langreport/plugins";
-import { deleteObject, getObject, putObject } from "@langreport/storage";
+import { conversationUploadObjectKey, deleteObject, getObject, putObject } from "@langreport/storage";
 import type { ColumnProfile, DataRow } from "@langreport/data-engine";
 
 const { processGenerationJob } = await import("../../src/index.js");
@@ -104,20 +104,40 @@ test("real generation and render workers persist plugin usage and historical sna
       },
       modelRoute: { routeSnapshotId: "worker-route-v1" }
     });
+    const [conversation] = await db.insert(conversations).values({ projectId: project.id, title: "Phase 5 Worker", createdBy: userId }).returning();
+    const assetId = randomUUID();
     const [asset] = await db.insert(dataAssets).values({
+      id: assetId,
       projectId: project.id,
+      sourceConversationId: conversation.id,
       name: "phase5-worker.csv",
       sourceType: "pasted",
       mimeType: "text/csv",
       sizeBytes: 1,
-      objectKey: `phase5-worker/${suffix}/source.csv`,
+      objectKey: conversationUploadObjectKey({
+        workspaceId: workspace.id,
+        projectId: project.id,
+        conversationId: conversation.id,
+        assetId,
+        kind: "source",
+        filename: "phase5-worker.csv"
+      }),
       status: "ready",
       createdBy: userId
     }).returning();
-    const normalizedObjectKey = `phase5-worker/${suffix}/snapshot.json`;
+    const snapshotId = randomUUID();
+    const normalizedObjectKey = conversationUploadObjectKey({
+      workspaceId: workspace.id,
+      projectId: project.id,
+      conversationId: conversation.id,
+      assetId: asset.id,
+      kind: "normalized",
+      filename: `${snapshotId}.json`
+    });
     objectKeys.push(normalizedObjectKey);
     await putObject({ key: normalizedObjectKey, body: JSON.stringify({ columns: profiles.map((profile) => profile.name), rows }), contentType: "application/json" });
     const [snapshot] = await db.insert(dataSnapshots).values({
+      id: snapshotId,
       assetId: asset.id,
       version: 1,
       rowCount: rows.length,
@@ -126,7 +146,6 @@ test("real generation and render workers persist plugin usage and historical sna
       preview: rows,
       normalizedObjectKey
     }).returning();
-    const [conversation] = await db.insert(conversations).values({ projectId: project.id, title: "Phase 5 Worker", createdBy: userId }).returning();
     const [job] = await db.insert(generationJobs).values({
       projectId: project.id,
       conversationId: conversation.id,
@@ -290,6 +309,67 @@ test("real generation and render workers persist plugin usage and historical sna
     assert.equal(failedJob.errorCode, "PLUGIN_CONTEXT_INVALID");
     const [failedRevision] = await db.select({ id: chartRevisions.id }).from(chartRevisions).where(eq(chartRevisions.generationJobId, invalidJob.id)).limit(1);
     assert.equal(failedRevision, undefined);
+
+    const foreignAssetId = randomUUID();
+    const foreignSnapshotId = randomUUID();
+    await db.insert(dataAssets).values({
+      id: foreignAssetId,
+      projectId: project.id,
+      sourceConversationId: conversation.id,
+      name: "foreign-snapshot.csv",
+      sourceType: "pasted",
+      mimeType: "text/csv",
+      sizeBytes: 1,
+      objectKey: conversationUploadObjectKey({
+        workspaceId: workspace.id,
+        projectId: project.id,
+        conversationId: conversation.id,
+        assetId: foreignAssetId,
+        kind: "source",
+        filename: "foreign-snapshot.csv"
+      }),
+      status: "ready",
+      createdBy: userId
+    });
+    await db.insert(dataSnapshots).values({
+      id: foreignSnapshotId,
+      assetId: foreignAssetId,
+      version: 1,
+      rowCount: rows.length,
+      columnCount: profiles.length,
+      schema: profiles,
+      preview: rows,
+      normalizedObjectKey: conversationUploadObjectKey({
+        workspaceId: workspace.id,
+        projectId: project.id,
+        conversationId: conversation.id,
+        assetId: foreignAssetId,
+        kind: "normalized",
+        filename: `${foreignSnapshotId}.json`
+      })
+    });
+    const [invalidSnapshotJob] = await db.insert(generationJobs).values({
+      projectId: project.id,
+      conversationId: conversation.id,
+      dataAssetId: asset.id,
+      snapshotId: foreignSnapshotId,
+      prompt: "快照关系校验测试",
+      idempotencyKey: `worker-invalid-snapshot-${suffix}`,
+      inputFingerprint: `worker-invalid-snapshot-fingerprint-${suffix}`,
+      renderer: "vega-lite",
+      rendererVersion: "vega-lite-svg-v1",
+      theme: "economist",
+      themeVersion: "v1",
+      themeSource: "request",
+      themeConfig: {},
+      analysisBriefSnapshot: {},
+      metricDefinitionSnapshot: {},
+      createdBy: userId
+    }).returning();
+    await processGenerationJob(invalidSnapshotJob.id);
+    const [invalidSnapshotResult] = await db.select().from(generationJobs).where(eq(generationJobs.id, invalidSnapshotJob.id)).limit(1);
+    assert.equal(invalidSnapshotResult.status, "failed");
+    assert.equal(invalidSnapshotResult.errorCode, "SNAPSHOT_RELATION_INVALID");
 
     await revokePluginInstallation({ workspaceId: workspace.id, installationId: installation.id, userId, reason: "worker integration" });
     const [historicalRevision] = await db.select({ pluginSnapshot: chartRevisions.pluginSnapshot }).from(chartRevisions).where(eq(chartRevisions.id, revision.id)).limit(1);
