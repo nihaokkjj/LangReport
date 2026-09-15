@@ -20,6 +20,7 @@ packages/db/drizzle/*
 !packages/db/drizzle/0014_generation_job_leases.sql
 !packages/db/drizzle/0015_bailian_model_route_snapshot.sql
 !packages/db/drizzle/0018_execution_assembly.sql
+!packages/db/drizzle/0019_nervous_pestilence.sql
 !packages/db/drizzle/meta/
 packages/db/drizzle/meta/*
 !packages/db/drizzle/meta/_journal.json
@@ -27,6 +28,7 @@ packages/db/drizzle/meta/*
 !packages/db/drizzle/meta/0003_snapshot.json
 !packages/db/drizzle/meta/0004_snapshot.json
 !packages/db/drizzle/meta/0018_snapshot.json
+!packages/db/drizzle/meta/0019_snapshot.json
 .env
 .env.*
 !.env.example

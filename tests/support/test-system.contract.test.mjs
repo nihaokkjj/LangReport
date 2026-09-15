@@ -141,6 +141,11 @@ test("the offline runner rejects configured external services before tests start
   assert.match(`${result.stdout}\n${result.stderr}`, /Offline test mode refuses configured external environment: DATABASE_URL/);
 });
 
+test("the offline runner checks the integration isolation contract without starting services", () => {
+  const runner = readFileSync(repositoryPath("scripts/test-offline.mjs"), "utf8");
+  assert.match(runner, /integration-environment\.contract\.test\.mjs/);
+});
+
 test("the PR workflow installs a frozen lockfile and runs the three offline gates", () => {
   const workflowPath = repositoryPath(".github/workflows/pr-offline.yml");
   assert.equal(existsSync(workflowPath), true);

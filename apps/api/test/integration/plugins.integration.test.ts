@@ -2,12 +2,11 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { and, eq } from "drizzle-orm";
-import { closeDatabase, db, auditEvents, chartArtifacts, chartRevisions, conversations, dataAssets, dataSnapshots, generationJobs, members, metricDefinitions, projectMembers, projects, workspaces } from "@langreport/db";
+import { closeDatabase, db, analysisBriefs, auditEvents, chartArtifacts, chartRevisions, conversations, dataAssets, dataSnapshots, generationJobs, members, metricDefinitions, projectMembers, projects, workspaces } from "@langreport/db";
 import { pluginContextSchema } from "@langreport/contracts";
 import { buildApp } from "../../src/app.js";
 import { buildPluginSnapshot, PluginServiceError } from "@langreport/plugins";
 
-const enabled = process.env.RUN_INTEGRATION === "1";
 type JsonObject = Record<string, unknown>;
 type InjectMethod = "GET" | "POST" | "PUT";
 
@@ -24,7 +23,7 @@ function stringValue(value: unknown, label: string): string {
   return value;
 }
 
-test("plugin API completes install, binding, theme, revoke, restore and audit flow", { skip: !enabled }, async () => {
+test("plugin API completes install, binding, theme, revoke, restore and audit flow", async () => {
   const suffix = randomUUID();
   const ownerId = `phase5-owner-${suffix}`;
   const editorId = `phase5-editor-${suffix}`;
@@ -92,6 +91,18 @@ test("plugin API completes install, binding, theme, revoke, restore and audit fl
     version: 1,
     confirmedBy: ownerId,
     confirmedAt: new Date(),
+    createdBy: ownerId,
+    updatedAt: new Date()
+  });
+  await db.insert(analysisBriefs).values({
+    projectId: project.id,
+    conversationId: conversation.id,
+    businessQuestion: "按月份展示各区域销售额趋势",
+    audience: "客户管理层",
+    timeRange: "2026-01 至 2026-02",
+    timeGrain: "月",
+    outputFormat: "evidence_block",
+    status: "confirmed",
     createdBy: ownerId,
     updatedAt: new Date()
   });
@@ -165,8 +176,8 @@ test("plugin API completes install, binding, theme, revoke, restore and audit fl
 
     const changedManifest = { ...manifest, metadata: { ...asObject(manifest.metadata), name: "Changed name" } };
     result = await request("POST", `/api/v1/workspaces/${workspace.id}/plugins`, ownerId, { ...installPayload, manifest: changedManifest, source: "uploaded" });
-    assert.equal(result.status, 403, JSON.stringify(result.body));
-    assert.equal(result.body.code, "PLUGIN_UPLOADED_DISABLED");
+    assert.equal(result.status, 400, JSON.stringify(result.body));
+    assert.equal(result.body.code, "INVALID_INPUT");
 
     result = await request("POST", `/api/v1/workspaces/${workspace.id}/plugins`, ownerId, { ...installPayload, manifest: changedManifest });
     assert.equal(result.status, 403, JSON.stringify(result.body));

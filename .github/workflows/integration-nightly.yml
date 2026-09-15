@@ -1,0 +1,64 @@
+name: Isolated integration gate
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  integration:
+    name: Isolated integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: docker compose -f infra/docker-compose.test.yml up -d --wait
+      - id: integration
+        run: pnpm test:integration
+      - name: Record integration green streak
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          INTEGRATION_OUTCOME: ${{ steps.integration.outcome }}
+        with:
+          script: |
+            const marker = "<!-- langreport-integration-green-streak -->";
+            const title = "LangReport integration gate streak";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const outcome = process.env.INTEGRATION_OUTCOME === "success" ? "success" : "failure";
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "all",
+              per_page: 100
+            });
+            const tracked = issues.find((issue) => !issue.pull_request && issue.body?.includes(marker));
+            if (tracked?.state === "closed" && outcome === "success") {
+              core.info("The integration streak Issue is manually closed; do not recreate it automatically.");
+              return;
+            }
+            const previous = tracked?.state === "open"
+              ? Number(/Current consecutive green runs: (\d+)/.exec(tracked.body ?? "")?.[1] ?? 0)
+              : 0;
+            const current = outcome === "success" ? previous + 1 : 0;
+            const body = `${marker}\n\n## Isolated integration gate\n\nCurrent consecutive green runs: ${current}\n\nLatest result: **${outcome}**\n\nLatest workflow run: ${runUrl}\n\nA failure resets the count to 0. After 10 consecutive green runs, a maintainer must manually close this Issue before making integration a required main check.`;
+            if (tracked?.state === "open") {
+              await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: tracked.number, title, body });
+            } else {
+              await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title, body });
+            }
+      - name: Remove isolated test services
+        if: always()
+        run: docker compose -f infra/docker-compose.test.yml down -v

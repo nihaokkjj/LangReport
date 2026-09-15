@@ -115,6 +115,17 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 存储原始上传文件、标准化快照、Vega-Lite JSON、PNG、SVG 和其他导出产物。对象路径必须包含 Workspace 和 Project 作用域，访问使用短时授权地址或 Worker 的受控凭据。
 
+由 Conversation 发起的上传使用以下可审计路径：
+
+```text
+workspaces/{workspaceId}/projects/{projectId}/conversations/{conversationId}/user-data/uploads/{assetId}/source/{filename}
+workspaces/{workspaceId}/projects/{projectId}/conversations/{conversationId}/user-data/uploads/{assetId}/snapshots/{snapshotId}.json
+```
+
+`Data Asset.sourceConversationId` 只记录来源和隔离目录，不改变 Data Asset 仍归 Project 所有的关系；历史或项目级导入继续使用兼容路径。Snapshot 对象名包含 Snapshot ID，避免后续解析覆盖已被 Chart Revision 引用的输入。
+
+第一阶段的模型读取链路仍由 Generation Worker 控制：Worker 根据 Generation Job 固化的 `snapshotId` 读取 `normalizedObjectKey`，校验快照内容后只向 Model Gateway 传递必要的字段画像、受限行数据和 Conversation 上下文投影。对象路径不会进入模型上下文，也不开放任意 `read_file`、`grep` 或 `glob`；若未来需要工具式文件阅读，必须另行实现带 Workspace/Project/Conversation 权限和路径白名单的受控工具。
+
 ### 任务队列
 
 初期使用 PostgreSQL-backed Queue 与事务性任务记录，保证业务写入和任务投递的一致性。Job 领取以数据库条件更新写入 owner、随机 lease token、单调 fencing token、到期时间和 heartbeat；只有这些字段仍匹配且未到期的 Worker 可以推进状态。超期的生成阶段 Job 回到 `queued`，超期的渲染阶段 Job 回到 `rendering` 以复用已通过的计划。任务量增长后可以替换为 Redis-backed Queue，但 Generation Job 的业务状态、租约和 fencing 仍由数据库保存。

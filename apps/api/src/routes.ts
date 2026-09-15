@@ -24,6 +24,14 @@ function assertProjectId(projectId: string): void {
   if (!projectIdPattern.test(projectId)) throw new DataAssetError("项目 ID 无效");
 }
 
+function multipartTextField(fields: Record<string, unknown>, name: string): string | undefined {
+  const raw = fields[name];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value || typeof value !== "object" || !("value" in value)) return undefined;
+  const text = (value as { value?: unknown }).value;
+  return typeof text === "string" && text.trim() ? text.trim() : undefined;
+}
+
 export async function registerRoutes(app: FastifyInstance, environment: NodeJS.ProcessEnv = process.env): Promise<void> {
   await registerChartRoutes(app);
 
@@ -322,9 +330,11 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       if (!part) return sendHttpError(reply, 400, "请上传文件", "INVALID_INPUT");
       const bytes = await part.toBuffer();
       if (part.file.truncated) return sendHttpError(reply, 413, "文件不能超过 50 MB", "PAYLOAD_TOO_LARGE");
+      const sourceConversationId = multipartTextField(part.fields as Record<string, unknown>, "conversationId");
 
       const asset = await ingestDataAsset({
         projectId: request.params.projectId,
+        sourceConversationId,
         createdBy: userIdFromRequest(request),
         name: part.filename,
         sourceType: inferSourceType(part.filename, part.mimetype),
@@ -344,6 +354,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       const body = pasteDataRequestSchema.parse(request.body);
       const asset = await ingestDataAsset({
         projectId: request.params.projectId,
+        sourceConversationId: body.conversationId,
         createdBy: userIdFromRequest(request),
         name: body.name,
         sourceType: "pasted",

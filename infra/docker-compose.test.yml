@@ -1,0 +1,36 @@
+name: langreport-test
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "54330:5432"
+    environment:
+      POSTGRES_USER: langreport_test
+      POSTGRES_PASSWORD: langreport_test
+      POSTGRES_DB: langreport_integration_test
+    volumes:
+      - langreport-test-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langreport_test -d langreport_integration_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    environment:
+      MINIO_ROOT_USER: langreport_test
+      MINIO_ROOT_PASSWORD: langreport-test-secret
+    volumes:
+      - langreport-test-minio:/data
+
+volumes:
+  langreport-test-postgres:
+    name: langreport-test-postgres
+  langreport-test-minio:
+    name: langreport-test-minio

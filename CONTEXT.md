@@ -24,7 +24,7 @@ _Avoid_: Prompt、Task、Chat Request
 
 ## 数据、口径与生成
 
-**Data Asset**：用户导入到 Project 中的原始文件或表格数据。
+**Data Asset**：用户导入到 Project 中的原始文件或表格数据，可记录其来源 Conversation。
 _Avoid_: Dataset、Data Source、Upload
 
 **Data Snapshot**：从 Data Asset 解析出的不可变数据版本，是一次 Generation Cycle 实际使用的数据输入。

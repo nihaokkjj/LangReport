@@ -2,9 +2,18 @@ import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } fro
 import { config } from "dotenv";
 import { resolve } from "node:path";
 
-if (process.env.LANGREPORT_OFFLINE_TEST !== "1") {
+function assertIsolatedIntegrationStorage(): void {
+  if (process.env.LANGREPORT_INTEGRATION_TEST !== "1") return;
+  if (process.env.APP_ENV !== "test") throw new Error("Integration storage requires APP_ENV=test");
+  if (process.env.S3_ENDPOINT !== "http://127.0.0.1:9002") throw new Error("Integration storage must use the test Compose MinIO endpoint");
+  if (!process.env.S3_BUCKET?.startsWith("langreport-test-")) throw new Error("Integration storage bucket must start with langreport-test-");
+}
+
+if (process.env.LANGREPORT_OFFLINE_TEST !== "1" && process.env.LANGREPORT_INTEGRATION_TEST !== "1") {
   config({ path: resolve(process.cwd(), "../../.env") });
 }
+
+assertIsolatedIntegrationStorage();
 
 const bucket = process.env.S3_BUCKET ?? "langreport";
 const endpoint = process.env.S3_ENDPOINT ?? "http://localhost:9000";
@@ -24,6 +33,7 @@ export async function putObject(input: {
   body: Buffer | string;
   contentType: string;
 }): Promise<void> {
+  assertIsolatedIntegrationStorage();
   await client.send(new PutObjectCommand({
     Bucket: bucket,
     Key: input.key,
@@ -39,6 +49,7 @@ export async function getObject(key: string): Promise<Buffer> {
 }
 
 export async function deleteObject(key: string): Promise<void> {
+  assertIsolatedIntegrationStorage();
   await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
@@ -57,6 +68,30 @@ export function storageObjectKey(input: {
     "data-assets",
     input.assetId,
     input.kind,
+    input.filename.replace(/[^a-zA-Z0-9._-]/g, "_")
+  ].join("/");
+}
+
+/** Keep uploads discoverable by their originating Conversation. */
+export function conversationUploadObjectKey(input: {
+  workspaceId: string;
+  projectId: string;
+  conversationId: string;
+  assetId: string;
+  kind: "source" | "normalized";
+  filename: string;
+}): string {
+  return [
+    "workspaces",
+    input.workspaceId,
+    "projects",
+    input.projectId,
+    "conversations",
+    input.conversationId,
+    "user-data",
+    "uploads",
+    input.assetId,
+    input.kind === "normalized" ? "snapshots" : "source",
     input.filename.replace(/[^a-zA-Z0-9._-]/g, "_")
   ].join("/");
 }

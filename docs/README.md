@@ -25,3 +25,4 @@
 - [领域模型](./architecture/domain-model.md)
 - [测试系统搭建计划](./testing/testing-system-plan.md)
 - [T3 核心分支覆盖基线](./testing/coverage-baselines.md)
+- [T4 隔离集成测试环境](./testing/integration-environment.md)

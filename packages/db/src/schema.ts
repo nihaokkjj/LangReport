@@ -95,6 +95,7 @@ export const projectMembers = pgTable("project_members", {
 export const dataAssets = pgTable("data_assets", {
   id: uuid("id").defaultRandom().primaryKey(),
   projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  sourceConversationId: uuid("source_conversation_id").references(() => conversations.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   sourceType: dataAssetSourceType("source_type").notNull(),
   mimeType: text("mime_type").notNull(),
@@ -106,6 +107,7 @@ export const dataAssets = pgTable("data_assets", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => [
   index("data_assets_project_idx").on(table.projectId),
+  index("data_assets_source_conversation_idx").on(table.sourceConversationId),
   index("data_assets_status_idx").on(table.status)
 ]);
 

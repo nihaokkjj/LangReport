@@ -8,6 +8,7 @@
     "typecheck": "pnpm -r typecheck && pnpm -r --if-present run test:typecheck",
     "test": "node scripts/test-offline.mjs",
     "test:coverage": "node scripts/test-offline.mjs --coverage",
+    "test:integration": "node scripts/test-integration.mjs",
     "db:generate": "pnpm --filter @langreport/db db:generate",
     "db:migrate": "pnpm --filter @langreport/db db:migrate",
     "db:verify": "pnpm --filter @langreport/db db:verify",

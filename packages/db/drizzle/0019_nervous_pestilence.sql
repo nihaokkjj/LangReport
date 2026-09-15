@@ -1,0 +1,3 @@
+ALTER TABLE "data_assets" ADD COLUMN "source_conversation_id" uuid;--> statement-breakpoint
+ALTER TABLE "data_assets" ADD CONSTRAINT "data_assets_source_conversation_id_conversations_id_fk" FOREIGN KEY ("source_conversation_id") REFERENCES "public"."conversations"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "data_assets_source_conversation_idx" ON "data_assets" USING btree ("source_conversation_id");

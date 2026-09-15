@@ -1,6 +1,6 @@
 {
-  "id": "92b457ca-ff90-4ec8-a9da-5942bbabf445",
-  "prevId": "6180902b-23c1-442e-a829-fb9aa7bcd898",
+  "id": "40aaf0af-0113-4fd8-9739-7379b69d87a5",
+  "prevId": "92b457ca-ff90-4ec8-a9da-5942bbabf445",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1517,6 +1517,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "source_conversation_id": {
+          "name": "source_conversation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "name": {
           "name": "name",
           "type": "text",
@@ -1592,6 +1598,21 @@
           "method": "btree",
           "with": {}
         },
+        "data_assets_source_conversation_idx": {
+          "name": "data_assets_source_conversation_idx",
+          "columns": [
+            {
+              "expression": "source_conversation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "data_assets_status_idx": {
           "name": "data_assets_status_idx",
           "columns": [
@@ -1620,6 +1641,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "data_assets_source_conversation_id_conversations_id_fk": {
+          "name": "data_assets_source_conversation_id_conversations_id_fk",
+          "tableFrom": "data_assets",
+          "tableTo": "conversations",
+          "columnsFrom": [
+            "source_conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { toPublicDataAsset } from "../../src/data-assets.js";
+import { conversationUploadObjectKey } from "@langreport/storage";
 
 test("public data asset DTO omits storage object keys", () => {
   const asset = {
     id: "asset-1",
     projectId: "project-1",
+    sourceConversationId: null,
     name: "sales.csv",
     sourceType: "csv" as const,
     mimeType: "text/csv",
@@ -32,4 +34,18 @@ test("public data asset DTO omits storage object keys", () => {
   assert.equal("objectKey" in result, false);
   assert.equal("normalizedObjectKey" in (result.latestSnapshot ?? {}), false);
   assert.equal(result.latestSnapshot?.id, "snapshot-1");
+});
+
+test("conversation uploads use an isolated, snapshot-addressable object path", () => {
+  assert.equal(
+    conversationUploadObjectKey({
+      workspaceId: "workspace-1",
+      projectId: "project-1",
+      conversationId: "conversation-1",
+      assetId: "asset-1",
+      kind: "normalized",
+      filename: "snapshot-1.json"
+    }),
+    "workspaces/workspace-1/projects/project-1/conversations/conversation-1/user-data/uploads/asset-1/snapshots/snapshot-1.json"
+  );
 });

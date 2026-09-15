@@ -31,12 +31,10 @@ import {
 import { deleteObject, getObject, putObject } from "@langreport/storage";
 import type { ColumnProfile, DataRow } from "@langreport/data-engine";
 
-const enabled = process.env.RUN_WORKER_INTEGRATION === "1";
-process.env.LANGREPORT_WORKER_TEST = "1";
 const { processGenerationJob } = await import("../../src/index.js");
 const { processRenderJob } = await import("../../../render-worker/src/index.js");
 
-test("real generation and render workers persist plugin usage and historical snapshot", { skip: !enabled }, async () => {
+test("real generation and render workers persist plugin usage and historical snapshot", async () => {
   const suffix = randomUUID();
   const userId = `phase5-worker-${suffix}`;
   let workspaceId: string | undefined;
@@ -59,7 +57,7 @@ test("real generation and render workers persist plugin usage and historical sna
       workspaceId: workspace.id,
       userId,
       manifest: catalogEntry.manifest,
-      source: "uploaded",
+      source: "builtin",
       idempotencyKey: `worker-install-${suffix}`
     });
     const installation = installationResult.installation;

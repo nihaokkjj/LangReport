@@ -477,7 +477,8 @@ export const createProjectRequestSchema = z.object({
 
 export const pasteDataRequestSchema = z.object({
   name: z.string().trim().min(1).max(120).default("pasted-data.csv"),
-  content: z.string().min(1).max(50 * 1024 * 1024)
+  content: z.string().min(1).max(50 * 1024 * 1024),
+  conversationId: z.string().uuid().optional()
 });
 
 export type TransformPlan = z.infer<typeof transformPlanSchema>;

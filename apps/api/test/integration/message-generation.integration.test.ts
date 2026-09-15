@@ -18,14 +18,13 @@ import {
 } from "@langreport/db";
 import { buildApp } from "../../src/app.js";
 
-const enabled = process.env.RUN_INTEGRATION === "1";
 type JsonObject = Record<string, unknown>;
 
 function asObject(value: unknown): JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : {};
 }
 
-test("message-triggered generation is single-write, idempotent and explains missing prerequisites", { skip: !enabled }, async () => {
+test("message-triggered generation is single-write, idempotent and explains missing prerequisites", async () => {
   const suffix = randomUUID();
   const userId = `phase1-message-${suffix}`;
   const [workspace] = await db.insert(workspaces).values({ name: `Phase 1 message ${suffix}` }).returning();

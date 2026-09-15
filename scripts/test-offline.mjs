@@ -53,8 +53,8 @@ function run(command, args) {
 }
 
 const nodeTestArgs = coverage
-  ? ["--experimental-test-coverage", "--test", "tests/support/test-system.contract.test.mjs"]
-  : ["--test", "tests/support/test-system.contract.test.mjs"];
+  ? ["--experimental-test-coverage", "--test", "tests/support/test-system.contract.test.mjs", "tests/support/integration-environment.contract.test.mjs"]
+  : ["--test", "tests/support/test-system.contract.test.mjs", "tests/support/integration-environment.contract.test.mjs"];
 const contractStatus = run(process.execPath, nodeTestArgs);
 if (contractStatus !== 0) process.exit(contractStatus);
 

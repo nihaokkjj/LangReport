@@ -1,9 +1,10 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   dataAssetSourceType,
   dataAssets,
   dataSnapshots,
   db,
+  conversations,
   projects
 } from "@langreport/db";
 import {
@@ -11,9 +12,10 @@ import {
   parseData,
   type DataSourceType
 } from "@langreport/data-engine";
-import { putObject, storageObjectKey } from "@langreport/storage";
+import { conversationUploadObjectKey, putObject, storageObjectKey } from "@langreport/storage";
 
 const MAX_DATA_BYTES = 50 * 1024 * 1024;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export class DataAssetError extends Error {
   constructor(message: string) {
@@ -38,6 +40,7 @@ export function toPublicDataAsset(
 
 export type IngestDataAssetInput = {
   projectId: string;
+  sourceConversationId?: string;
   createdBy: string;
   name: string;
   sourceType: DataSourceType;
@@ -58,26 +61,59 @@ export async function ingestDataAsset(input: IngestDataAssetInput) {
 
   if (!project) throw new DataAssetError("项目不存在");
 
+  if (input.sourceConversationId) {
+    if (!UUID_PATTERN.test(input.sourceConversationId)) throw new DataAssetError("来源对话 ID 无效");
+    const [conversation] = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(and(
+        eq(conversations.id, input.sourceConversationId),
+        eq(conversations.projectId, input.projectId)
+      ))
+      .limit(1);
+    if (!conversation) throw new DataAssetError("数据来源对话不属于当前项目");
+  }
+
   const assetId = crypto.randomUUID();
+  const snapshotId = crypto.randomUUID();
   const safeName = input.name.trim().replace(/[^a-zA-Z0-9._\-\u4e00-\u9fff]/g, "_") || "data.csv";
-  const sourceObjectKey = storageObjectKey({
-    workspaceId: project.workspaceId,
-    projectId: input.projectId,
-    assetId,
-    kind: "source",
-    filename: safeName
-  });
-  const normalizedObjectKey = storageObjectKey({
-    workspaceId: project.workspaceId,
-    projectId: input.projectId,
-    assetId,
-    kind: "normalized",
-    filename: "snapshot.json"
-  });
+  const sourceObjectKey = input.sourceConversationId
+    ? conversationUploadObjectKey({
+      workspaceId: project.workspaceId,
+      projectId: input.projectId,
+      conversationId: input.sourceConversationId,
+      assetId,
+      kind: "source",
+      filename: safeName
+    })
+    : storageObjectKey({
+      workspaceId: project.workspaceId,
+      projectId: input.projectId,
+      assetId,
+      kind: "source",
+      filename: safeName
+    });
+  const normalizedObjectKey = input.sourceConversationId
+    ? conversationUploadObjectKey({
+      workspaceId: project.workspaceId,
+      projectId: input.projectId,
+      conversationId: input.sourceConversationId,
+      assetId,
+      kind: "normalized",
+      filename: `${snapshotId}.json`
+    })
+    : storageObjectKey({
+      workspaceId: project.workspaceId,
+      projectId: input.projectId,
+      assetId,
+      kind: "normalized",
+      filename: `${snapshotId}.json`
+    });
 
   await db.insert(dataAssets).values({
     id: assetId,
     projectId: input.projectId,
+    sourceConversationId: input.sourceConversationId ?? null,
     name: input.name.trim() || safeName,
     sourceType: input.sourceType as typeof dataAssetSourceType.enumValues[number],
     mimeType: input.mimeType || "application/octet-stream",
@@ -111,7 +147,7 @@ export async function ingestDataAsset(input: IngestDataAssetInput) {
     const version = (latestSnapshot?.version ?? 0) + 1;
 
     await db.insert(dataSnapshots).values({
-      id: crypto.randomUUID(),
+      id: snapshotId,
       assetId,
       version,
       rowCount: parsed.rows.length,
