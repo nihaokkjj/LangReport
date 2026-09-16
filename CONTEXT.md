@@ -2,21 +2,21 @@
 
 LangReport 第一阶段服务“咨询项目报告”：把客户提供的数据和分析问题整理成可追溯、可审核、符合项目视觉规范的图表证据模块。本文档只定义业务语言；产品规则、状态机和技术实现记录在 `docs/` 中。
 
-## Workspace 与项目
+## 用户、Workspace 与项目
 
-**Workspace**：用户、项目、数据、插件和组织级记忆的隔离边界，也是成员协作和资源配额的边界。
+**Workspace**：系统内部的技术隔离边界，承载用户的项目、数据、插件和私有记忆。第一阶段为每个认证用户自动维护一个私有 Workspace；用户不选择、不切换也不管理 Workspace，产品界面直接从用户进入 Project。
 _Avoid_: Team、Organization、Account、Tenant
 
-**Member**：属于 Workspace 的用户，以及该用户在 Workspace 中的角色。
+**Member**：系统用于兼容授权和数据迁移的 Workspace 用户记录，以及该用户在 Workspace 中的角色；第一阶段不提供用户管理 Workspace 成员的产品能力。
 _Avoid_: Collaborator、Participant
 
-**Project**：围绕一个长期业务主题组织数据、会话、指标口径、视觉规范和图表产物的工作空间。第一阶段的 Project 默认是一个咨询客户项目。
+**Project**：用户直接管理的、围绕一个长期业务主题组织数据、会话、指标口径、视觉规范和图表产物的业务项目。持久化上 Project 仍归属于内部 Workspace；第一阶段默认每个用户只能访问自己的 Project。
 _Avoid_: Report、Dashboard、Workspace
 
 **Consulting Project**：以客户问题和客户交付物为目标的 Project，包含分析范围、数据证据、审核过程和最终可交付版本。
 _Avoid_: Generic Workspace、Analysis Session
 
-**Project Role**：Member 在单个 Project 中拥有的 Editor、Reviewer 或 Viewer 权限。
+**Project Role**：用户在单个 Project 中拥有的 Editor、Reviewer 或 Viewer 权限。角色模型保留用于项目授权和后续协作扩展；第一阶段不提供 Workspace 成员管理入口。
 _Avoid_: Permission、Access Level
 
 **Analysis Brief**：对一次咨询分析的范围约束，至少说明业务问题、目标受众、时间范围、指标要求和期望交付形式。Brief 可以在 Conversation 中逐步澄清，但确认后的内容才是生成依据。
@@ -68,7 +68,7 @@ _Avoid_: Long-term Memory、Project Memory
 **Project Memory**：经用户确认后，对单个 Project 持久有效的指标定义、数据口径、业务规则或偏好。
 _Avoid_: Project Notes、Chat History
 
-**Workspace Memory**：经授权后，对 Workspace 内多个 Project 共享的组织规范、术语和模板偏好。
+**Workspace Memory**：经用户确认后，对该用户私有 Workspace 内多个 Project 共享的规范、术语和模板偏好；第一阶段不跨用户共享。
 _Avoid_: Team Memory、Global Memory
 
 **Memory Candidate**：模型从 Conversation 中提取、等待用户确认是否写入 Project Memory 或 Workspace Memory 的候选事实。
@@ -91,7 +91,7 @@ _Avoid_: Project Approval、Publish
 **Generation Job**：承载 Generation Cycle 的可观察执行单元，记录数据画像、计划、变换、规范生成、校验和渲染状态。
 _Avoid_: Request、Chat Response
 
-**Workspace Model Credential**：由 Workspace Owner 或 Admin 通过受控入口配置、以加密形式保存的供应商 API Key。它只在受信任的 Worker 进程内短暂解密用于实际调用；不属于 Generation Job、Model Route Snapshot 或审计正文。
+**Workspace Model Credential**：代表当前用户私有模型凭据的内部存储记录，由受控入口配置、以加密形式保存供应商 API Key。它只在受信任的 Worker 进程内短暂解密用于实际调用；不属于 Generation Job、Model Route Snapshot 或审计正文。
 _Avoid_: Project API Key、Browser Secret、Model Route
 
 **Model Route Snapshot**：在 Generation Job 创建时冻结的、无密钥的模型执行选择，包含 Profile、模型标识、协议、端点、结构化输出方式、输出合同哈希和生效参数。它保证排队任务不会因运行环境后来改变而静默改用另一条模型路线。

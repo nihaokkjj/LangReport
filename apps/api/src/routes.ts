@@ -3,7 +3,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { acceptMemoryCandidateRequestSchema, chartGenerationRequestSchema, createAnalysisBriefRequestSchema, createConversationMessageRequestSchema, createConversationRequestSchema, createMetricDefinitionRequestSchema, createProjectRequestSchema, executionAssemblySchema, memoryDeleteRequestSchema, pasteDataRequestSchema, pluginEnableRequestSchema, rejectMemoryCandidateRequestSchema, updateAnalysisBriefRequestSchema, updateWorkspaceModelCredentialRequestSchema, type ModelRouteSnapshot } from "@langreport/contracts";
 import { assertChartAction, ChartServiceError, getProjectAccess, getProjectTheme, getRevision } from "@langreport/chart";
-import { analysisBriefs, auditEvents, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, db, evidenceBlocks, generationJobs, members, metricDefinitions, projectMembers, projects, workspaces, workspaceModelCredentials } from "@langreport/db";
+import { analysisBriefs, auditEvents, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, db, evidenceBlocks, generationJobs, members, metricDefinitions, projectMembers, projects, workspaces, workspaceModelCredentials, withAdvisoryLock } from "@langreport/db";
 import { getObject } from "@langreport/storage";
 import { MemoryServiceError, acceptMemoryCandidate, createMemoryExtractionJob, deleteMemory, getConversationMemory, getMemoryContextForGeneration, listMemoryCandidates, listProjectMemory, listWorkspaceMemory, rejectMemoryCandidate, updateConversationMemory } from "@langreport/memory";
 import { projectConversationToCanonicalTextContext } from "@langreport/generation";
@@ -38,29 +38,8 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
   app.post("/api/v1/dev/bootstrap", async (request, reply) => {
     if (!isDevBootstrapAllowed(environment)) return sendHttpError(reply, 404, "资源不存在", "NOT_FOUND");
     const userId = userIdFromRequest(request);
-    const workspaceName = "LangReport Local";
     const projectName = "销售分析 Demo";
-
-    let [workspace] = await db
-      .select()
-      .from(workspaces)
-      .where(eq(workspaces.name, workspaceName))
-      .limit(1);
-
-    if (!workspace) {
-      [workspace] = await db.insert(workspaces).values({ name: workspaceName }).returning();
-      await db.insert(members).values({
-        workspaceId: workspace.id,
-        userId,
-        role: "owner"
-      });
-    } else {
-      await db.insert(members).values({
-        workspaceId: workspace.id,
-        userId,
-        role: "member"
-      }).onConflictDoNothing();
-    }
+    const workspace = await ensurePersonalWorkspace(userId);
 
     let [project] = await db
       .select()
@@ -88,6 +67,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
   app.get("/api/v1/projects", async (request, reply) => {
     try {
       const userId = userIdFromRequest(request);
+      const personalWorkspace = await ensurePersonalWorkspace(userId);
       const rows = await db.select({
         project: projects,
         workspace: { id: workspaces.id, name: workspaces.name, createdAt: workspaces.createdAt },
@@ -98,8 +78,10 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
         .innerJoin(workspaces, eq(workspaces.id, projects.workspaceId))
         .where(eq(members.userId, userId))
         .orderBy(desc(projects.createdAt));
+      const [membership] = rows.length === 0 ? await db.select({ role: members.role }).from(members)
+        .where(and(eq(members.workspaceId, personalWorkspace.id), eq(members.userId, userId))).limit(1) : [];
       return reply.send({
-        workspace: rows[0] ? { ...rows[0].workspace, role: rows[0].workspaceRole } : null,
+        workspace: rows[0] ? { ...rows[0].workspace, role: rows[0].workspaceRole } : { id: personalWorkspace.id, name: personalWorkspace.name, createdAt: personalWorkspace.createdAt, role: membership?.role ?? "owner" },
         projects: rows.map((row) => row.project)
       });
     } catch (error) {
@@ -111,25 +93,24 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
     try {
       const body = createProjectRequestSchema.parse(request.body);
       const userId = userIdFromRequest(request);
-      const [membership] = await db.select().from(members).where(eq(members.userId, userId)).orderBy(asc(members.createdAt)).limit(1);
-      if (!membership) throw new DataAssetError("没有可用的 Workspace");
+      const workspace = await ensurePersonalWorkspace(userId);
       const slugBase = slugify(body.name);
       let slug = slugBase;
       let suffix = 2;
       while (true) {
         const [existing] = await db.select({ id: projects.id }).from(projects)
-          .where(and(eq(projects.workspaceId, membership.workspaceId), eq(projects.slug, slug))).limit(1);
+          .where(and(eq(projects.workspaceId, workspace.id), eq(projects.slug, slug))).limit(1);
         if (!existing) break;
         slug = `${slugBase}-${suffix}`;
         suffix += 1;
       }
       const [project] = await db.insert(projects).values({
-        workspaceId: membership.workspaceId,
+        workspaceId: workspace.id,
         name: body.name,
         slug
       }).returning();
       await db.insert(projectMembers).values({ projectId: project.id, userId, role: "editor" });
-      return reply.code(201).send({ project, workspaceId: membership.workspaceId });
+      return reply.code(201).send({ project, workspaceId: workspace.id });
     } catch (error) {
       return sendDataError(reply, error);
     }
@@ -1216,6 +1197,42 @@ async function listConversationMessagesForProjection(conversationId: string, pro
 
 async function assertProjectAccess(projectId: string, userId: string): Promise<void> {
   await getProjectAccess(projectId, userId);
+}
+
+/**
+ * Workspace remains an internal tenancy boundary, but it is provisioned
+ * privately for the authenticated user. The user never chooses or manages it.
+ */
+async function ensurePersonalWorkspace(userId: string): Promise<typeof workspaces.$inferSelect> {
+  const existing = await findWorkspaceForUser(userId);
+  if (existing) return existing;
+
+  const created = await withAdvisoryLock(`langreport:personal-workspace:${userId}`, async () => {
+    const concurrent = await findWorkspaceForUser(userId);
+    if (concurrent) return concurrent;
+
+    return db.transaction(async (transaction) => {
+      const [workspace] = await transaction.insert(workspaces).values({ name: "LangReport Personal" }).returning();
+      if (!workspace) throw new DataAssetError("个人项目空间初始化失败");
+      await transaction.insert(members).values({ workspaceId: workspace.id, userId, role: "owner" });
+      return workspace;
+    });
+  });
+
+  if (created) return created;
+  const retried = await findWorkspaceForUser(userId);
+  if (retried) return retried;
+  throw new DataAssetError("个人项目空间正在初始化，请稍后重试");
+}
+
+async function findWorkspaceForUser(userId: string): Promise<typeof workspaces.$inferSelect | undefined> {
+  const [record] = await db.select({ workspace: workspaces })
+    .from(workspaces)
+    .innerJoin(members, eq(members.workspaceId, workspaces.id))
+    .where(eq(members.userId, userId))
+    .orderBy(asc(members.createdAt))
+    .limit(1);
+  return record?.workspace;
 }
 
 async function assertWorkspaceCredentialManager(workspaceId: string, userId: string): Promise<void> {

@@ -4,13 +4,15 @@
 
 ### Workspace
 
-Workspace 是多租户隔离边界，拥有 Member、Project、Workspace Memory、Workspace Theme、Plugin 和使用配额。
+Workspace 是系统内部的技术隔离边界，拥有 Member、Project、Workspace Memory、Workspace Theme、Plugin 和使用配额。第一阶段不把它作为用户可见层级；每个认证用户自动拥有一个私有 Workspace，用户通过自己的 Project 进入业务数据。
 
-Workspace 还拥有至多一个当前有效的 **Workspace Model Credential**。它只保存供应商标识、密文、尾号和更新元数据；Owner/Admin 可以轮换，普通 Member 无权读取状态或写入。它是可轮换的运行凭据，不是 Model Route Snapshot 的一部分，也不会写入 Generation Job、Revision 或 Model Invocation。
+Member 是兼容现有授权模型和迁移数据的内部记录，不提供用户管理入口。新用户初始化时由系统创建一条 owner 记录；系统不再把多个用户放入同一个默认 Workspace。
+
+Workspace 还拥有至多一个当前有效的 **Workspace Model Credential**。它只保存供应商标识、密文、尾号和更新元数据；在私有 Workspace 中等价于当前用户的模型凭据。它是可轮换的运行凭据，不是 Model Route Snapshot 的一部分，也不会写入 Generation Job、Revision 或 Model Invocation。
 
 ### Project
 
-Project 属于一个 Workspace，拥有 Data Asset、Conversation、Analysis Brief、Metric Definition、Project Memory、Visual Template、Chart Artifact、Evidence Block 和 Project Role。第一阶段的 Project 默认是一个咨询客户项目。
+Project 持久化上属于一个内部 Workspace，用户层面是直接创建、列表、切换和归档的业务对象。它拥有 Data Asset、Conversation、Analysis Brief、Metric Definition、Project Memory、Visual Template、Chart Artifact、Evidence Block 和 Project Role。第一阶段的 Project 默认是一个咨询客户项目。
 
 ### Analysis Brief
 
@@ -50,15 +52,16 @@ Worker Lease 附着在 Generation Job，不是独立的业务聚合。每一次�
 
 ### Memory
 
-Memory Candidate 来自 Conversation，确认后转化为 Project Memory 或 Workspace Memory。长期 Memory 必须可以追溯到来源 Conversation 或用户明确输入。
+Memory Candidate 来自 Conversation，确认后转化为 Project Memory 或当前用户私有 Workspace Memory。长期 Memory 必须可以追溯到来源 Conversation 或用户明确输入，不得因为 Workspace 的内部存在而跨用户共享。
 
 ### Plugin
 
-Plugin 属于 Workspace 的安装范围，具体是否生效由 Project 选择。插件能力由固定版本的 Plugin Manifest 决定。
+Plugin 在内部属于用户私有 Workspace 的安装范围，具体是否生效由 Project 选择。用户界面把它呈现为“当前账号可用能力”，不暴露 Workspace 安装层。插件能力由固定版本的 Plugin Manifest 决定。
 
 ## 2. 关系
 
 ```text
+User 1 ── 1 private Workspace
 Workspace 1 ── * Member
 Workspace 1 ── * Project
 Workspace 1 ── * Workspace Memory
@@ -89,6 +92,7 @@ Chart Revision 1 ── * Review Comment
 
 1. 所有持久化业务对象必须能解析到唯一 Workspace。
 2. Project 不能跨 Workspace 移动；Project 内的资产不能被其他 Workspace 直接引用。
+   对外查询必须先由认证用户解析其私有 Workspace；用户不能通过界面或普通 API 选择其他 Workspace。
 3. Chart Revision 必须引用一个明确的 Data Snapshot，不能引用“当前数据”。
 4. Chart Revision 保存完整 TransformPlan、Flint Spec、主题快照和输出版本。
 5. Chart Revision 一旦 Approved 就不可修改；修改只能创建新的 Revision。
@@ -176,7 +180,7 @@ Active → Superseded / Deleted
 
 | 能力 | Workspace Owner/Admin | Project Editor | Project Reviewer | Project Viewer |
 | --- | --- | --- | --- | --- |
-| 管理 Workspace 成员 | 是 | 否 | 否 | 否 |
+| 管理 Workspace 成员 | 仅系统初始化/迁移 | 否 | 否 | 否 |
 | 创建/归档 Project | 是 | 按 Workspace 策略 | 否 | 否 |
 | 上传和管理数据 | 是 | 是 | 否 | 否 |
 | 生成和编辑图表 | 是 | 是 | 否 | 否 |

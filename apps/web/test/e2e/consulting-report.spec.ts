@@ -107,6 +107,7 @@ test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => 
   const fixture = createFixture();
   await page.route("**/api/**", fixture.route);
   await page.goto("/");
+  await expect(page.getByText("E2E Workspace", { exact: true })).toHaveCount(0);
 
   const sampleButton = page.getByRole("button", { name: "使用示例" });
   if (page.viewportSize()?.width === 390) {
@@ -136,14 +137,14 @@ test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => 
 
   await page.getByLabel("继续对话").fill("按月份展示各区域销售额");
   await page.getByRole("button", { name: "发送" }).click();
-  const evidenceWorkspace = page.getByLabel("证据工作区");
-  await expect(evidenceWorkspace.getByRole("heading", { name: "各区域月度销售额" })).toBeVisible({ timeout: 10000 });
-  await expect(evidenceWorkspace.getByText("草稿", { exact: true })).toBeVisible();
+  const evidenceCanvas = page.getByLabel("证据画布");
+  await expect(evidenceCanvas.getByRole("heading", { name: "各区域月度销售额" })).toBeVisible({ timeout: 10000 });
+  await expect(evidenceCanvas.getByText("草稿", { exact: true })).toBeVisible();
 
-  await evidenceWorkspace.getByRole("button", { name: "提交审核" }).click();
-  await expect(evidenceWorkspace.getByText("审核中", { exact: true })).toBeVisible();
-  await evidenceWorkspace.getByRole("button", { name: "批准版本" }).click();
-  await expect(evidenceWorkspace.getByText("已批准", { exact: true })).toBeVisible();
+  await evidenceCanvas.getByRole("button", { name: "提交审核" }).click();
+  await expect(evidenceCanvas.getByText("审核中", { exact: true })).toBeVisible();
+  await evidenceCanvas.getByRole("button", { name: "批准版本" }).click();
+  await expect(evidenceCanvas.getByText("已批准", { exact: true })).toBeVisible();
 
   await expect(page.getByRole("link", { name: "导出 SVG" })).toBeVisible();
   const downloadPromise = page.waitForEvent("download");

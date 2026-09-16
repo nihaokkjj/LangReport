@@ -8,7 +8,7 @@ config({ path: resolve(process.cwd(), "../../.env") });
 const confirmation = process.env.PROVISION_CONFIRM?.trim();
 const userId = process.env.PROVISION_USER_ID?.trim();
 const workspaceId = process.env.PROVISION_WORKSPACE_ID?.trim();
-const workspaceName = process.env.PROVISION_WORKSPACE_NAME?.trim() || "LangReport Production";
+const workspaceName = process.env.PROVISION_WORKSPACE_NAME?.trim() || "LangReport Personal";
 const projectName = process.env.PROVISION_PROJECT_NAME?.trim() || "咨询项目 Demo";
 const projectSlug = process.env.PROVISION_PROJECT_SLUG?.trim() || slugify(projectName);
 const dryRun = process.env.PROVISION_DRY_RUN === "true";
@@ -24,10 +24,12 @@ try {
   if (dryRun) {
     console.log(JSON.stringify({ dryRun: true, userId, workspaceId: workspaceId ?? null, workspaceName, projectName, projectSlug }));
   } else {
-    const result = await withAdvisoryLock(`production-provision:${workspaceId ?? workspaceName}`, () => db.transaction(async (tx) => {
+    const result = await withAdvisoryLock(`production-provision:${userId}`, () => db.transaction(async (tx) => {
       const workspace = workspaceId
         ? (await tx.select().from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1))[0]
-        : (await tx.select().from(workspaces).where(eq(workspaces.name, workspaceName)).limit(1))[0]
+        : (await tx.select({ workspace: workspaces }).from(workspaces)
+          .innerJoin(members, eq(members.workspaceId, workspaces.id))
+          .where(eq(members.userId, userId)).limit(1))[0]?.workspace
           ?? (await tx.insert(workspaces).values({ name: workspaceName }).returning())[0];
       if (!workspace) throw new Error(`Workspace 不存在：${workspaceId}`);
 

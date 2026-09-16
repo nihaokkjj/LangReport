@@ -6,7 +6,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 - 数据来源和转换过程可追溯
 - 图表规范和渲染结果可复现
-- Workspace、Project 和成员权限隔离
+- 内部 Workspace 与 Project 的权限隔离；用户直接管理自己的 Project
 - 长短期记忆可控且可审计
 - 插件扩展不引入任意服务器端代码执行
 - 生成过程可异步执行、可重试、可观察
@@ -54,11 +54,11 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ### Workspace Access
 
-负责用户身份、Workspace、Member、Workspace Role、Project Role 和所有租户边界检查。任何 Project、Data Asset、Conversation、Memory、Plugin 或 Chart Artifact 查询都必须携带 Workspace 作用域。
+负责用户身份、内部 Workspace、Member、Workspace Role、Project Role 和所有租户边界检查。每个认证用户自动解析到自己的私有 Workspace，用户不选择、不切换 Workspace，也没有成员管理入口。任何 Project、Data Asset、Conversation、Memory、Plugin 或 Chart Artifact 查询仍必须携带 Workspace 作用域。
 
 ### Project
 
-负责 Project 的创建、归档、主题继承、Project Member、Analysis Brief、Metric Definition、Visual Template 和项目级配置。Project 是长期上下文的拥有者，但不拥有用户身份。
+负责 Project 的创建、列表、归档、主题继承、Project Member、Analysis Brief、Metric Definition、Visual Template 和项目级配置。用户直接管理自己的 Project；Project Member 授权结构暂时保留用于兼容和后续协作，但第一阶段不提供 Workspace 成员管理。
 
 ### Data
 
@@ -70,7 +70,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ### Memory
 
-负责 Conversation Memory、Memory Candidate、Project Memory 和 Workspace Memory。长期记忆写入必须经过确认，并保存来源、创建人、更新时间、置信度和删除状态。
+负责 Conversation Memory、Memory Candidate、Project Memory 和当前用户私有 Workspace Memory。长期记忆写入必须经过确认，并保存来源、创建人、更新时间、置信度和删除状态；Workspace Memory 不跨用户共享。
 
 ### Generation
 
@@ -86,7 +86,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ### Extensions
 
-负责 Plugin Manifest 的目录解析、安装生命周期、版本/哈希固定、Project 启用、能力发现和 Revision 快照。第一阶段只接受平台发布的内置 Manifest：Workspace Owner/Admin 可以安装、撤销或恢复目录中的精确版本，Project Owner、Admin、Editor 可以启用或禁用已安装版本；`uploaded` 来源和任意 Manifest 均被拒绝。插件只追加模板、Theme、字段语义和校验规则，不能载入代码、替换核心校验或引入未知 Renderer。
+负责 Plugin Manifest 的目录解析、安装生命周期、版本/哈希固定、Project 启用、能力发现和 Revision 快照。第一阶段只接受平台发布的内置 Manifest：系统在当前用户私有 Workspace 中维护可用能力，用户可以从项目入口启用或停用精确版本；`uploaded` 来源和任意 Manifest 均被拒绝。插件只追加模板、Theme、字段语义和校验规则，不能载入代码、替换核心校验或引入未知 Renderer。
 
 ## 5. 生成流程
 
@@ -146,11 +146,11 @@ Project Memory 优先于 Workspace Memory；同名指标或规则出现冲突时
 
 主题解析顺序为：图表临时设置、Project Visual Template 中的 Theme、Workspace Theme、系统默认 Theme。解析后的结果在生成 Chart Revision 时固化为 Visual Template 和 Theme 快照。
 
-Plugin Manifest 只能声明模板、Theme、语义、校验器、示例和平台已允许的渲染后端。第一阶段的校验和安装都必须命中平台内置目录的精确内容哈希；Workspace Owner/Admin 管理安装、撤销和恢复，Project Owner、Admin、Editor 管理启用。任何自定义代码执行能力都不属于插件协议；`uploaded` 安装入口保持禁用。
+Plugin Manifest 只能声明模板、Theme、语义、校验器、示例和平台已允许的渲染后端。第一阶段的校验和安装都必须命中平台内置目录的精确内容哈希；当前用户在其私有 Workspace 中管理安装、撤销和恢复，Project Owner、Admin、Editor 管理启用。任何自定义代码执行能力都不属于插件协议；`uploaded` 安装入口保持禁用。
 
 ## 10. 权限原则
 
-- Workspace Owner/Admin 管理成员、Workspace Theme、Workspace Memory、插件和配额。
+- 当前用户管理自己的 Project、私有 Workspace Theme、Workspace Memory、插件和配额；Workspace 成员由系统初始化/迁移，不提供用户管理。
 - Project Editor 管理项目数据、Project Memory、Project Visual Template，并可创建和修改图表版本。
 - Project Reviewer 可以评论、提交审核和批准/退回 Chart Revision，但不能修改 Project 设置。
 - Project Viewer 只能读取被授权的项目资产和图表。

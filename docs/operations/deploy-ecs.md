@@ -47,18 +47,17 @@ docker compose --env-file .env.production -f infra/docker-compose.prod.yml run -
 
 `db:verify` 只在目标数据库创建并删除 `migration_verify_*` 临时 schema，重放完整迁移链并检查历史 Phase 2–4 Job/Revision/Theme；生产发布仍需由运维确认备份、回滚窗口和数据库权限。
 
-首次部署还需要把外部登录网关的管理员 `sub` 初始化为 Workspace Owner。开发 Bootstrap 在生产环境不可用，使用下面的显式确认命令创建 Workspace、Project 和成员；重复执行不会重复创建成员或 Project：
+首次部署还需要把外部登录网关的管理员 `sub` 初始化为个人 Project 作用域。开发 Bootstrap 在生产环境不可用，使用下面的显式确认命令按用户创建内部私有 Workspace、Project 和授权记录；重复执行不会重复创建成员或 Project：
 
 ```sh
 docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm \\
   -e PROVISION_CONFIRM=I_UNDERSTAND \\
   -e PROVISION_USER_ID='<jwt-sub>' \\
-  -e PROVISION_WORKSPACE_NAME='LangReport Production' \\
   -e PROVISION_PROJECT_NAME='咨询项目 Demo' \\
   api pnpm --filter @langreport/api provision:production
 ```
 
-只读预览可将确认变量替换为 `PROVISION_DRY_RUN=true`；已有 Workspace 需要额外设置 `PROVISION_WORKSPACE_ID`，脚本不会因为重复执行而提升已有成员权限。
+只读预览可将确认变量替换为 `PROVISION_DRY_RUN=true`。只有迁移或修复历史数据时才额外设置 `PROVISION_WORKSPACE_ID`；普通用户初始化不要复用已有 Workspace，脚本不会因为重复执行而提升已有成员权限。
 
 ## 4. Phase 5 生产 Smoke 验收
 
