@@ -31,6 +31,9 @@ test("the Chart public patch returns isolated material for a new Revision", () =
       x: { field: "区域", type: "nominal" },
       y: { field: "销售额_sum", type: "quantitative" }
     },
+    annotations: [{ text: "关注华东", xField: "区域" }],
+    showValues: true,
+    showLegend: false,
     themeVersion: "project-v2"
   };
 
@@ -42,6 +45,9 @@ test("the Chart public patch returns isolated material for a new Revision", () =
   assert.equal(derived.chartSpec.subtitle, undefined);
   assert.equal(derived.chartSpec.chartType, "Bar Chart");
   assert.equal(derived.chartSpec.encodings.x.field, "区域");
+  assert.deepEqual(derived.chartSpec.annotations, [{ text: "关注华东", xField: "区域" }]);
+  assert.equal(derived.chartSpec.showValues, true);
+  assert.equal(derived.chartSpec.showLegend, false);
   assert.equal(derived.themeVersion, "project-v2");
   assert.equal(sourceSpec.chartSpec.title, "原始标题");
   assert.equal(sourceSpec.chartSpec.subtitle, "原始副标题");

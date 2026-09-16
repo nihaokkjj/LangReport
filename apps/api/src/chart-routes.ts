@@ -148,7 +148,7 @@ export async function registerChartRoutes(app: FastifyInstance): Promise<void> {
           artifactId: request.params.artifactId,
           baseRevisionId: command.baseRevisionId,
           editPatch: command.patch,
-          transformPlan: source.revision.transformPlan,
+          transformPlan: command.patch.transformPlan ?? source.revision.transformPlan,
           fieldLineage: source.revision.fieldLineage,
           pluginContext,
           createdBy: userId

@@ -226,6 +226,8 @@ export async function createDerivedRevision(input: {
   createdBy: string;
   changeReason: string;
   generationJobId?: string;
+  transformPlan?: unknown;
+  fieldLineage?: unknown;
   flintSpec?: FlintSpec;
   themeSnapshot?: unknown;
   vegaLiteSpec?: unknown;
@@ -273,8 +275,8 @@ export async function createDerivedRevision(input: {
     parentRevisionId: source.id,
     createdBy: input.createdBy,
     changeReason: input.changeReason,
-    transformPlan: source.transformPlan,
-    fieldLineage: source.fieldLineage,
+    transformPlan: input.transformPlan ?? source.transformPlan,
+    fieldLineage: input.fieldLineage ?? source.fieldLineage,
     flintSpec: input.flintSpec ?? source.flintSpec,
     themeSnapshot: input.themeSnapshot ?? source.themeSnapshot,
     vegaLiteSpec: input.vegaLiteSpec ?? source.vegaLiteSpec,

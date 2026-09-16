@@ -107,7 +107,11 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       const [project] = await db.insert(projects).values({
         workspaceId: workspace.id,
         name: body.name,
-        slug
+        slug,
+        clientName: body.clientName,
+        objective: body.objective,
+        audience: body.audience,
+        visualTemplate: body.visualTemplate
       }).returning();
       await db.insert(projectMembers).values({ projectId: project.id, userId, role: "editor" });
       return reply.code(201).send({ project, workspaceId: workspace.id });

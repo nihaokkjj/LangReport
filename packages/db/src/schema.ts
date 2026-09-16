@@ -76,6 +76,10 @@ export const projects = pgTable("projects", {
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   slug: text("slug").notNull(),
+  clientName: text("client_name").notNull().default(""),
+  objective: text("objective").notNull().default(""),
+  audience: text("audience").notNull().default("client_presentation"),
+  visualTemplate: text("visual_template").notNull().default("consulting-neutral"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => [
   uniqueIndex("projects_workspace_slug_unique").on(table.workspaceId, table.slug),

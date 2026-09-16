@@ -167,6 +167,8 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
         createdBy: record.job.createdBy,
         changeReason: "edit",
         generationJobId: jobId,
+        transformPlan: record.job.transformPlan ?? undefined,
+        fieldLineage: record.job.fieldLineage ?? undefined,
         flintSpec: spec,
         themeSnapshot: {
           id: spec.theme,

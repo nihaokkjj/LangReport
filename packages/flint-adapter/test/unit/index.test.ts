@@ -28,6 +28,21 @@ test("default deterministic chart uses the restrained design palette", async () 
   assert.doesNotMatch(rendered.svg, /#ff3d8b|#1f1d3d|#c5b0f4/i);
 });
 
+test("display annotations and value labels remain present in deterministic SVG exports", async () => {
+  const rendered = await renderChart({
+    ...spec,
+    chartSpec: {
+      ...spec.chartSpec,
+      annotations: [{ text: "重点月份" }],
+      showValues: true,
+      showLegend: false
+    }
+  });
+  assert.match(rendered.svg, /重点月份/);
+  assert.match(rendered.svg, />10<|>20</);
+  assert.doesNotMatch(rendered.svg, /华东/);
+});
+
 test("render validation records concrete Vega-Lite, SVG, and PNG artifacts independently", async () => {
   const rendered = await renderChart(spec);
   const valid = validateRenderedChart(rendered);

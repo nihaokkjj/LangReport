@@ -228,8 +228,12 @@ const projectDto = dto({
   workspaceId: uuid(),
   name: string(),
   slug: string(),
+  clientName: string(),
+  objective: string(),
+  audience: { type: "string", enum: ["internal_analysis", "client_presentation", "management"] },
+  visualTemplate: { type: "string", enum: ["consulting-neutral", "consulting-insight", "consulting-research"] },
   createdAt: dateTime()
-}, ["id", "workspaceId", "name", "slug", "createdAt"]);
+}, ["id", "workspaceId", "name", "slug", "clientName", "objective", "audience", "visualTemplate", "createdAt"]);
 
 const snapshotDto = dto({
   id: uuid(),

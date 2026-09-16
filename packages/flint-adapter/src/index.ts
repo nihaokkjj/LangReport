@@ -167,6 +167,9 @@ function renderDeterministicSvg(spec: FlintSpec): string {
   parts.push(`<rect width="${width}" height="${height}" fill="#ffffff"/>`);
   parts.push(`<text x="${left}" y="32" font-family="${sansFont}" font-size="22" font-weight="600" fill="#17212b">${escapeXml(spec.chartSpec.title)}</text>`);
   if (spec.chartSpec.subtitle) parts.push(`<text x="${left}" y="54" font-family="${sansFont}" font-size="12" fill="#17212b">${escapeXml(spec.chartSpec.subtitle)}</text>`);
+  for (const [index, annotation] of (spec.chartSpec.annotations ?? []).entries()) {
+    parts.push(`<text x="${left}" y="${76 + index * 16}" font-family="${sansFont}" font-size="12" fill="#5B6875">${escapeXml(annotation.text)}</text>`);
+  }
   parts.push(`<line x1="${left}" y1="${top + plotHeight}" x2="${left + plotWidth}" y2="${top + plotHeight}" stroke="#17212b" stroke-width="1"/>`);
   parts.push(`<line x1="${left}" y1="${top}" x2="${left}" y2="${top + plotHeight}" stroke="#17212b" stroke-width="1"/>`);
   parts.push(`<text x="${left - 12}" y="${top + 4}" text-anchor="end" font-family="${monoFont}" font-size="11" fill="#17212b">${formatNumber(maxValue)}</text>`);
@@ -179,7 +182,7 @@ function renderDeterministicSvg(spec: FlintSpec): string {
     const points = rows.filter((row) => !colorField || String(row[colorField] ?? "") === seriesValue);
     if (spec.chartSpec.chartType === "Bar Chart") {
       const barWidth = Math.max(8, plotWidth / Math.max(xValues.length * series.length, 1) * 0.72);
-      for (const row of points) {
+      for (const [pointIndex, row] of points.entries()) {
         const xIndex = xValues.indexOf(String(row[xField] ?? ""));
         const value = Number(row[yField]);
         if (!Number.isFinite(value)) continue;
@@ -187,6 +190,9 @@ function renderDeterministicSvg(spec: FlintSpec): string {
         const y = top + yPosition(Math.max(value, minValue));
         const baseline = top + yPosition(Math.min(value, minValue));
         parts.push(`<rect x="${x - barWidth / 2}" y="${Math.min(y, baseline)}" width="${barWidth - 2}" height="${Math.max(1, Math.abs(baseline - y))}" fill="${colors[seriesIndex % colors.length]}" opacity="0.86"><title>${escapeXml(`${String(row[xField] ?? "")}: ${formatNumber(value)}`)}</title></rect>`);
+        if (spec.chartSpec.showValues && pointIndex < 40) {
+          parts.push(`<text x="${x}" y="${Math.min(y, baseline) - 6}" text-anchor="middle" font-family="${monoFont}" font-size="10" fill="#17212b">${formatNumber(value)}</text>`);
+        }
         void xIndex;
       }
     } else {
@@ -196,15 +202,18 @@ function renderDeterministicSvg(spec: FlintSpec): string {
         .map((row, index) => `${index === 0 ? "M" : "L"}${left + xPosition(String(row[xField] ?? ""))},${top + yPosition(Number(row[yField]))}`)
         .join(" ");
       if (path) parts.push(`<path d="${path}" fill="none" stroke="${colors[seriesIndex % colors.length]}" stroke-width="3"/>`);
-      for (const row of points) {
+      for (const [pointIndex, row] of points.entries()) {
         const value = Number(row[yField]);
         if (!Number.isFinite(value)) continue;
         const cx = left + xPosition(String(row[xField] ?? ""));
         const cy = top + yPosition(value);
         parts.push(`<circle cx="${cx}" cy="${cy}" r="4" fill="${colors[seriesIndex % colors.length]}"><title>${escapeXml(`${String(row[xField] ?? "")}: ${formatNumber(value)}`)}</title></circle>`);
+        if (spec.chartSpec.showValues && pointIndex < 40) {
+          parts.push(`<text x="${cx}" y="${cy - 8}" text-anchor="middle" font-family="${monoFont}" font-size="10" fill="#17212b">${formatNumber(value)}</text>`);
+        }
       }
     }
-    if (colorField && seriesValue) {
+    if (colorField && seriesValue && spec.chartSpec.showLegend !== false) {
       const legendX = left + seriesIndex * 120;
       parts.push(`<circle cx="${legendX}" cy="${height - 18}" r="4" fill="${colors[seriesIndex % colors.length]}"/>`);
       parts.push(`<text x="${legendX + 10}" y="${height - 14}" font-family="${monoFont}" font-size="11" fill="#17212b">${escapeXml(seriesValue)}</text>`);

@@ -73,6 +73,9 @@ export function applyChartEditPatch(specInput: FlintSpec, patchInput: ChartEditP
   }
   if (patch.chartType !== undefined) spec.chartSpec.chartType = patch.chartType;
   if (patch.encodings !== undefined) spec.chartSpec.encodings = structuredClone(patch.encodings);
+  if (patch.annotations !== undefined) spec.chartSpec.annotations = structuredClone(patch.annotations);
+  if (patch.showValues !== undefined) spec.chartSpec.showValues = patch.showValues;
+  if (patch.showLegend !== undefined) spec.chartSpec.showLegend = patch.showLegend;
   if (patch.theme !== undefined) spec.theme = patch.theme;
   if (patch.themeVersion !== undefined) spec.themeVersion = patch.themeVersion;
   return spec;

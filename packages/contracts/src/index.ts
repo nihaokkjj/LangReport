@@ -15,6 +15,18 @@ export const themePresetSchema = z.enum([
   "datawrapper"
 ]);
 
+export const projectAudienceSchema = z.enum([
+  "internal_analysis",
+  "client_presentation",
+  "management"
+]);
+
+export const visualTemplateSchema = z.enum([
+  "consulting-neutral",
+  "consulting-insight",
+  "consulting-research"
+]);
+
 const transformStepSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("filter"),
@@ -87,6 +99,13 @@ export const flintSpecSchema = z.object({
     title: z.string().min(1),
     subtitle: z.string().optional(),
     encodings: z.record(z.string(), chartEncodingSchema),
+    annotations: z.array(z.object({
+      text: z.string().trim().min(1).max(240),
+      xField: z.string().trim().min(1).optional(),
+      yField: z.string().trim().min(1).optional()
+    }).strict()).max(8).optional(),
+    showValues: z.boolean().optional(),
+    showLegend: z.boolean().optional(),
     baseSize: z.object({ width: z.number().int().positive(), height: z.number().int().positive() })
   }),
   theme: themePresetSchema,
@@ -128,6 +147,14 @@ export const chartEditPatchSchema = z.object({
   subtitle: z.union([z.string().trim().max(400), z.null()]).optional(),
   chartType: z.enum(["Line Chart", "Bar Chart", "Area Chart"]).optional(),
   encodings: z.record(z.string(), chartEncodingSchema).optional(),
+  transformPlan: transformPlanSchema.optional(),
+  annotations: z.array(z.object({
+    text: z.string().trim().min(1).max(240),
+    xField: z.string().trim().min(1).optional(),
+    yField: z.string().trim().min(1).optional()
+  }).strict()).max(8).optional(),
+  showValues: z.boolean().optional(),
+  showLegend: z.boolean().optional(),
   theme: themePresetSchema.optional(),
   themeVersion: z.string().trim().min(1).max(40).optional()
 }).strict().refine((value) => Object.keys(value).length > 0, {
@@ -472,8 +499,12 @@ export const updateWorkspaceModelCredentialRequestSchema = z.object({
 }).strict();
 
 export const createProjectRequestSchema = z.object({
-  name: z.string().trim().min(1).max(80)
-});
+  name: z.string().trim().min(1).max(80),
+  clientName: z.string().trim().min(1).max(120),
+  objective: z.string().trim().min(1).max(2000),
+  audience: projectAudienceSchema,
+  visualTemplate: visualTemplateSchema
+}).strict();
 
 export const pasteDataRequestSchema = z.object({
   name: z.string().trim().min(1).max(120).default("pasted-data.csv"),
@@ -533,6 +564,8 @@ export type CreateConversationMessageRequest = z.infer<typeof createConversation
 export type CreateMetricDefinitionRequest = z.infer<typeof createMetricDefinitionRequestSchema>;
 export type CreateWorkspaceRequest = z.infer<typeof createWorkspaceRequestSchema>;
 export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
+export type ProjectAudience = z.infer<typeof projectAudienceSchema>;
+export type VisualTemplate = z.infer<typeof visualTemplateSchema>;
 export type PasteDataRequest = z.infer<typeof pasteDataRequestSchema>;
 
 /** The only model task exposed by the first model-gateway contract. */

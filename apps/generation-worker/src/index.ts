@@ -4,7 +4,8 @@ import { GenerationCycle, validateCanonicalTextContextProjection, validateGenera
 import { GenerationJobLeaseLostError, assertGenerationJobLease, claimGenerationJobLease, db, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, generationJobs, memoryExtractionJobs, projects, recoverExpiredGenerationJobLeases, startGenerationJobLeaseHeartbeat, updateGenerationJobUnderLease, workspaceModelCredentials, type GenerationJobLease, type GenerationJobStatus } from "@langreport/db";
 import { getObject } from "@langreport/storage";
 import { applyRevisionPatch } from "@langreport/chart";
-import { chartEditPatchSchema, flintSpecSchema, memoryContextSchema, modelRouteSnapshotSchema, pluginUsageSchema, themePresetSchema, type ModelRouteSnapshot, type TransformPlan, type ValidationRecord, type ValidationReport } from "@langreport/contracts";
+import { executeTransformPlan } from "@langreport/data-engine";
+import { chartEditPatchSchema, flintSpecSchema, memoryContextSchema, modelRouteSnapshotSchema, pluginUsageSchema, themePresetSchema, transformPlanSchema, type ModelRouteSnapshot, type TransformPlan, type ValidationRecord, type ValidationReport } from "@langreport/contracts";
 import { getMemoryContextForGeneration, processMemoryExtractionJob } from "@langreport/memory";
 import { createBailianQwenGateway, decryptWorkspaceModelCredential, ModelCredentialEncryptionError, ModelGatewayConfigurationError, resolveModelRouteSnapshot } from "@langreport/model-gateway";
 import { pluginContextSchema } from "@langreport/contracts";
@@ -18,6 +19,13 @@ const pollIntervalMs = Number(process.env.GENERATION_POLL_INTERVAL_MS ?? 1000);
 const leaseDurationMs = Number(process.env.GENERATION_JOB_LEASE_MS ?? 30_000);
 const workerInstanceId = process.env.GENERATION_WORKER_ID?.trim() || `${workerName}:${randomUUID()}`;
 let polling = false;
+
+type GenerationJobRecord = {
+  job: typeof generationJobs.$inferSelect;
+  snapshot: typeof dataSnapshots.$inferSelect;
+  asset: typeof dataAssets.$inferSelect;
+  workspaceId: string;
+};
 
 export async function processGenerationJob(jobId: string): Promise<void> {
   const lease = await claimGenerationJobLease({
@@ -71,7 +79,7 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
 
   try {
     if (job.job.operation === "edit") {
-      await processEditJob(jobId, job.job, lease);
+      await processEditJob(jobId, job, lease);
       return;
     }
     await setStatus(jobId, lease, "profiling", { errorCode: null, errorMessage: null });
@@ -264,7 +272,8 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
   }
 }
 
-async function processEditJob(jobId: string, job: typeof generationJobs.$inferSelect, lease: GenerationJobLease): Promise<void> {
+async function processEditJob(jobId: string, record: GenerationJobRecord, lease: GenerationJobLease): Promise<void> {
+  const job = record.job;
   if (!job.baseRevisionId || !job.artifactId) {
     await failJob(jobId, lease, "EDIT_INPUT_INVALID", "编辑任务缺少基础 Revision");
     return;
@@ -278,23 +287,49 @@ async function processEditJob(jobId: string, job: typeof generationJobs.$inferSe
     return;
   }
   try {
+    let frozenSnapshot: FrozenSnapshotInput;
+    try {
+      frozenSnapshot = await loadFrozenSnapshot({
+        job: {
+          projectId: job.projectId,
+          conversationId: job.conversationId,
+          dataAssetId: job.dataAssetId,
+          snapshotId: job.snapshotId
+        },
+        asset: record.asset,
+        snapshot: record.snapshot,
+        workspaceId: record.workspaceId,
+        readSnapshot: getObject
+      });
+    } catch (error) {
+      if (error instanceof SnapshotAccessError) {
+        await failJob(jobId, lease, error.code, error.message);
+        return;
+      }
+      throw error;
+    }
     const spec = flintSpecSchema.parse(source.flintSpec);
     const patch = chartEditPatchSchema.parse(job.editPatch);
+    const plan = transformPlanSchema.parse(patch.transformPlan ?? source.transformPlan);
+    const transform = executeTransformPlan(plan, frozenSnapshot.rows);
     const editedSpec = applyRevisionPatch(spec, patch);
+    editedSpec.data.values = transform.rows;
+    editedSpec.semanticTypes = semanticTypesForEditedSpec(spec.semanticTypes, transform.columns, transform.lineage);
     const validation = validateGenerationRevision(editedSpec);
     const planValidation = planValidationFromReport(validation);
     const renderValidation = pendingRenderValidation();
-    const [sourceJob] = source.generationJobId
-      ? await db.select({ previewData: generationJobs.previewData }).from(generationJobs).where(eq(generationJobs.id, source.generationJobId)).limit(1)
-      : [];
     await setStatus(jobId, lease, "transforming", {
-      transformPlan: source.transformPlan,
-      fieldLineage: source.fieldLineage,
+      transformPlan: plan,
+      fieldLineage: transform.lineage,
       memoryContext: job.memoryContext ?? source.memorySnapshot ?? [],
       validation,
       planValidation,
       renderValidation,
-      previewData: sourceJob?.previewData ?? null
+      previewData: {
+        columns: transform.columns,
+        rows: transform.rows.slice(0, 500),
+        steps: transform.steps
+      }
     });
     await setStatus(jobId, lease, "compiling", { flintSpec: editedSpec, validation, planValidation, renderValidation });
     if (!validation.valid) {
@@ -305,6 +340,19 @@ async function processEditJob(jobId: string, job: typeof generationJobs.$inferSe
   } catch (error) {
     await failJob(jobId, lease, "EDIT_INVALID", error instanceof Error ? error.message : "图表编辑失败");
   }
+}
+
+function semanticTypesForEditedSpec(
+  sourceTypes: Record<string, string>,
+  columns: string[],
+  lineage: Array<{ outputColumn: string; operation: string }>
+): Record<string, string> {
+  return Object.fromEntries(columns.map((column) => {
+    const existing = sourceTypes[column];
+    if (existing) return [column, existing];
+    const line = lineage.find((item) => item.outputColumn === column);
+    return [column, line?.operation.startsWith("aggregate:") || line?.operation.startsWith("derive:") ? "Quantity" : "Category"];
+  }));
 }
 
 async function pollOnce(): Promise<void> {

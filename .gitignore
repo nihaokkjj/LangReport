@@ -1,6 +1,7 @@
 node_modules/
 .pnpm-store/
 .next/
+.next-e2e/
 *.tsbuildinfo
 dist/
 coverage/
@@ -23,6 +24,7 @@ packages/db/drizzle/*
 !packages/db/drizzle/0015_bailian_model_route_snapshot.sql
 !packages/db/drizzle/0018_execution_assembly.sql
 !packages/db/drizzle/0019_nervous_pestilence.sql
+!packages/db/drizzle/0020_project_onboarding.sql
 !packages/db/drizzle/meta/
 packages/db/drizzle/meta/*
 !packages/db/drizzle/meta/_journal.json

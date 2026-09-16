@@ -213,6 +213,68 @@ test("real generation and render workers persist plugin usage and historical sna
     const [evidence] = await db.select({ id: evidenceBlocks.id }).from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, job.id)).limit(1);
     assert.ok(evidence);
 
+    const editPlan = {
+      version: "v1" as const,
+      rationale: "只保留华东订单，按月份聚合后按销售额降序排列。",
+      steps: [
+        { kind: "filter" as const, column: "区域", operator: "eq" as const, value: "华东" },
+        { kind: "aggregate" as const, groupBy: ["月份"], measures: [{ column: "销售额", operation: "sum" as const, outputColumn: "销售额_sum" }] },
+        { kind: "sort" as const, column: "销售额_sum", direction: "desc" as const }
+      ],
+      expectedColumns: ["月份", "销售额_sum"]
+    };
+    const [editJob] = await db.insert(generationJobs).values({
+      projectId: project.id,
+      conversationId: conversation.id,
+      dataAssetId: asset.id,
+      snapshotId: snapshot.id,
+      prompt: "编辑图表版本 R1",
+      idempotencyKey: `worker-edit-${suffix}`,
+      inputFingerprint: `worker-edit-fingerprint-${suffix}`,
+      renderer: "vega-lite",
+      rendererVersion: "vega-lite-svg-v1",
+      theme: generatedSpec.theme,
+      themeVersion: generatedSpec.themeVersion,
+      themeSource: "revision",
+      themeConfig: generatedSpec.themeConfig,
+      operation: "edit",
+      artifactId: revision.artifactId,
+      baseRevisionId: revision.id,
+      editPatch: {
+        transformPlan: editPlan,
+        encodings: {
+          x: { field: "月份", type: "temporal" },
+          y: { field: "销售额_sum", type: "quantitative" }
+        },
+        annotations: [{ text: "仅看华东" }],
+        showValues: true,
+        showLegend: false
+      },
+      transformPlan: editPlan,
+      pluginContext: pluginResolution.context,
+      analysisBriefSnapshot: {},
+      metricDefinitionSnapshot: {},
+      createdBy: userId
+    }).returning();
+    await processGenerationJob(editJob.id);
+    const [transformedEditJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, editJob.id)).limit(1);
+    assert.equal(transformedEditJob.status, "rendering");
+    assert.deepEqual(transformedEditJob.transformPlan, editPlan);
+    assert.deepEqual((transformedEditJob.previewData as { rows: DataRow[] }).rows, [
+      { 月份: "2026-02", 销售额_sum: 130 },
+      { 月份: "2026-01", 销售额_sum: 100 }
+    ]);
+    assert.equal((transformedEditJob.flintSpec as { chartSpec: { showValues?: boolean } }).chartSpec.showValues, true);
+    await processRenderJob(editJob.id);
+    const [renderedEditJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, editJob.id)).limit(1);
+    assert.equal(renderedEditJob.status, "succeeded");
+    const [derivedRevision] = await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, editJob.id)).limit(1);
+    assert.ok(derivedRevision);
+    assert.equal(derivedRevision.parentRevisionId, revision.id);
+    assert.notDeepEqual(derivedRevision.transformPlan, revision.transformPlan);
+    assert.equal(revision.revision, 1);
+    assert.equal((derivedRevision.flintSpec as { chartSpec: { annotations?: Array<{ text: string }> } }).chartSpec.annotations?.[0]?.text, "仅看华东");
+
     await db.update(generationJobs).set({ status: "failed", errorCode: "RENDER_FAILED", errorMessage: "simulated post-revision failure" }).where(eq(generationJobs.id, job.id));
     await db.update(generationJobs).set({ status: "rendering" }).where(eq(generationJobs.id, job.id));
     await processRenderJob(job.id);

@@ -25,7 +25,8 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       NEXT_PUBLIC_API_URL: "/api",
-      NEXT_PUBLIC_DEV_USER_ID: "e2e-user"
+      NEXT_PUBLIC_DEV_USER_ID: "e2e-user",
+      LANGREPORT_NEXT_DIST_DIR: ".next-e2e"
     }
   }
 });

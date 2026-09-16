@@ -8,7 +8,7 @@ import {
   routeContracts,
   routeSchema
 } from "../../src/http.js";
-import { createConversationMessageRequestSchema, pasteDataRequestSchema } from "../../src/index.js";
+import { chartRevisionCommandSchema, createConversationMessageRequestSchema, createProjectRequestSchema, pasteDataRequestSchema } from "../../src/index.js";
 
 const expectedRoutes = [
   "GET /health",
@@ -159,6 +159,66 @@ test("generation message contract carries the single-send inputs and allows prec
 test("data uploads require a Conversation source", () => {
   assert.throws(() => pasteDataRequestSchema.parse({ name: "sales.csv", content: "a,b\n1,2" }));
   assert.deepEqual(pasteDataRequestSchema.parse({ name: "sales.csv", content: "a,b\n1,2", conversationId: "00000000-0000-4000-8000-000000000001" }).conversationId, "00000000-0000-4000-8000-000000000001");
+});
+
+test("Project creation contract requires auditable onboarding context", () => {
+  const request = createProjectRequestSchema.parse({
+    name: "华东消费洞察",
+    clientName: "海岚消费",
+    objective: "识别区域销售增长机会，形成客户汇报证据。",
+    audience: "client_presentation",
+    visualTemplate: "consulting-insight"
+  });
+  assert.equal(request.audience, "client_presentation");
+  assert.equal(request.visualTemplate, "consulting-insight");
+  assert.throws(() => createProjectRequestSchema.parse({ name: "只有名称" }));
+  assert.throws(() => createProjectRequestSchema.parse({
+    name: "项目",
+    clientName: "客户",
+    objective: "目标",
+    audience: "unknown",
+    visualTemplate: "arbitrary-theme"
+  }));
+
+  const document = createOpenApiDocument({ serverUrl: "http://localhost:4000" });
+  const operation = document.paths["/api/v1/projects"]?.post as Record<string, any>;
+  const schema = operation.requestBody.content["application/json"].schema;
+  assert.deepEqual(schema.required, ["name", "clientName", "objective", "audience", "visualTemplate"]);
+  assert.equal(schema.properties.audience.enum.join(","), "internal_analysis,client_presentation,management");
+  assert.equal(schema.properties.visualTemplate.enum.join(","), "consulting-neutral,consulting-insight,consulting-research");
+});
+
+test("Chart edit contract keeps data logic and display annotations explicit", () => {
+  const command = chartRevisionCommandSchema.parse({
+    operation: "edit",
+    baseRevisionId: "00000000-0000-4000-8000-000000000001",
+    patch: {
+      transformPlan: {
+        version: "v1",
+        rationale: "先筛选有效订单，再按月份聚合并按结果降序排列。",
+        steps: [
+          { kind: "filter", column: "订单状态", operator: "eq", value: "有效" },
+          { kind: "aggregate", groupBy: ["月份"], measures: [{ column: "销售额", operation: "sum", outputColumn: "销售额_sum" }] },
+          { kind: "sort", column: "销售额_sum", direction: "desc" }
+        ],
+        expectedColumns: ["月份", "销售额_sum"]
+      },
+      annotations: [{ text: "重点关注：华东" }],
+      showValues: true,
+      showLegend: false
+    }
+  });
+  assert.equal(command.operation, "edit");
+  if (command.operation !== "edit") throw new Error("expected edit command");
+  assert.equal(command.patch.transformPlan?.steps[0]?.kind, "filter");
+  assert.deepEqual(command.patch.annotations, [{ text: "重点关注：华东" }]);
+  assert.equal(command.patch.showValues, true);
+  assert.equal(command.patch.showLegend, false);
+  assert.throws(() => chartRevisionCommandSchema.parse({
+    operation: "edit",
+    baseRevisionId: "00000000-0000-4000-8000-000000000001",
+    patch: { transformPlan: { version: "v1", rationale: "任意查询", steps: [{ kind: "sql", query: "select *" }], expectedColumns: ["x"] } }
+  }));
 });
 
 test("OpenAPI document is generated from the route contracts", () => {
