@@ -94,8 +94,9 @@ async function validateDocsRoot() {
   const entries = await readdir(docsRoot, { withFileTypes: true });
   const rootFiles = entries.filter((entry) => entry.isFile()).map((entry) => entry.name).sort();
   if (!rootFiles.includes("README.md")) report("docs/ 必须包含唯一的根级导航文件 docs/README.md。");
+  const allowedRootFiles = new Set(["README.md", "project-spec.md"]);
   for (const file of rootFiles) {
-    if (file !== "README.md") report(`docs/ 根目录只允许 README.md；请迁移 docs/${file}。`);
+    if (!allowedRootFiles.has(file)) report(`docs/ 根目录只允许 README.md 和 project-spec.md；请迁移 docs/${file}。`);
   }
 }
 

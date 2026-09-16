@@ -1,9 +1,11 @@
 # LangReport 文档导航
 
-`docs/` 根目录只保留本导航。其余文档按用途和读者场景归类；产品术语仍以仓库根 [CONTEXT.md](../CONTEXT.md) 为准，Agent 工作纪律仍以根 [AGENTS.md](../AGENTS.md) 为准。
+`docs/` 根目录保留本导航和 [项目基线](./project-spec.md)；其余文档按用途和读者场景归类。产品术语仍以仓库根 [CONTEXT.md](../CONTEXT.md) 为准，Agent 工作纪律仍以根 [AGENTS.md](../AGENTS.md) 为准。
 
 | 分类 | 内容 |
 | --- | --- |
+| [project-spec.md](./project-spec.md) | 当前代码结构、模块边界、运行流和验证入口 |
+| [changes/](./changes/) | SDD 变更流程、模板、验收和会话交接 |
 | [product/](./product/) | 当前产品规格、路线与验收边界 |
 | [architecture/](./architecture/) | 系统架构与领域模型 |
 | [agent/](./agent/) | Agent 启动、循环与执行约束 |
@@ -19,6 +21,8 @@
 
 ## 优先入口
 
+- [项目基线](./project-spec.md)
+- [SDD 变更治理](./changes/README.md)
 - [第一阶段产品规格](./product/phase1-consulting-report.md)
 - [Agent 启动与 Loop 规范](./agent/agent-loop-spec.md)
 - [系统架构](./architecture/architecture.md)

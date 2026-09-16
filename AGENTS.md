@@ -36,3 +36,9 @@ When a task changes `apps/web` pages, components, styles, layout, or interaction
 一项第一阶段功能只有在以下条件全部满足时才算完成：产品边界仍是咨询项目报告；领域不变量没有被破坏；失败状态可解释；数据和图表版本可追溯；相关测试或类型检查通过；文档中的验收标准与实现一致。
 
 UI 任务还必须满足：实现符合 [DESIGN.md](./DESIGN.md) 的视觉规则，现有 API 和数据行为仍然可用，桌面与移动端的层级、对比度、触控区域、溢出、空态、加载态和错误态已检查，并通过 `pnpm --filter @langreport/web typecheck`。
+
+## SDD project governance
+
+中大型需求和架构变化遵循 [SDD 变更治理](./docs/changes/README.md)：先按规模建立变更目录和 proposal/design/task，再经过人工审核门禁进入实现，最后用 test-plan、acceptance 和 handoff 保存可复现证据。当前代码结构、模块边界和验证入口见 [项目基线](./docs/project-spec.md)；Agent 上下文路由见 [.agents/manifest.json](./.agents/manifest.json)。
+
+根 `CLAUDE.md` 只是工具适配层，不复制本文件、`CONTEXT.md` 或 `docs/` 中的事实。任何新增领域术语、产品边界、不变量或难以逆转的架构取舍，仍分别写入 `CONTEXT.md`、产品/架构文档或 `docs/adr/`。

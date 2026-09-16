@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "project": {
+    "name": "LangReport",
+    "kind": "pnpm-monorepo",
+    "defaultContext": [
+      "AGENTS.md",
+      "CONTEXT.md",
+      "README.md",
+      "docs/project-spec.md",
+      "docs/product/phase1-consulting-report.md",
+      "docs/changes/README.md"
+    ]
+  },
+  "context": [
+    {
+      "path": "AGENTS.md",
+      "when": "always",
+      "purpose": "项目协作纪律、第一阶段产品边界、UI 特殊要求和完成标准"
+    },
+    {
+      "path": "CONTEXT.md",
+      "when": "always",
+      "purpose": "业务术语和领域对象的唯一来源"
+    },
+    {
+      "path": "docs/project-spec.md",
+      "when": "always",
+      "purpose": "代码结构、模块边界、运行流和验证入口的事实基线"
+    },
+    {
+      "path": "docs/product/phase1-consulting-report.md",
+      "when": "product-or-cross-module",
+      "purpose": "咨询项目报告的范围、生成闭环和验收标准"
+    },
+    {
+      "path": "docs/agent/agent-loop-spec.md",
+      "when": "agent-generation-data-worker-memory-template",
+      "purpose": "Agent 启动协议、Generation Loop、不变量和停止条件"
+    },
+    {
+      "path": "docs/changes/README.md",
+      "when": "change-or-architecture",
+      "purpose": "SDD 变更目录、人工审核门禁、追踪和交接要求"
+    }
+  ],
+  "routes": [
+    {
+      "id": "web-ui",
+      "match": ["apps/web/**", "DESIGN.md"],
+      "read": ["apps/web/AGENTS.md", "apps/web/CLAUDE.md", "DESIGN.md"],
+      "checks": ["web-typecheck", "web-test-typecheck"]
+    },
+    {
+      "id": "api",
+      "match": ["apps/api/**"],
+      "read": ["docs/architecture/architecture.md", "docs/architecture/domain-model.md", "docs/operations/development-setup.md"],
+      "checks": ["api-typecheck", "api-test"]
+    },
+    {
+      "id": "generation",
+      "match": ["apps/generation-worker/**", "packages/generation/**", "packages/harness/**", "packages/model-gateway/**"],
+      "read": ["docs/agent/agent-loop-spec.md", "docs/generation/minimum-generation-closed-loop-design.md", "docs/architecture/architecture.md"],
+      "checks": ["typecheck", "offline-tests"]
+    },
+    {
+      "id": "data-artifact",
+      "match": ["apps/render-worker/**", "packages/chart/**", "packages/contracts/**", "packages/data-engine/**", "packages/db/**", "packages/domain/**", "packages/flint-adapter/**", "packages/memory/**", "packages/plugin-sdk/**", "packages/plugins/**", "packages/storage/**"],
+      "read": ["docs/product/phase1-consulting-report.md", "docs/architecture/domain-model.md", "docs/architecture/architecture.md"],
+      "checks": ["typecheck", "offline-tests"]
+    },
+    {
+      "id": "documentation",
+      "match": ["AGENTS.md", "CLAUDE.md", "CONTEXT.md", "README.md", ".agents/**", "docs/**"],
+      "read": ["docs/changes/README.md", "docs/project-spec.md"],
+      "checks": ["docs-check"]
+    }
+  ],
+  "checks": {
+    "docs-check": {
+      "command": "pnpm docs:check",
+      "purpose": "校验 docs 根目录约束、Markdown 相对链接和锚点"
+    },
+    "typecheck": {
+      "command": "pnpm typecheck",
+      "purpose": "校验所有 workspace TypeScript 类型"
+    },
+    "offline-tests": {
+      "command": "pnpm test",
+      "purpose": "运行仓库离线测试集合"
+    },
+    "api-typecheck": {
+      "command": "pnpm --filter @langreport/api typecheck",
+      "purpose": "校验 API workspace 类型"
+    },
+    "api-test": {
+      "command": "pnpm --filter @langreport/api test",
+      "purpose": "运行 API 单元和 HTTP 契约测试"
+    },
+    "web-typecheck": {
+      "command": "pnpm --filter @langreport/web typecheck",
+      "purpose": "校验 Web workspace 类型"
+    },
+    "web-test-typecheck": {
+      "command": "pnpm --filter @langreport/web test:typecheck",
+      "purpose": "校验 Web 测试类型"
+    }
+  }
+}

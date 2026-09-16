@@ -23,6 +23,8 @@ Consulting Project
 
 ## 文档
 
+- [项目基线与模块地图](./docs/project-spec.md)
+- [SDD 变更治理与模板](./docs/changes/README.md)
 - [领域上下文](./CONTEXT.md)
 - [第一阶段产品规格：咨询项目报告](./docs/product/phase1-consulting-report.md)
 - [Agent 启动与 Loop 规范](./docs/agent/agent-loop-spec.md)
