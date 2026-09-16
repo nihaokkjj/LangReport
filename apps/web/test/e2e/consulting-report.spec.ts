@@ -115,6 +115,31 @@ test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => 
   const fixture = createFixture();
   await page.route("**/api/**", fixture.route);
   await page.goto("/");
+  const topbar = page.locator(".topbar");
+  const projectButton = page.locator(".project-selector .selector-button");
+  await expect(projectButton).toHaveCSS("height", "48px");
+  if ((page.viewportSize()?.width ?? 0) > 760) {
+    const initialTopbarHeight = await topbar.evaluate((element) => element.getBoundingClientRect().height);
+    expect(initialTopbarHeight).toBe(70);
+    await projectButton.click();
+    const projectMenu = page.locator(".project-selector .selector-menu");
+    await expect(projectMenu).toBeVisible();
+    const menuLayout = await page.evaluate(() => {
+      const nav = document.querySelector<HTMLElement>(".topbar");
+      const menu = document.querySelector<HTMLElement>(".project-selector .selector-menu");
+      if (!nav || !menu) throw new Error("项目菜单未渲染");
+      return {
+        navHeight: nav.getBoundingClientRect().height,
+        navBottom: nav.getBoundingClientRect().bottom,
+        menuTop: menu.getBoundingClientRect().top,
+        menuPosition: getComputedStyle(menu).position
+      };
+    });
+    expect(menuLayout.navHeight).toBe(70);
+    expect(menuLayout.menuPosition).toBe("absolute");
+    expect(menuLayout.menuTop).toBeGreaterThanOrEqual(menuLayout.navBottom);
+    await page.locator(".project-selector .menu-item.current").click();
+  }
   await expect(page.getByText("E2E Workspace", { exact: true })).toHaveCount(0);
   const composerWrap = page.locator(".composer-wrap");
   await expect(composerWrap).toHaveCSS("position", "fixed");
@@ -133,7 +158,9 @@ test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => 
     await expect(sampleButton).toBeEnabled();
     await sampleButton.click({ force: true });
   }
-  await expect(page.getByText("sales-sample.csv", { exact: true })).toBeVisible();
+  await expect(page.locator(".context-summary-copy")).toContainText("sales-sample.csv");
+  const snapshotDetails = page.locator(".context-rail details").first();
+  expect(await snapshotDetails.evaluate((element) => (element as HTMLDetailsElement).open)).toBe(false);
 
   await page.getByRole("button", { name: "确认指标" }).click();
   await page.getByRole("button", { name: "确认并保存" }).click();
@@ -153,14 +180,13 @@ test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => 
   const evidenceCanvas = page.getByLabel("证据画布");
   await expect(evidenceCanvas.getByRole("heading", { name: "各区域月度销售额" })).toBeVisible({ timeout: 10000 });
   await expect(evidenceCanvas.getByText("草稿", { exact: true })).toBeVisible();
+  await expect(page.locator(".plugin-trace-banner")).toHaveCount(0);
 
   await evidenceCanvas.getByRole("button", { name: "提交审核" }).click();
   await expect(evidenceCanvas.getByText("审核中", { exact: true })).toBeVisible();
-  if (page.viewportSize()?.width === 390) {
-    await page.getByRole("button", { name: "批准此版本", exact: true }).click();
-  } else {
-    await evidenceCanvas.getByRole("button", { name: "批准版本" }).click();
-  }
+  await expect(evidenceCanvas.getByRole("button", { name: "批准版本" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "批准此版本", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "批准此版本", exact: true }).click();
   await expect(evidenceCanvas.getByText("已批准", { exact: true })).toBeVisible();
 
   await expect(page.getByRole("link", { name: "导出 SVG" })).toBeVisible();
@@ -178,7 +204,7 @@ test("图表编辑器把逻辑和显示变化提交为可追溯 Patch", async ({
     await fetch("/api/v1/projects/project-sales/data-assets/paste", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "sales-sample.csv", conversationId: "conversation-sales", content: "月份,区域,销售额\n2026-01,华东,120000\n2026-02,华东,138000" }) });
   });
   await page.reload();
-  await expect(page.getByText("sales-sample.csv", { exact: true })).toBeVisible();
+  await expect(page.locator(".context-summary-copy")).toContainText("sales-sample.csv");
   await page.getByRole("button", { name: "确认指标" }).click();
   await page.getByRole("button", { name: "确认并保存" }).click();
   await expect(page.getByText("指标已确认")).toBeVisible();

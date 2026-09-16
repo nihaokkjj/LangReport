@@ -24,7 +24,7 @@ Metric Definition 属于一个 Project，描述指标名称、业务含义、计
 
 ### Data Asset
 
-Data Asset 属于一个 Project，代表用户导入的逻辑数据资源。每个新 Data Asset 必须记录一个来源 Conversation；该字段用于文件目录隔离和来源审计，不把 Data Asset 的所有权转移给 Conversation。每次重新上传或重新解析都生成新的 Data Snapshot；历史 Snapshot 不被覆盖。
+Data Asset 属于一个 Project，代表用户导入的逻辑数据资源。每个新 Data Asset 必须记录一个不可变、非空的来源 Conversation 标识；该字段用于文件目录隔离和来源审计，不把 Data Asset 的所有权转移给 Conversation。来源 Conversation 删除后仍保留该标识，并在读模型显示来源已删除；Data Asset 和历史 Data Snapshot 继续可读。每次重新上传或重新解析都生成新的 Data Snapshot；历史 Snapshot 不被覆盖。
 
 ### Conversation
 

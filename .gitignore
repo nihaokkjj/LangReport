@@ -25,6 +25,7 @@ packages/db/drizzle/*
 !packages/db/drizzle/0018_execution_assembly.sql
 !packages/db/drizzle/0019_nervous_pestilence.sql
 !packages/db/drizzle/0020_project_onboarding.sql
+!packages/db/drizzle/0021_data_asset_intake_lifecycle.sql
 !packages/db/drizzle/meta/
 packages/db/drizzle/meta/*
 !packages/db/drizzle/meta/_journal.json

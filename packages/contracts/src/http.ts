@@ -249,17 +249,19 @@ const snapshotDto = dto({
 const assetDto = dto({
   id: uuid(),
   projectId: uuid(),
-  sourceConversationId: nullable(uuid()),
+  sourceConversationId: uuid(),
+  sourceConversationDeleted: boolean(),
   name: string(),
   sourceType: { type: "string", enum: ["csv", "xlsx", "json", "pasted"] },
   mimeType: string(),
   sizeBytes: integer(),
   status: { type: "string", enum: ["processing", "ready", "failed", "archived", "deleted"] },
+  errorCode: nullable(string()),
   errorMessage: nullable(string()),
   createdBy: string(),
   createdAt: dateTime(),
   latestSnapshot: nullable(snapshotDto)
-}, ["id", "projectId", "sourceConversationId", "name", "sourceType", "mimeType", "sizeBytes", "status", "createdBy", "createdAt", "latestSnapshot"]);
+}, ["id", "projectId", "sourceConversationId", "sourceConversationDeleted", "name", "sourceType", "mimeType", "sizeBytes", "status", "errorCode", "createdBy", "createdAt", "latestSnapshot"]);
 
 const conversationDto = dto({
   id: uuid(),

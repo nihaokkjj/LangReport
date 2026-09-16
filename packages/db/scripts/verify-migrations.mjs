@@ -97,16 +97,43 @@ async function run() {
         JOIN "project_themes" t ON t."project_id" = j."project_id"
         WHERE j."id" = '00000000-0000-0000-0000-000000000006'
       `);
-      assert.equal(historical.job_prompt, "历史销售额");
-      assert.deepEqual(historical.plugin_context, {});
-      assert.deepEqual(historical.plugin_usage, {});
-      assert.deepEqual(historical.model_route, {});
-      assert.equal(historical.job_execution_assembly, null);
-      assert.deepEqual(historical.plugin_snapshot, {});
-      assert.equal(historical.revision_execution_assembly, null);
-      assert.deepEqual(historical.revision_outputs, { svg: "historical.svg" });
-      assert.deepEqual(historical.theme_config, { ink: "#111111" });
-      assert.equal(historical.theme_ref, null);
+      assert.equal(historical, undefined, "legacy project-scoped Data Asset records must be cleaned before source becomes required");
+
+      const [legacyAssets] = await transaction.unsafe(`
+        SELECT count(*)::integer AS count
+        FROM "data_assets"
+        WHERE "id" = '00000000-0000-0000-0000-000000000003'
+      `);
+      assert.equal(legacyAssets.count, 0, "legacy Data Asset metadata must not survive the provenance migration");
+
+      const [sourceColumn] = await transaction.unsafe(`
+        SELECT is_nullable
+        FROM information_schema.columns
+        WHERE table_schema = '${schemaName}'
+          AND table_name = 'data_assets'
+          AND column_name = 'source_conversation_id'
+      `);
+      assert.equal(sourceColumn.is_nullable, "NO", "Data Asset provenance must be non-null");
+
+      const [errorCodeColumn] = await transaction.unsafe(`
+        SELECT count(*)::integer AS count
+        FROM information_schema.columns
+        WHERE table_schema = '${schemaName}'
+          AND table_name = 'data_assets'
+          AND column_name = 'error_code'
+      `);
+      assert.equal(errorCodeColumn.count, 1, "Data Asset failure codes must be persisted");
+
+      const sourceForeignKeys = await transaction.unsafe(`
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class r ON r.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = r.relnamespace
+        WHERE n.nspname = '${schemaName}'
+          AND r.relname = 'data_assets'
+          AND c.conname = 'data_assets_source_conversation_id_conversations_id_fk'
+      `);
+      assert.equal(sourceForeignKeys.length, 0, "Data Asset provenance must not use a live Conversation FK");
 
       const [columns] = await transaction.unsafe(`
         SELECT count(*)::integer AS count

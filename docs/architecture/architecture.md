@@ -62,7 +62,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ### Data
 
-负责文件上传、格式解析、字段画像、Data Asset 和 Data Snapshot。原始文件进入私有对象存储，解析后的结构化快照进入受控存储。
+负责文件上传、格式解析、字段画像、Data Asset 和 Data Snapshot。HTTP upload/paste 只负责传输解析、Project action 权限、intake command 组装和安全错误响应；Data Asset intake module 负责来源 Conversation 与 Project 关系校验、Conversation-scoped canonical key、解析编排、`processing → ready/failed` 状态和 PostgreSQL/S3 补偿。原始文件进入私有对象存储，解析后的结构化快照进入受控存储。一次 intake 成功后，Snapshot 元数据和 `ready` 状态在同一 PostgreSQL transaction 中提交。
 
 ### Conversation
 
@@ -123,6 +123,8 @@ workspaces/{workspaceId}/projects/{projectId}/conversations/{conversationId}/use
 ```
 
 新建 Data Asset 必须绑定来源 Conversation；`sourceConversationId` 用于目录隔离和来源审计，但 Data Asset 的所有权仍归 Project。Snapshot 对象名包含 Snapshot ID，避免后续解析覆盖已被 Chart Revision 引用的输入。旧的项目级上传路径不再由应用生成或兼容读取，历史对象可以在部署时清理。
+
+`sourceConversationId` 是不可变、非空的来源/路径标识，不再使用指向 live Conversation 的 `ON DELETE SET NULL` FK。来源 Conversation 删除后，Data Asset 继续保留该 UUID；读模型通过 left join 派生 `sourceConversationDeleted`，并保留 Project-owned 资产及其 Snapshot 的可读性。intake 的解析、对象写入和持久化失败使用稳定的 Data Asset error code，成功写入的 source/normalized object 会按逆序 best-effort 删除；补偿失败写入审计事件，不把 provider 错误或 object key 返回给客户端。
 
 第一阶段的模型读取链路仍由 Generation Worker 控制：Worker 先通过 `Snapshot access module` 从 `workspaceId`、Project、来源 Conversation、Data Asset 和 Snapshot ID 重建 canonical `normalizedObjectKey`，拒绝旧项目级路径、关系不一致或缺失来源 Conversation 的记录，然后读取并验证 JSON payload。读取失败使用 `SNAPSHOT_RELATION_INVALID`、`SNAPSHOT_KEY_INVALID`、`SNAPSHOT_OBJECT_NOT_FOUND`、`SNAPSHOT_PAYLOAD_INVALID` 或 `SNAPSHOT_READ_FAILED` 等可审计错误码；只有经过验证的字段画像和行数据才会传给 Model Gateway。对象路径不会进入模型上下文，也不开放任意 `read_file`、`grep` 或 `glob`；若未来需要工具式文件阅读，必须另行实现带 Workspace/Project/Conversation 权限和路径白名单的受控工具。
 

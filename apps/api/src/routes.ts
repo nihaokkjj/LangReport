@@ -9,7 +9,7 @@ import { MemoryServiceError, acceptMemoryCandidate, createMemoryExtractionJob, d
 import { projectConversationToCanonicalTextContext } from "@langreport/generation";
 import { ModelCredentialEncryptionError, ModelGatewayConfigurationError, encryptWorkspaceModelCredential, modelRouteFingerprint, resolveModelRouteSnapshot } from "@langreport/model-gateway";
 import { PluginServiceError, assertProjectThemeReference, getWorkspacePlugin, installPlugin, listBuiltinPluginCatalog, listProjectPlugins, listWorkspacePlugins, resolveProjectPluginContext, restorePluginInstallation, revokePluginInstallation, setProjectPluginBinding, validateBuiltinPluginManifest } from "@langreport/plugins";
-import { DataAssetError, getDataAsset, inferSourceType, ingestDataAsset, listDataAssets } from "./data-assets.js";
+import { DataAssetError, getDataAsset, inferSourceType, ingestDataAsset, listDataAssets, type DataAssetIntakeCommand } from "./data-assets.js";
 import { registerChartRoutes } from "./chart-routes.js";
 import { sendHttpError } from "./http-errors.js";
 import { isDevBootstrapAllowed } from "./http-contracts.js";
@@ -314,19 +314,23 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       const part = await request.file();
       if (!part) return sendHttpError(reply, 400, "请上传文件", "INVALID_INPUT");
       const bytes = await part.toBuffer();
-      if (part.file.truncated) return sendHttpError(reply, 413, "文件不能超过 50 MB", "PAYLOAD_TOO_LARGE");
+      if (part.file.truncated) return sendHttpError(reply, 413, "文件不能超过 50 MB", "DATA_ASSET_TOO_LARGE");
       const sourceConversationId = multipartTextField(part.fields as Record<string, unknown>, "conversationId");
-      if (!sourceConversationId) throw new DataAssetError("上传数据必须指定 Conversation");
+      if (!sourceConversationId) throw new DataAssetError("上传数据必须指定 Conversation", "SOURCE_CONVERSATION_INVALID");
 
-      const asset = await ingestDataAsset({
+      const command: DataAssetIntakeCommand = {
         projectId: request.params.projectId,
         sourceConversationId,
         createdBy: userIdFromRequest(request),
-        name: part.filename,
-        sourceType: inferSourceType(part.filename, part.mimetype),
-        mimeType: part.mimetype,
-        bytes
-      });
+        requestId: request.id,
+        source: {
+          name: part.filename,
+          sourceType: inferSourceType(part.filename, part.mimetype),
+          mimeType: part.mimetype,
+          bytes
+        }
+      };
+      const asset = await ingestDataAsset(command);
       return reply.code(201).send({ asset });
     } catch (error) {
       return sendDataError(reply, error);
@@ -338,15 +342,19 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       assertProjectId(request.params.projectId);
       await assertChartAction(request.params.projectId, userIdFromRequest(request), "manage_data");
       const body = pasteDataRequestSchema.parse(request.body);
-      const asset = await ingestDataAsset({
+      const command: DataAssetIntakeCommand = {
         projectId: request.params.projectId,
         sourceConversationId: body.conversationId,
         createdBy: userIdFromRequest(request),
-        name: body.name,
-        sourceType: "pasted",
-        mimeType: "text/csv",
-        bytes: Buffer.from(body.content, "utf8")
-      });
+        requestId: request.id,
+        source: {
+          name: body.name,
+          sourceType: "pasted",
+          mimeType: "text/csv",
+          bytes: Buffer.from(body.content, "utf8")
+        }
+      };
+      const asset = await ingestDataAsset(command);
       return reply.code(201).send({ asset });
     } catch (error) {
       return sendDataError(reply, error);
@@ -1327,15 +1335,28 @@ function assistantReplyForMessage(content: string): string {
   return "已记录到当前 Conversation。你可以继续补充业务问题、时间范围或需要比较的维度。";
 }
 
-function sendDataError(reply: FastifyReply, error: unknown) {
+export function sendDataError(reply: FastifyReply, error: unknown) {
   if (error instanceof AuthenticationError) return sendHttpError(reply, error.statusCode, error.message, error.code);
   if (error instanceof PluginServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code, error.details);
   if (error instanceof ChartServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code);
   if (error instanceof MemoryServiceError) return sendHttpError(reply, error.statusCode, error.message, error.code, error.details);
   if (error instanceof ModelCredentialEncryptionError) return sendHttpError(reply, 503, error.message, "MODEL_CREDENTIAL_CONFIGURATION_INVALID");
   if (error instanceof ModelGatewayConfigurationError) return sendHttpError(reply, 503, error.message, "MODEL_ROUTE_CONFIGURATION_INVALID");
-  if (error instanceof DataAssetError || error instanceof Error && ["DataParseError", "ZodError"].includes(error.name)) {
-    return sendHttpError(reply, 400, error.message, "INVALID_INPUT");
+  if (error instanceof DataAssetError) {
+    return sendHttpError(reply, error.statusCode, error.message, error.code);
+  }
+  if (error instanceof Error && ["DataParseError", "ZodError"].includes(error.name)) {
+    if (error.name === "ZodError" && isDataAssetTooLargeValidation(error)) {
+      return sendHttpError(reply, 413, "文件不能超过 50 MB", "DATA_ASSET_TOO_LARGE");
+    }
+    return sendHttpError(reply, error.name === "DataParseError" ? 422 : 400, error.name === "DataParseError" ? "数据无法解析，请检查文件格式、表头和内容" : error.message, error.name === "DataParseError" ? "DATA_PARSE_FAILED" : "INVALID_INPUT");
   }
   return sendHttpError(reply, 500, "数据处理失败", "DATA_PROCESSING_ERROR");
+}
+
+function isDataAssetTooLargeValidation(error: Error): boolean {
+  if (!Array.isArray((error as Error & { issues?: unknown }).issues)) return false;
+  return (error as Error & { issues: Array<{ code?: unknown; path?: unknown[] }> }).issues.some((issue) =>
+    issue.code === "too_big" && issue.path?.[0] === "content"
+  );
 }

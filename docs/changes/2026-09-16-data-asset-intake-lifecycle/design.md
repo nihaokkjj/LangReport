@@ -1,7 +1,7 @@
 # 收拢 Conversation-bound Data Asset intake：设计
 
 - 变更编号：`CHG-2026-09-16-DATA-ASSET-INTAKE`
-- 状态：`REVIEWING`
+- 状态：`VERIFYING`
 - 创建时间：2026-09-16
 - 更新时间：2026-09-16
 
@@ -11,7 +11,7 @@
 
 当前持久化关系为：
 
-- `data_assets` 是 Project-owned，目标状态是包含不可变、非空的 `sourceConversationId` 和原始对象 key；
+- `data_assets` 是 Project-owned，目标状态是包含不可变、非空的 `sourceConversationId`、原始对象 key 和可审计 `errorCode` 的记录；
 - `data_snapshots` 属于 Data Asset，包含字段画像、预览和 normalized object key；
 - 当前 `sourceConversationId` 的 FK 使用 `ON DELETE SET NULL`，本次迁移将移除该删除行为，保留不可变来源 UUID；
 - Snapshot access module 只要求来源标识非空且可重建当前 Conversation-scoped canonical key，不要求来源 Conversation 行仍然存在。
@@ -227,21 +227,21 @@ Intake module 不直接调用 Worker、GenerationCycle 或 Model Gateway。
 ### 迁移前检查
 
 - 枚举 `sourceConversationId IS NULL`、旧项目级 object key 和找不到对应 Snapshot 的历史记录；
-- 按用户已确认的历史可丢弃策略清理这些记录和对象；
+- 按用户已确认的历史可丢弃策略清理这些记录和对象；数据库迁移只处理元数据及对象 key 引用，部署清理步骤按迁移前对象清单删除历史孤儿对象；
 - 检查所有新生成路径均服从 Conversation-scoped canonical key。
 
 ### Schema 迁移决策
 
 采用已确认的方案 B：
 
-1. 清理允许丢弃的 `sourceConversationId IS NULL` 记录、旧项目级 object key 和无法重建 Snapshot key 的历史记录；
+1. 清理允许丢弃的 `sourceConversationId IS NULL` 记录、旧项目级 object key 引用和无法重建 Snapshot key 的历史记录；迁移不直接调用 S3，部署清理步骤负责依据迁移前对象清单删除对应历史孤儿对象；
 2. 将 `data_assets.sourceConversationId` 改为 `NOT NULL`；
 3. 移除指向 live `conversations` 行的 `ON DELETE SET NULL` 约束（实现上不保留会阻止删除 Conversation 的强 FK），保留该 UUID 作为不可变来源/路径标识；
 4. intake 创建时仍必须验证 Conversation 属于当前 Project；
 5. `getDataAsset`、列表读模型和审计通过 left join 或存在性查询派生 `sourceConversationDeleted`，不把 Data Asset 所有权转移给 Conversation；
 6. Snapshot access module 以 `projectId + assetId + sourceConversationId + snapshotId` 重建 key，不要求 Conversation 行仍存在。
 
-该方案牺牲了 live FK 的引用完整性，换取 Project-owned Data Asset 不受 Conversation 删除影响。不可变 UUID、Project 关系和 canonical key 校验共同承担安全约束。
+该方案牺牲了 live FK 的引用完整性，换取 Project-owned Data Asset 不受 Conversation 删除影响。不可变 UUID、Project 关系和 canonical key 校验共同承担安全约束。迁移中的数据库清理与对象存储清理保持分层：数据库迁移删除不可恢复的无效元数据引用，部署运维按受控对象清单处理历史对象；运行时 intake 对新孤儿对象负责 best-effort 补偿并审计失败。
 
 ### 回滚
 
@@ -275,10 +275,10 @@ Intake module 不直接调用 Worker、GenerationCycle 或 Model Gateway。
 
 | 需求 | 设计 | 任务 | 测试 | commit |
 | --- | --- | --- | --- | --- |
-| R1 upload/paste 共享 intake module | D1 模块边界、D2 command | T1/T2 | route + module unit | 待提交 |
-| R2 跨 PostgreSQL/S3 失败可补偿 | D3 状态流、D4 失败路径 | T3/T4 | failure/cleanup tests | 待提交 |
-| R3 关系和 canonical key 一致 | D2、D5 权限校验、迁移 | T2/T5 | relation/key/contract tests | 待提交 |
-| R4 错误可审计且不泄露 provider 细节 | D6 error mapping、D7 observability | T6 | HTTP/error tests | 待提交 |
-| R5 Data Asset 保持 Project-owned | D1、D5 | T5 | ownership regression tests | 待提交 |
-| R6 Snapshot re-ingest 方向确定但不在本次实现 | D8 已确认决策与后续变更边界 | T0/T7 | product/design review | 待提交 |
-| R7 来源 Conversation 删除后仍可审计/读取 | D9 不可变来源 UUID、派生删除状态 | T0/T5/T6 | migration/read-model/access tests | 待提交 |
+| R1 upload/paste 共享 intake module | D1 模块边界、D2 command | T1/T2 | route + module unit | `apps/api/src/routes.ts`、`apps/api/src/data-assets.ts` |
+| R2 跨 PostgreSQL/S3 失败可补偿 | D3 状态流、D4 失败路径 | T3/T4 | failure/cleanup tests | `apps/api/test/unit/data-assets.test.ts` |
+| R3 关系和 canonical key 一致 | D2、D5 权限校验、迁移 | T2/T5 | relation/key/contract tests | intake unit、Snapshot access tests、`packages/db/drizzle/0021_data_asset_intake_lifecycle.sql` |
+| R4 错误可审计且不泄露 provider 细节 | D6 error mapping、D7 observability | T6 | HTTP/error tests | `apps/api/src/routes.ts`、API/contract tests |
+| R5 Data Asset 保持 Project-owned | D1、D5 | T5 | ownership regression tests | `docs/architecture/domain-model.md`、worker access tests |
+| R6 Snapshot re-ingest 方向确定但不在本次实现 | D8 已确认决策与后续变更边界 | T0/T7 | product/design review | proposal/design/ADR-0020 |
+| R7 来源 Conversation 删除后仍可审计/读取 | D9 不可变来源 UUID、派生删除状态 | T0/T5/T6 | migration/read-model/access tests | contracts、schema、Data Asset read projection、ADR-0020 |

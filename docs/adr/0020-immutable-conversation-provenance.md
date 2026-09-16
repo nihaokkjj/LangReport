@@ -1,6 +1,6 @@
 # ADR-0020：保留 Data Asset 的不可变来源 Conversation 标识
 
-- 状态：Proposed
+- 状态：Accepted
 - 日期：2026-09-16
 - 关联变更：`CHG-2026-09-16-DATA-ASSET-INTAKE`
 
@@ -83,3 +83,7 @@ workspaces/{workspaceId}/projects/{projectId}/conversations/{conversationId}/use
 - 迁移前清理可丢弃的无来源记录和旧项目级对象；
 - 迁移失败时保留数据库和对象存储的原状态，不执行破坏性回退；
 - 若未来否决本决策，应先设计独立的来源审计记录或对象路径迁移，再修改 Schema。
+
+## 实现记录
+
+`CHG-2026-09-16-DATA-ASSET-INTAKE` 已按本 ADR 落地：Data Asset intake 在写入前校验 Project/Conversation 关系，`data_assets.source_conversation_id` 已改为非空且不再保留 live Conversation FK；PublicDataAsset 通过 `sourceConversationDeleted` 投影来源行是否仍存在。Snapshot access module 继续仅按不可变 UUID 重建 Conversation-scoped canonical key，不要求 Conversation 行仍存在。

@@ -16,6 +16,7 @@ import {
   projects,
   workspaces
 } from "@langreport/db";
+import { conversationUploadObjectKey } from "@langreport/storage";
 import { buildApp } from "../../src/app.js";
 
 type JsonObject = Record<string, unknown>;
@@ -40,25 +41,44 @@ test("message-triggered generation is single-write, idempotent and explains miss
       title: `Phase 1 ${name}`,
       createdBy: userId
     }).returning();
+    const assetId = randomUUID();
+    const snapshotId = randomUUID();
     const [asset] = await db.insert(dataAssets).values({
+      id: assetId,
       projectId: project.id,
+      sourceConversationId: conversation.id,
       name: `${name}.csv`,
       sourceType: "pasted",
       mimeType: "text/csv",
       sizeBytes: 1,
-      objectKey: `phase1/${suffix}/${name}.csv`,
+      objectKey: conversationUploadObjectKey({
+        workspaceId: workspace.id,
+        projectId: project.id,
+        conversationId: conversation.id,
+        assetId,
+        kind: "source",
+        filename: `${name}.csv`
+      }),
       status: "ready",
       createdBy: userId
     }).returning();
     if (options.snapshot) {
       await db.insert(dataSnapshots).values({
+        id: snapshotId,
         assetId: asset.id,
         version: 1,
         rowCount: 1,
         columnCount: 1,
         schema: [{ name: "销售额", inferredType: "number", nullCount: 0, distinctCount: 1, sampleValues: [100] }],
         preview: [{ 销售额: 100 }],
-        normalizedObjectKey: `phase1/${suffix}/${name}.json`
+        normalizedObjectKey: conversationUploadObjectKey({
+          workspaceId: workspace.id,
+          projectId: project.id,
+          conversationId: conversation.id,
+          assetId,
+          kind: "normalized",
+          filename: `${snapshotId}.json`
+        })
       });
     }
     const metricIds: string[] = [];

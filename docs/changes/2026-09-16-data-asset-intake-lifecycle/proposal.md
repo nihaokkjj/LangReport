@@ -1,7 +1,7 @@
 # 收拢 Conversation-bound Data Asset intake：提案
 
 - 变更编号：`CHG-2026-09-16-DATA-ASSET-INTAKE`
-- 状态：`REVIEWING`
+- 状态：`VERIFYING`
 - 创建时间：2026-09-16
 - 更新时间：2026-09-16
 
@@ -17,7 +17,7 @@
 2. `sourceConversationId` 在 intake 中被要求存在，但数据库允许 `NULL` 并使用 `ON DELETE SET NULL`，与 Conversation-scoped object key 和 Snapshot access module 的读取前提冲突。
 3. 存储故障、数据库故障和用户输入错误都可能被映射为 `400 INVALID_INPUT`，不利于用户处理和审计。
 4. `ingestDataAsset` 的 interface 看似单一，但 DB、解析器、对象存储和 key 生成器都被直接绑定，缺少可测试的显式 seam。
-5. 当前每次 intake 都生成新的 Data Asset；产品方向要求同一 Data Asset 的重新上传追加 Snapshot，但该 HTTP 操作不属于本次 intake 补偿改造。
+5. 当前一次 intake 仍生成一个新的 Data Asset；产品方向要求同一 Data Asset 的重新上传追加 Snapshot，但该 HTTP 操作不属于本次 intake 补偿改造。
 
 ## 目标用户与使用场景
 
@@ -37,7 +37,7 @@
 3. 在 module 内设置最小的对象存储 callback seam；生产环境继续使用唯一的 S3 adapter，单元测试使用内存 callback。
 4. 为 source object、normalized snapshot object、Snapshot DB 写入和 `ready` 状态更新定义成功、失败和补偿语义。
 5. 引入可审计的 typed error code，并区分用户输入错误、对象存储故障和数据库故障。
-6. 将 `sourceConversationId` 作为不可变、非空的来源标识保存；不使用 `ON DELETE SET NULL`，允许来源 Conversation 删除，并在读模型和审计中显示“来源 Conversation 已删除”。清理可以丢弃的旧项目级对象和无效历史记录，不保留旧路径兼容读取。
+6. 将 `sourceConversationId` 作为不可变、非空的来源标识保存；不使用 `ON DELETE SET NULL`，允许来源 Conversation 删除，并在读模型和审计中显示“来源 Conversation 已删除”。迁移清理可丢弃的旧项目级元数据及其对象引用，不保留旧路径兼容读取；部署运维仍需按对象存储清单清理历史孤儿对象。
 7. 增加 intake module 的成功、关系校验、解析失败、各阶段写入失败和补偿测试。
 
 ### 后续范围

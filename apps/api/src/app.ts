@@ -114,7 +114,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
             : statusCode === 409
               ? "CONFLICT"
               : statusCode === 413
-                ? "PAYLOAD_TOO_LARGE"
+                ? "DATA_ASSET_TOO_LARGE"
                 : statusCode === 422
                   ? "VALIDATION_FAILED"
                   : statusCode >= 500

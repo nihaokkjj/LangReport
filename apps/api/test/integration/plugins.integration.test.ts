@@ -6,6 +6,7 @@ import { closeDatabase, db, analysisBriefs, auditEvents, chartArtifacts, chartRe
 import { pluginContextSchema } from "@langreport/contracts";
 import { buildApp } from "../../src/app.js";
 import { buildPluginSnapshot, PluginServiceError } from "@langreport/plugins";
+import { conversationUploadObjectKey } from "@langreport/storage";
 
 type JsonObject = Record<string, unknown>;
 type InjectMethod = "GET" | "POST" | "PUT";
@@ -55,29 +56,48 @@ test("plugin API completes install, binding, theme, revoke, restore and audit fl
     { projectId: project.id, userId: reviewerId, role: "reviewer" },
     { projectId: project.id, userId: viewerId, role: "viewer" }
   ]);
-  const [asset] = await db.insert(dataAssets).values({
+  const [conversation] = await db.insert(conversations).values({
     projectId: project.id,
+    title: "Phase 5 integration",
+    createdBy: ownerId
+  }).returning();
+  const assetId = randomUUID();
+  const snapshotId = randomUUID();
+  const [asset] = await db.insert(dataAssets).values({
+    id: assetId,
+    projectId: project.id,
+    sourceConversationId: conversation.id,
     name: "phase5.csv",
     sourceType: "pasted",
     mimeType: "text/csv",
     sizeBytes: 1,
-    objectKey: `phase5/${suffix}/asset.csv`,
+    objectKey: conversationUploadObjectKey({
+      workspaceId: workspace.id,
+      projectId: project.id,
+      conversationId: conversation.id,
+      assetId,
+      kind: "source",
+      filename: "phase5.csv"
+    }),
     status: "ready",
     createdBy: ownerId
   }).returning();
   const [snapshot] = await db.insert(dataSnapshots).values({
+    id: snapshotId,
     assetId: asset.id,
     version: 1,
     rowCount: 1,
     columnCount: 1,
     schema: [],
     preview: [],
-    normalizedObjectKey: `phase5/${suffix}/snapshot.json`
-  }).returning();
-  const [conversation] = await db.insert(conversations).values({
-    projectId: project.id,
-    title: "Phase 5 integration",
-    createdBy: ownerId
+    normalizedObjectKey: conversationUploadObjectKey({
+      workspaceId: workspace.id,
+      projectId: project.id,
+      conversationId: conversation.id,
+      assetId,
+      kind: "normalized",
+      filename: `${snapshotId}.json`
+    })
   }).returning();
   await db.insert(metricDefinitions).values({
     projectId: project.id,

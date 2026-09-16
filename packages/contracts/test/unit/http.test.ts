@@ -159,6 +159,15 @@ test("generation message contract carries the single-send inputs and allows prec
 test("data uploads require a Conversation source", () => {
   assert.throws(() => pasteDataRequestSchema.parse({ name: "sales.csv", content: "a,b\n1,2" }));
   assert.deepEqual(pasteDataRequestSchema.parse({ name: "sales.csv", content: "a,b\n1,2", conversationId: "00000000-0000-4000-8000-000000000001" }).conversationId, "00000000-0000-4000-8000-000000000001");
+
+  const contract = getRouteContract("POST", "/api/v1/projects/:projectId/data-assets/paste");
+  assert.ok(contract);
+  const assetSchema = (contract.responses[201] as { properties: { asset: { required: string[]; properties: Record<string, unknown> } } }).properties.asset;
+  assert.ok(assetSchema.required.includes("sourceConversationId"));
+  assert.ok(assetSchema.required.includes("sourceConversationDeleted"));
+  assert.ok(assetSchema.required.includes("errorCode"));
+  assert.equal((assetSchema.properties.sourceConversationId as { type?: string }).type, "string");
+  assert.equal((assetSchema.properties.sourceConversationDeleted as { type?: string }).type, "boolean");
 });
 
 test("Project creation contract requires auditable onboarding context", () => {

@@ -99,13 +99,16 @@ export const projectMembers = pgTable("project_members", {
 export const dataAssets = pgTable("data_assets", {
   id: uuid("id").defaultRandom().primaryKey(),
   projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
-  sourceConversationId: uuid("source_conversation_id").references(() => conversations.id, { onDelete: "set null" }),
+  // This is immutable provenance/path data. Intake validates the Conversation
+  // belongs to the Project, but the asset remains readable after deletion.
+  sourceConversationId: uuid("source_conversation_id").notNull(),
   name: text("name").notNull(),
   sourceType: dataAssetSourceType("source_type").notNull(),
   mimeType: text("mime_type").notNull(),
   sizeBytes: integer("size_bytes").notNull(),
   objectKey: text("object_key").notNull(),
   status: dataAssetStatus("status").notNull().default("processing"),
+  errorCode: text("error_code"),
   errorMessage: text("error_message"),
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()

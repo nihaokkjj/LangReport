@@ -1,7 +1,7 @@
 # 收拢 Conversation-bound Data Asset intake：测试计划
 
 - 变更编号：`CHG-2026-09-16-DATA-ASSET-INTAKE`
-- 状态：`REVIEWING`
+- 状态：`VERIFYING`
 - 创建时间：2026-09-16
 - 更新时间：2026-09-16
 
@@ -53,13 +53,13 @@
 8. `pnpm docs:check`
 9. `git diff --check`
 
-需要新增或调整的自动化测试文件由实现阶段确定，预期包括：
+本次实际新增或调整的自动化测试文件为：
 
 - `apps/api/test/unit/data-assets.test.ts`：DTO、command、module failure paths；
-- `apps/api/test/unit/routes.test.ts` 或现有 HTTP route 测试：upload/paste 错误映射；
+- `apps/api/test/unit/http-errors.test.ts`：Data Asset typed error 的 HTTP 状态、稳定 code 和 provider 错误隔离；
 - `packages/contracts/test/unit/http.test.ts`：DTO、请求和 error response contract；
-- `packages/db/test` 或迁移验证：非空约束、删除策略、状态流；
-- 对象存储测试：内存 callback 单元测试和隔离 MinIO 集成测试。
+- `packages/db/scripts/verify-migrations.mjs`：非空约束、删除策略、历史无效 Data Asset 清理和 `error_code` 列；
+- 对象存储测试：`data-assets.test.ts` 中的内存 callback 单元测试；隔离 MinIO 集成测试沿用现有集成入口。
 
 ## 人工验收步骤
 
@@ -69,7 +69,7 @@
 4. 通过测试故障注入让 normalized 写入失败，确认 source object 被补偿删除，Data Asset 为 `failed`。
 5. 通过测试故障注入让 Snapshot DB 写入失败，确认两个对象均被处理，错误可通过 assetId 追踪。
 6. 查询成功响应和 Data Asset DTO，确认不包含任何内部 object key。
-7. 检查历史无效记录/旧项目级对象清理结果，确认没有新增兼容读取分支。
+7. 检查历史无效记录/旧项目级对象引用清理结果，确认没有新增兼容读取分支；部署时再按迁移前对象清单清理对应对象。
 8. 删除来源 Conversation 后查询 Data Asset，确认 `sourceConversationId` 仍保留、Snapshot key 仍可读取，并显示来源已删除状态。
 9. 检查当前 intake 没有通过创建新 Data Asset 模拟 re-ingest；真正的 re-ingest HTTP 操作应在后续变更中实现。
 
