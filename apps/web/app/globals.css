@@ -21,6 +21,9 @@
   --canvas-translucent: rgba(255, 255, 255, .96);
   --shadow-soft: 0 4px 16px rgba(23, 33, 43, .08);
   --overlay: rgba(23, 33, 43, .58);
+  --scrollbar-track: var(--surface-muted);
+  --scrollbar-thumb: var(--border);
+  --scrollbar-thumb-hover: var(--ink-border);
   /* DESIGN.md's open-source substitutes for figmaSans and figmaMono. */
   --font-sans: "Inter", "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
@@ -42,7 +45,12 @@
   --composer-reserve: 208px;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); scrollbar-width: thin; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+*::-webkit-scrollbar-thumb { border: 2px solid var(--scrollbar-track); border-radius: 999px; background: var(--scrollbar-thumb); }
+*::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+*::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
 html { min-width: 320px; background: var(--canvas); }
 body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-size: var(--type-body); font-weight: var(--weight-regular); line-height: 1.6; font-feature-settings: "kern"; -webkit-font-smoothing: antialiased; }
 button, input, textarea, select { font: inherit; }
