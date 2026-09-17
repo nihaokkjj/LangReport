@@ -15,10 +15,30 @@ const rows = [
 
 function createFixture() {
   let asset: Record<string, unknown> | null = null;
+  let snapshots: Record<string, unknown>[] = [];
   let metric: Record<string, unknown> | null = null;
   let brief: Record<string, unknown> | null = null;
   let editRequest: Record<string, unknown> | null = null;
   let revisionStatus: "draft" | "in_review" | "approved" = "draft";
+  const schema = [
+    { name: "月份", inferredType: "date", nullCount: 0, distinctCount: 3, sampleValues: ["2026-01"] },
+    { name: "区域", inferredType: "string", nullCount: 0, distinctCount: 1, sampleValues: ["华东"] },
+    { name: "销售额", inferredType: "number", nullCount: 0, distinctCount: 3, sampleValues: [120000] }
+  ];
+  const createSnapshot = (version: number, sourceName: string, sourceType: "csv" | "pasted") => ({
+    id: `snapshot-sales-v${version}`,
+    assetId,
+    version,
+    rowCount: rows.length,
+    columnCount: 3,
+    sourceName,
+    sourceType,
+    mimeType: "text/csv",
+    sizeBytes: 42,
+    createdAt: now,
+    schema,
+    preview: rows
+  });
   const revision = () => ({
     id: revisionId,
     artifactId: "artifact-sales",
@@ -63,6 +83,15 @@ function createFixture() {
       if (path === "/api/v1/dev/bootstrap" && request.method() === "POST") return route.fulfill({ json: { workspace: { id: "workspace-sales", name: "E2E Workspace", role: "owner" }, project: { id: projectId, name: "销售分析 Demo", clientName: "海岚消费", objective: "验证区域销售增长机会。", audience: "client_presentation", visualTemplate: "consulting-neutral" } } });
       if (path === "/api/v1/projects" && request.method() === "GET") return route.fulfill({ json: { workspace: { id: "workspace-sales", name: "E2E Workspace", role: "owner" }, projects: [{ id: projectId, name: "销售分析 Demo", clientName: "海岚消费", objective: "验证区域销售增长机会。", audience: "client_presentation", visualTemplate: "consulting-neutral" }] } });
       if (path === `/api/v1/projects/${projectId}/data-assets` && request.method() === "GET") return route.fulfill({ json: { assets: asset ? [asset] : [] } });
+      if (path === `/api/v1/data-assets/${assetId}/snapshots` && request.method() === "GET") {
+        return route.fulfill({ json: { snapshots: snapshots.map((snapshot) => Object.fromEntries(Object.entries(snapshot).filter(([key]) => key !== "schema" && key !== "preview"))) } });
+      }
+      const snapshotDetailMatch = path.match(new RegExp(`^/api/v1/data-assets/${assetId}/snapshots/([^/]+)$`));
+      if (snapshotDetailMatch && request.method() === "GET") {
+        const snapshot = snapshots.find((candidate) => candidate.id === snapshotDetailMatch[1]);
+        if (!snapshot) return route.fulfill({ status: 404, json: { code: "SNAPSHOT_NOT_FOUND", message: "Snapshot 不存在" } });
+        return route.fulfill({ json: { snapshot } });
+      }
       if (path === `/api/v1/projects/${projectId}/conversations` && request.method() === "GET") return route.fulfill({ json: { conversations: [{ id: conversationId, projectId, title: "销售分析对话", createdAt: now, updatedAt: now }] } });
       if (path === `/api/v1/projects/${projectId}/metric-definition` && request.method() === "GET") return route.fulfill({ json: { definition: metric } });
       if (path === `/api/v1/projects/${projectId}/analysis-brief` && request.method() === "GET") return route.fulfill({ json: { brief } });
@@ -72,15 +101,21 @@ function createFixture() {
       if (path === "/api/v1/workspaces/workspace-sales/model-credential" && request.method() === "GET") return route.fulfill({ json: { credential: { workspaceId: "workspace-sales", provider: "bailian", configured: false, keySuffix: null, updatedAt: null } } });
       if (path === `/api/v1/conversations/${conversationId}/messages` && request.method() === "GET") return route.fulfill({ json: { messages: [] } });
       if (path === `/api/v1/projects/${projectId}/data-assets/paste` && request.method() === "POST") {
-        asset = { id: assetId, projectId, sourceConversationId: conversationId, name: "sales-sample.csv", sourceType: "paste", sizeBytes: 42, status: "ready", errorMessage: null, createdAt: now, latestSnapshot: { id: "snapshot-sales-v1", version: 1, rowCount: rows.length, columnCount: 3, schema: [{ name: "月份", inferredType: "date", nullCount: 0, distinctCount: 3, sampleValues: ["2026-01"] }, { name: "区域", inferredType: "string", nullCount: 0, distinctCount: 1, sampleValues: ["华东"] }, { name: "销售额", inferredType: "number", nullCount: 0, distinctCount: 3, sampleValues: [120000] }], preview: rows } };
+        const snapshot = createSnapshot(1, "sales-sample.csv", "pasted");
+        snapshots = [snapshot];
+        asset = { id: assetId, projectId, sourceConversationId: conversationId, name: "sales-sample.csv", sourceType: "pasted", sizeBytes: 42, status: "ready", errorMessage: null, createdAt: now, latestSnapshot: snapshot };
         return route.fulfill({ status: 201, json: { asset } });
       }
       if (path === `/api/v1/projects/${projectId}/data-assets/upload` && request.method() === "POST") {
-        asset = { id: assetId, projectId, sourceConversationId: conversationId, name: "sales-v1.csv", sourceType: "csv", sizeBytes: 42, status: "ready", errorMessage: null, createdAt: now, latestSnapshot: { id: "snapshot-sales-v1", version: 1, rowCount: rows.length, columnCount: 3, schema: [{ name: "月份", inferredType: "date", nullCount: 0, distinctCount: 3, sampleValues: ["2026-01"] }, { name: "区域", inferredType: "string", nullCount: 0, distinctCount: 1, sampleValues: ["华东"] }, { name: "销售额", inferredType: "number", nullCount: 0, distinctCount: 3, sampleValues: [120000] }], preview: rows } };
+        const snapshot = createSnapshot(1, "sales-v1.csv", "csv");
+        snapshots = [snapshot];
+        asset = { id: assetId, projectId, sourceConversationId: conversationId, name: "sales-v1.csv", sourceType: "csv", sizeBytes: 42, status: "ready", errorMessage: null, createdAt: now, latestSnapshot: snapshot };
         return route.fulfill({ status: 201, json: { asset } });
       }
       if (path === `/api/v1/projects/${projectId}/data-assets/${assetId}/snapshots/upload` && request.method() === "POST") {
-        asset = { ...(asset ?? {}), name: "sales-v2.csv", latestSnapshot: { ...((asset?.latestSnapshot ?? {}) as Record<string, unknown>), id: "snapshot-sales-v2", version: 2 } };
+        const snapshot = createSnapshot(2, "sales-v2.csv", "csv");
+        snapshots = [...snapshots.filter((candidate) => candidate.version !== 2), snapshot];
+        asset = { ...(asset ?? {}), name: "sales-v2.csv", sourceType: "csv", sizeBytes: 42, latestSnapshot: snapshot };
         return route.fulfill({ status: 201, json: { asset } });
       }
       if (path === `/api/v1/projects/${projectId}/metric-definitions` && request.method() === "POST") {
@@ -135,6 +170,39 @@ test("导入文件与更新当前数据保持显式分流", async ({ page }) => 
   await page.locator('input[aria-label="选择数据文件"]').setInputFiles({ name: "sales-v2.csv", mimeType: "text/csv", buffer: Buffer.from("month,amount\nJan,11") });
   await expect(page.getByRole("status").filter({ hasText: "更新为数据快照 v2" })).toBeVisible();
   await expect(page.locator(".context-summary-copy")).toContainText("sales-v2.csv · v2");
+});
+
+test("数据预览默认打开最新版本并可切换历史 Snapshot", async ({ page }) => {
+  const fixture = createFixture();
+  await page.route("**/api/**", fixture.route);
+  await page.goto("/");
+
+  const sourceInput = page.locator(".rail-source input[type=file]");
+  await expect(sourceInput).toBeEnabled();
+  await sourceInput.setInputFiles({ name: "sales-v1.csv", mimeType: "text/csv", buffer: Buffer.from("month,amount\nJan,10") });
+  await expect(page.getByRole("status").filter({ hasText: "创建为数据快照 v1" })).toBeVisible();
+  await page.locator(".canvas-header-actions").getByRole("button", { name: "更新当前数据" }).click();
+  await page.locator('input[aria-label="选择数据文件"]').setInputFiles({ name: "sales-v2.csv", mimeType: "text/csv", buffer: Buffer.from("month,amount\nJan,11") });
+  await expect(page.getByRole("status").filter({ hasText: "更新为数据快照 v2" })).toBeVisible();
+
+  if (page.viewportSize()?.width === 390) await page.getByRole("button", { name: "打开项目依据" }).click();
+  const snapshotDetails = page.locator(".context-rail details").first();
+  await snapshotDetails.locator("summary").click();
+  await snapshotDetails.locator(".snapshot-preview-trigger").click();
+  const dialog = page.getByRole("dialog", { name: "查看数据" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".snapshot-version-item")).toHaveCount(2);
+  await expect(dialog.locator(".snapshot-version-item").first()).toHaveClass(/selected/);
+  await expect(dialog.getByText("sales-v2.csv", { exact: true })).toBeVisible();
+  await expect(dialog.getByRole("table")).toBeVisible();
+  await expect(dialog.getByText("前 3 行 / 共 3 行 · 只读预览", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("只读", { exact: true })).toBeVisible();
+
+  await dialog.locator(".snapshot-version-item").filter({ hasText: "v1" }).click();
+  await expect(dialog.locator(".snapshot-version-item").filter({ hasText: "v1" })).toHaveClass(/selected/);
+  await expect(dialog.getByText("sales-v1.csv", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "关闭数据预览" }).click();
+  await expect(dialog).toBeHidden();
 });
 
 test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => {

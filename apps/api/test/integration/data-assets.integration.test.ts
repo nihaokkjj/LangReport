@@ -70,6 +70,10 @@ test("data asset snapshot update appends immutable snapshots and isolates concur
     assert.equal("objectKey" in initialAsset, false);
     assert.equal("sourceObjectKey" in asObject(initialAsset.latestSnapshot), false);
     assert.equal(asObject(initialAsset.latestSnapshot).version, 1);
+    assert.equal(asObject(initialAsset.latestSnapshot).sourceName, "sales-v1.csv");
+    assert.equal(asObject(initialAsset.latestSnapshot).sourceType, "pasted");
+    assert.equal(asObject(initialAsset.latestSnapshot).mimeType, "text/csv");
+    assert.equal(asObject(initialAsset.latestSnapshot).sizeBytes, 26);
 
     const second = await update(project.id, assetId, conversation.id, "sales-v2.csv", "month,amount\nJan,11\nFeb,21");
     assert.equal(second.status, 201, JSON.stringify(second.body));
@@ -96,6 +100,51 @@ test("data asset snapshot update appends immutable snapshots and isolates concur
       assert.ok((await getObject(snapshot.normalizedObjectKey)).byteLength > 0);
     }
     assert.match((await getObject(snapshots[0].normalizedObjectKey)).toString("utf8"), /Jan/);
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/data-assets/${assetId}/snapshots`,
+      headers: { "x-user-id": userId }
+    });
+    assert.equal(listResponse.statusCode, 200, listResponse.body);
+    const listedSnapshots = (asObject(listResponse.json()).snapshots as unknown[]).map(asObject);
+    assert.deepEqual(listedSnapshots.map((snapshot) => snapshot.version), [4, 3, 2, 1]);
+    assert.equal(listedSnapshots.find((snapshot) => snapshot.version === 1)?.sourceName, "sales-v1.csv");
+    for (const snapshot of listedSnapshots) {
+      assert.equal("schema" in snapshot, false);
+      assert.equal("preview" in snapshot, false);
+      assert.equal("sourceObjectKey" in snapshot, false);
+      assert.equal("normalizedObjectKey" in snapshot, false);
+    }
+
+    const detailResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/data-assets/${assetId}/snapshots/${String(snapshots[3].id)}`,
+      headers: { "x-user-id": userId }
+    });
+    assert.equal(detailResponse.statusCode, 200, detailResponse.body);
+    const detailSnapshot = asObject(asObject(detailResponse.json()).snapshot);
+    assert.equal(detailSnapshot.version, 4);
+    assert.ok(Array.isArray(detailSnapshot.schema));
+    assert.ok(Array.isArray(detailSnapshot.preview));
+    assert.equal("sourceObjectKey" in detailSnapshot, false);
+    assert.equal("normalizedObjectKey" in detailSnapshot, false);
+
+    const missingDetailResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/data-assets/${assetId}/snapshots/00000000-0000-4000-8000-000000000099`,
+      headers: { "x-user-id": userId }
+    });
+    assert.equal(missingDetailResponse.statusCode, 404, missingDetailResponse.body);
+    assert.equal(asObject(missingDetailResponse.json()).code, "SNAPSHOT_NOT_FOUND");
+
+    const forbiddenListResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/data-assets/${assetId}/snapshots`,
+      headers: { "x-user-id": `outside-${suffix}` }
+    });
+    assert.equal(forbiddenListResponse.statusCode, 404, forbiddenListResponse.body);
+    assert.equal(asObject(forbiddenListResponse.json()).code, "FORBIDDEN");
 
     const invalidConversation = await update(project.id, assetId, otherConversation.id, "invalid.csv", "month,amount\nJan,99");
     assert.equal(invalidConversation.status, 400, JSON.stringify(invalidConversation.body));

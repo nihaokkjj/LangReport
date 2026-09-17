@@ -30,6 +30,9 @@ _Avoid_: Dataset、Data Source、Upload
 **Data Snapshot**：从 Data Asset 解析出的不可变数据版本，是一次 Generation Cycle 实际使用的数据输入。
 _Avoid_: Copy、Cache、Current Data
 
+**Data Snapshot Preview**：对 Data Snapshot 中有限数据行和字段画像的只读查看；默认展示最新 Snapshot，也可以在同一 Data Asset 内切换历史 Snapshot，但不改变 Generation Cycle 的输入。
+_Avoid_: Raw File Viewer、Data Editor、Dataset Browser
+
 **Metric Definition**：项目确认的指标名称、业务含义、计算口径、单位、时间规则和过滤规则。它描述“指标是什么”，不是一张图表。
 _Avoid_: Metric Note、Formula Guess
 

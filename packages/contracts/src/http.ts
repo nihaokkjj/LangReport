@@ -235,16 +235,37 @@ const projectDto = dto({
   createdAt: dateTime()
 }, ["id", "workspaceId", "name", "slug", "clientName", "objective", "audience", "visualTemplate", "createdAt"]);
 
-const snapshotDto = dto({
+const snapshotSourceDto = {
+  sourceName: nullable(string()),
+  sourceType: nullable({ type: "string", enum: ["csv", "xlsx", "json", "pasted"] }),
+  mimeType: nullable(string()),
+  sizeBytes: nullable(integer())
+};
+
+const snapshotSummaryDto = dto({
   id: uuid(),
   assetId: uuid(),
   version: integer(),
   rowCount: integer(),
   columnCount: integer(),
+  ...snapshotSourceDto,
+  createdAt: dateTime()
+}, ["id", "assetId", "version", "rowCount", "columnCount", "sourceName", "sourceType", "mimeType", "sizeBytes", "createdAt"]);
+
+const snapshotDetailDto = dto({
+  id: uuid(),
+  assetId: uuid(),
+  version: integer(),
+  rowCount: integer(),
+  columnCount: integer(),
+  ...snapshotSourceDto,
   schema: anyJson,
   preview: anyJson,
   createdAt: dateTime()
-}, ["id", "assetId", "version", "rowCount", "columnCount", "schema", "preview", "createdAt"]);
+}, ["id", "assetId", "version", "rowCount", "columnCount", "sourceName", "sourceType", "mimeType", "sizeBytes", "schema", "preview", "createdAt"]);
+
+// Existing Asset responses keep returning the latest Snapshot detail for compatibility.
+const snapshotDto = snapshotDetailDto;
 
 const assetDto = dto({
   id: uuid(),
@@ -677,6 +698,8 @@ export const routeContracts: RouteContract[] = [
   contract("POST", "/api/v1/projects/:projectId/data-assets/:assetId/snapshots/upload", "uploadDataAssetSnapshot", ["Data Assets"], "上传文件并追加 Data Snapshot", { 201: dto({ asset: assetDto }, ["asset"]) }, { request: pathRequest("/api/v1/projects/:projectId/data-assets/:assetId/snapshots/upload", { body: json({ file: { type: "string", format: "binary", description: "待解析的数据文件" }, conversationId: { type: "string", format: "uuid", description: "更新请求来源 Conversation" } }, ["file", "conversationId"]), consumes: ["multipart/form-data"] }), extraResponses: { 413: errorResponseSchema } }),
   contract("POST", "/api/v1/projects/:projectId/data-assets/:assetId/snapshots/paste", "pasteDataAssetSnapshot", ["Data Assets"], "粘贴表格内容并追加 Data Snapshot", { 201: dto({ asset: assetDto }, ["asset"]) }, { request: pathRequest("/api/v1/projects/:projectId/data-assets/:assetId/snapshots/paste", { body: zodJson(pasteDataRequestSchema) }) }),
   contract("GET", "/api/v1/data-assets/:assetId", "getDataAsset", ["Data Assets"], "查询一个数据资产及最新 Snapshot", { 200: dto({ asset: assetDto }, ["asset"]) }),
+  contract("GET", "/api/v1/data-assets/:assetId/snapshots", "listDataAssetSnapshots", ["Data Assets"], "查询 Data Asset 的 Snapshot 版本列表", { 200: dto({ snapshots: array(snapshotSummaryDto) }, ["snapshots"]) }),
+  contract("GET", "/api/v1/data-assets/:assetId/snapshots/:snapshotId", "getDataAssetSnapshot", ["Data Assets"], "按需读取一个 Data Snapshot 的 schema 和 preview", { 200: dto({ snapshot: snapshotDetailDto }, ["snapshot"]) }),
   contract("POST", "/api/v1/projects/:projectId/conversations", "createConversation", ["Conversations"], "创建一个 Conversation", { 201: dto({ conversation: conversationDto }, ["conversation"]) }, { request: pathRequest("/api/v1/projects/:projectId/conversations", { body: zodJson(createConversationRequestSchema.omit({ projectId: true })) }) }),
   contract("GET", "/api/v1/projects/:projectId/conversations", "listConversations", ["Conversations"], "查询 Project Conversation", { 200: dto({ conversations: array(conversationDto) }, ["conversations"]) }),
   contract("GET", "/api/v1/conversations/:conversationId/messages", "listConversationMessages", ["Conversations"], "查询 Conversation 消息", { 200: dto({ conversation: conversationDto, messages: array(messageDto) }, ["conversation", "messages"]) }),

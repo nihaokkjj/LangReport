@@ -153,6 +153,36 @@ async function run() {
       `);
       assert.equal(sourceColumn.is_nullable, "NO", "Data Asset provenance must be non-null");
 
+      const snapshotSourceColumns = Array.from(await transaction.unsafe(`
+        SELECT column_name, is_nullable
+        FROM information_schema.columns
+        WHERE table_schema = '${schemaName}'
+          AND table_name = 'data_snapshots'
+          AND column_name IN ('source_name', 'source_type', 'mime_type', 'size_bytes')
+        ORDER BY column_name
+      `));
+      assert.deepEqual(
+        snapshotSourceColumns,
+        [
+          { column_name: 'mime_type', is_nullable: 'YES' },
+          { column_name: 'size_bytes', is_nullable: 'YES' },
+          { column_name: 'source_name', is_nullable: 'YES' },
+          { column_name: 'source_type', is_nullable: 'YES' }
+        ],
+        "Data Snapshot source metadata must be nullable for historical records"
+      );
+
+      const [legacySnapshotMetadata] = await transaction.unsafe(`
+        SELECT "source_name", "source_type", "mime_type", "size_bytes"
+        FROM "data_snapshots"
+        WHERE "id" = '00000000-0000-0000-0000-00000000000a'
+      `);
+      assert.deepEqual(
+        legacySnapshotMetadata,
+        { source_name: null, source_type: null, mime_type: null, size_bytes: null },
+        "historical Snapshot source metadata must not be backfilled"
+      );
+
       const [errorCodeColumn] = await transaction.unsafe(`
         SELECT count(*)::integer AS count
         FROM information_schema.columns

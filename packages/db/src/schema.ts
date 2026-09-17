@@ -125,6 +125,12 @@ export const dataSnapshots = pgTable("data_snapshots", {
   columnCount: integer("column_count").notNull(),
   schema: jsonb("schema").notNull(),
   preview: jsonb("preview").notNull(),
+  // Snapshot-local source metadata is nullable because historical snapshots
+  // predate per-version provenance and must not be backfilled from the live Asset.
+  sourceName: text("source_name"),
+  sourceType: dataAssetSourceType("source_type"),
+  mimeType: text("mime_type"),
+  sizeBytes: integer("size_bytes"),
   sourceObjectKey: text("source_object_key").notNull(),
   normalizedObjectKey: text("normalized_object_key").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()

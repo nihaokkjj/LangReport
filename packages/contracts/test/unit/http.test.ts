@@ -37,6 +37,8 @@ const expectedRoutes = [
   "POST /api/v1/projects/:projectId/data-assets/:assetId/snapshots/upload",
   "POST /api/v1/projects/:projectId/data-assets/:assetId/snapshots/paste",
   "GET /api/v1/data-assets/:assetId",
+  "GET /api/v1/data-assets/:assetId/snapshots",
+  "GET /api/v1/data-assets/:assetId/snapshots/:snapshotId",
   "POST /api/v1/projects/:projectId/conversations",
   "GET /api/v1/projects/:projectId/conversations",
   "GET /api/v1/conversations/:conversationId/messages",
@@ -170,6 +172,25 @@ test("data uploads require a Conversation source", () => {
   assert.ok(assetSchema.required.includes("errorCode"));
   assert.equal((assetSchema.properties.sourceConversationId as { type?: string }).type, "string");
   assert.equal((assetSchema.properties.sourceConversationDeleted as { type?: string }).type, "boolean");
+});
+
+test("Snapshot preview contracts keep list summaries light and detail provenance nullable", () => {
+  const listContract = getRouteContract("GET", "/api/v1/data-assets/:assetId/snapshots");
+  const detailContract = getRouteContract("GET", "/api/v1/data-assets/:assetId/snapshots/:snapshotId");
+  assert.ok(listContract);
+  assert.ok(detailContract);
+
+  const listSnapshot = ((listContract.responses[200] as { properties: { snapshots: { items: { properties: Record<string, unknown> } } } }).properties.snapshots.items);
+  const detailSnapshot = ((detailContract.responses[200] as { properties: { snapshot: { properties: Record<string, unknown> } } }).properties.snapshot);
+  assert.equal(listSnapshot.properties.schema, undefined);
+  assert.equal(listSnapshot.properties.preview, undefined);
+  assert.ok("sourceName" in listSnapshot.properties);
+  assert.ok("sourceType" in listSnapshot.properties);
+  assert.ok("sourceName" in detailSnapshot.properties);
+  assert.ok("schema" in detailSnapshot.properties);
+  assert.ok("preview" in detailSnapshot.properties);
+  assert.deepEqual((detailSnapshot.properties.sourceName as { anyOf?: unknown[] }).anyOf?.[1], { type: "null" });
+  assert.deepEqual((detailSnapshot.properties.sourceType as { anyOf?: unknown[] }).anyOf?.[1], { type: "null" });
 });
 
 test("Project creation contract requires auditable onboarding context", () => {

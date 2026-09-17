@@ -35,6 +35,10 @@ test("public data asset DTO omits storage object keys and reports source status"
     columnCount: 1,
     schema: [],
     preview: [],
+    sourceName: "sales.csv",
+    sourceType: "csv" as const,
+    mimeType: "text/csv",
+    sizeBytes: 12,
     sourceObjectKey: "private/source-key",
     normalizedObjectKey: "private/normalized-key",
     createdAt: new Date("2026-09-03T00:00:00.000Z")
@@ -47,6 +51,7 @@ test("public data asset DTO omits storage object keys and reports source status"
   assert.equal(result.sourceConversationId, "00000000-0000-4000-8000-000000000001");
   assert.equal(result.sourceConversationDeleted, true);
   assert.equal(result.latestSnapshot?.id, "snapshot-1");
+  assert.equal(result.latestSnapshot?.sourceName, "sales.csv");
 });
 
 test("conversation uploads use an isolated, snapshot-addressable object path", () => {
@@ -120,6 +125,10 @@ function createRepository(options: { persistError?: Error } = {}): {
         columnCount: input.columnCount,
         schema: input.schema,
         preview: input.preview,
+        sourceName: input.sourceName,
+        sourceType: input.sourceType,
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
         sourceObjectKey: input.sourceObjectKey,
         normalizedObjectKey: input.normalizedObjectKey,
         createdAt: new Date("2026-09-16T00:00:00.000Z")
@@ -216,6 +225,7 @@ test("intake writes both objects and commits one ready snapshot", async () => {
   assert.equal(asset.status, "ready");
   assert.equal(asset.sourceConversationDeleted, false);
   assert.equal(asset.latestSnapshot?.version, 1);
+  assert.equal(asset.latestSnapshot?.sourceName, "sales.csv");
   assert.equal(fixture.assets.get(asset.id)?.status, "ready");
   assert.equal(fixture.snapshots.size, 1);
   assert.equal(storage.objects.size, 2);

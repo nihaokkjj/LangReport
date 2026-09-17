@@ -36,6 +36,8 @@ export type DataAssetErrorCode =
   | "DATA_PARSE_FAILED"
   | "SOURCE_OBJECT_WRITE_FAILED"
   | "SNAPSHOT_OBJECT_WRITE_FAILED"
+  | "SNAPSHOT_NOT_FOUND"
+  | "SNAPSHOT_PREVIEW_UNAVAILABLE"
   | "SNAPSHOT_PERSIST_FAILED"
   | "DATA_ASSET_CLEANUP_FAILED";
 
@@ -51,6 +53,8 @@ const knownErrorCodes = new Set<DataAssetErrorCode>([
   "DATA_PARSE_FAILED",
   "SOURCE_OBJECT_WRITE_FAILED",
   "SNAPSHOT_OBJECT_WRITE_FAILED",
+  "SNAPSHOT_NOT_FOUND",
+  "SNAPSHOT_PREVIEW_UNAVAILABLE",
   "SNAPSHOT_PERSIST_FAILED",
   "DATA_ASSET_CLEANUP_FAILED"
 ]);
@@ -67,6 +71,8 @@ const defaultStatusByCode: Record<DataAssetErrorCode, number> = {
   DATA_PARSE_FAILED: 422,
   SOURCE_OBJECT_WRITE_FAILED: 503,
   SNAPSHOT_OBJECT_WRITE_FAILED: 503,
+  SNAPSHOT_NOT_FOUND: 404,
+  SNAPSHOT_PREVIEW_UNAVAILABLE: 409,
   SNAPSHOT_PERSIST_FAILED: 500,
   DATA_ASSET_CLEANUP_FAILED: 500
 };
@@ -97,8 +103,17 @@ export class DataAssetError extends Error {
 
 export type PublicDataAsset = typeof dataAssets.$inferSelect & {
   sourceConversationDeleted: boolean;
-  latestSnapshot: Omit<typeof dataSnapshots.$inferSelect, "sourceObjectKey" | "normalizedObjectKey"> | null;
+  latestSnapshot: PublicDataSnapshot | null;
 };
+
+export type PublicDataSnapshot = Omit<typeof dataSnapshots.$inferSelect, "sourceObjectKey" | "normalizedObjectKey">;
+export type PublicSnapshotSummary = Omit<PublicDataSnapshot, "schema" | "preview">;
+export type PublicSnapshotDetail = PublicDataSnapshot;
+
+function toPublicSnapshot(snapshot: typeof dataSnapshots.$inferSelect): PublicDataSnapshot {
+  const { sourceObjectKey: _sourceObjectKey, normalizedObjectKey: _normalizedObjectKey, ...publicSnapshot } = snapshot;
+  return publicSnapshot;
+}
 
 export function toPublicDataAsset(
   asset: typeof dataAssets.$inferSelect,
@@ -106,8 +121,7 @@ export function toPublicDataAsset(
   sourceConversationDeleted = false
 ): PublicDataAsset {
   if (!latestSnapshot) return { ...asset, sourceConversationDeleted, latestSnapshot: null };
-  const { sourceObjectKey: _sourceObjectKey, normalizedObjectKey: _normalizedObjectKey, ...publicSnapshot } = latestSnapshot;
-  return { ...asset, sourceConversationDeleted, latestSnapshot: publicSnapshot };
+  return { ...asset, sourceConversationDeleted, latestSnapshot: toPublicSnapshot(latestSnapshot) };
 }
 
 export type DataAssetIntakeCommand = {
@@ -136,6 +150,10 @@ type SnapshotPersistenceInput = {
   columnCount: number;
   schema: ParsedTable["profiles"];
   preview: ParsedTable["preview"];
+  sourceName: string;
+  sourceType: typeof dataAssetSourceType.enumValues[number];
+  mimeType: string;
+  sizeBytes: number;
   sourceObjectKey: string;
   normalizedObjectKey: string;
   assetMetadata: {
@@ -247,6 +265,10 @@ const productionRepository: IntakeRepository = {
         columnCount: input.columnCount,
         schema: input.schema,
         preview: input.preview,
+        sourceName: input.assetMetadata.name,
+        sourceType: input.assetMetadata.sourceType,
+        mimeType: input.assetMetadata.mimeType,
+        sizeBytes: input.assetMetadata.sizeBytes,
         sourceObjectKey: input.sourceObjectKey,
         normalizedObjectKey: input.normalizedObjectKey
       }).returning();
@@ -463,6 +485,10 @@ export function createDataAssetIntake(dependencies: IntakeDependencies = {}) {
             columnCount: parsed.columns.length,
             schema: parsed.profiles,
             preview: parsed.preview,
+            sourceName: command.source.name.trim() || normalizedName,
+            sourceType: command.source.sourceType as typeof dataAssetSourceType.enumValues[number],
+            mimeType,
+            sizeBytes: bytes.byteLength,
             sourceObjectKey,
             assetMetadata: {
               name: command.source.name.trim() || normalizedName,
@@ -576,6 +602,11 @@ async function readAsset(assetId: string): Promise<AssetReadRecord> {
   }
 }
 
+export async function getDataAssetProjectId(assetId: string): Promise<string> {
+  const record = await readAsset(assetId);
+  return record.asset.projectId;
+}
+
 export async function listDataAssets(projectId: string): Promise<PublicDataAsset[]> {
   try {
     const assets = await db
@@ -612,6 +643,57 @@ export async function getDataAsset(assetId: string): Promise<PublicDataAsset> {
     return toPublicDataAsset(record.asset, latestSnapshot ?? null, record.sourceConversationId === null);
   } catch (error) {
     throw new DataAssetError("数据资产暂时无法读取，请稍后重试", "DATA_ASSET_READ_FAILED", 500, { cause: error });
+  }
+}
+
+export async function listDataSnapshots(assetId: string): Promise<PublicSnapshotSummary[]> {
+  try {
+    const [asset] = await db
+      .select({ status: dataAssets.status })
+      .from(dataAssets)
+      .where(eq(dataAssets.id, assetId))
+      .limit(1);
+    if (!asset) throw new DataAssetError("数据资产不存在", "DATA_ASSET_NOT_FOUND");
+    if (asset.status !== "ready") return [];
+
+    const snapshots = await db
+      .select()
+      .from(dataSnapshots)
+      .where(eq(dataSnapshots.assetId, assetId))
+      .orderBy(desc(dataSnapshots.version));
+    return snapshots.map((snapshot) => {
+      const publicSnapshot = toPublicSnapshot(snapshot);
+      const { schema: _schema, preview: _preview, ...summary } = publicSnapshot;
+      return summary;
+    });
+  } catch (error) {
+    if (error instanceof DataAssetError) throw error;
+    throw new DataAssetError("数据快照暂时无法读取，请稍后重试", "DATA_ASSET_READ_FAILED", 500, { cause: error });
+  }
+}
+
+export async function getDataSnapshot(assetId: string, snapshotId: string): Promise<PublicSnapshotDetail> {
+  try {
+    const [asset] = await db
+      .select({ status: dataAssets.status })
+      .from(dataAssets)
+      .where(eq(dataAssets.id, assetId))
+      .limit(1);
+    if (!asset) throw new DataAssetError("数据资产不存在", "DATA_ASSET_NOT_FOUND");
+    if (asset.status !== "ready") {
+      throw new DataAssetError("当前 Data Asset 暂无可用预览", "SNAPSHOT_PREVIEW_UNAVAILABLE");
+    }
+
+    const [snapshot] = await db
+      .select()
+      .from(dataSnapshots)
+      .where(and(eq(dataSnapshots.assetId, assetId), eq(dataSnapshots.id, snapshotId)))
+      .limit(1);
+    if (!snapshot) throw new DataAssetError("Data Snapshot 不存在或当前不可见", "SNAPSHOT_NOT_FOUND");
+    return toPublicSnapshot(snapshot);
+  } catch (error) {
+    if (error instanceof DataAssetError) throw error;
+    throw new DataAssetError("数据快照暂时无法读取，请稍后重试", "DATA_ASSET_READ_FAILED", 500, { cause: error });
   }
 }
 

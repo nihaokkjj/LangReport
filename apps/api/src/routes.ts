@@ -9,7 +9,7 @@ import { MemoryServiceError, acceptMemoryCandidate, createMemoryExtractionJob, d
 import { projectConversationToCanonicalTextContext } from "@langreport/generation";
 import { ModelCredentialEncryptionError, ModelGatewayConfigurationError, encryptWorkspaceModelCredential, modelRouteFingerprint, resolveModelRouteSnapshot } from "@langreport/model-gateway";
 import { PluginServiceError, assertProjectThemeReference, getWorkspacePlugin, installPlugin, listBuiltinPluginCatalog, listProjectPlugins, listWorkspacePlugins, resolveProjectPluginContext, restorePluginInstallation, revokePluginInstallation, setProjectPluginBinding, validateBuiltinPluginManifest } from "@langreport/plugins";
-import { DataAssetError, getDataAsset, inferSourceType, ingestDataAsset, listDataAssets, type DataAssetIntakeCommand } from "./data-assets.js";
+import { DataAssetError, getDataAsset, getDataAssetProjectId, getDataSnapshot, inferSourceType, ingestDataAsset, listDataAssets, listDataSnapshots, type DataAssetIntakeCommand } from "./data-assets.js";
 import { registerChartRoutes } from "./chart-routes.js";
 import { sendHttpError } from "./http-errors.js";
 import { isDevBootstrapAllowed } from "./http-contracts.js";
@@ -420,6 +420,26 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       const asset = await getDataAsset(request.params.assetId);
       await assertChartAction(asset.projectId, userIdFromRequest(request), "view");
       return reply.send({ asset });
+    } catch (error) {
+      return sendDataError(reply, error);
+    }
+  });
+
+  app.get<{ Params: { assetId: string } }>("/api/v1/data-assets/:assetId/snapshots", async (request, reply) => {
+    try {
+      const projectId = await getDataAssetProjectId(request.params.assetId);
+      await assertChartAction(projectId, userIdFromRequest(request), "view");
+      return reply.send({ snapshots: await listDataSnapshots(request.params.assetId) });
+    } catch (error) {
+      return sendDataError(reply, error);
+    }
+  });
+
+  app.get<{ Params: { assetId: string; snapshotId: string } }>("/api/v1/data-assets/:assetId/snapshots/:snapshotId", async (request, reply) => {
+    try {
+      const projectId = await getDataAssetProjectId(request.params.assetId);
+      await assertChartAction(projectId, userIdFromRequest(request), "view");
+      return reply.send({ snapshot: await getDataSnapshot(request.params.assetId, request.params.snapshotId) });
     } catch (error) {
       return sendDataError(reply, error);
     }
