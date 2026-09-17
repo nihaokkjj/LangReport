@@ -6,7 +6,7 @@ import { closeDatabase, db, analysisBriefs, auditEvents, chartArtifacts, chartRe
 import { pluginContextSchema } from "@langreport/contracts";
 import { buildApp } from "../../src/app.js";
 import { buildPluginSnapshot, PluginServiceError } from "@langreport/plugins";
-import { conversationUploadObjectKey } from "@langreport/storage";
+import { conversationUploadObjectKey, snapshotSourceObjectKey } from "@langreport/storage";
 
 type JsonObject = Record<string, unknown>;
 type InjectMethod = "GET" | "POST" | "PUT";
@@ -71,14 +71,6 @@ test("plugin API completes install, binding, theme, revoke, restore and audit fl
     sourceType: "pasted",
     mimeType: "text/csv",
     sizeBytes: 1,
-    objectKey: conversationUploadObjectKey({
-      workspaceId: workspace.id,
-      projectId: project.id,
-      conversationId: conversation.id,
-      assetId,
-      kind: "source",
-      filename: "phase5.csv"
-    }),
     status: "ready",
     createdBy: ownerId
   }).returning();
@@ -90,6 +82,14 @@ test("plugin API completes install, binding, theme, revoke, restore and audit fl
     columnCount: 1,
     schema: [],
     preview: [],
+    sourceObjectKey: snapshotSourceObjectKey({
+      workspaceId: workspace.id,
+      projectId: project.id,
+      conversationId: conversation.id,
+      assetId,
+      snapshotId,
+      filename: "phase5.csv"
+    }),
     normalizedObjectKey: conversationUploadObjectKey({
       workspaceId: workspace.id,
       projectId: project.id,

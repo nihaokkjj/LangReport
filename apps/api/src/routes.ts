@@ -361,6 +361,60 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
     }
   });
 
+  app.post<{ Params: { projectId: string; assetId: string } }>("/api/v1/projects/:projectId/data-assets/:assetId/snapshots/upload", async (request, reply) => {
+    try {
+      assertProjectId(request.params.projectId);
+      await assertChartAction(request.params.projectId, userIdFromRequest(request), "manage_data");
+      const part = await request.file();
+      if (!part) return sendHttpError(reply, 400, "请上传文件", "INVALID_INPUT");
+      const bytes = await part.toBuffer();
+      if (part.file.truncated) return sendHttpError(reply, 413, "文件不能超过 50 MB", "DATA_ASSET_TOO_LARGE");
+      const sourceConversationId = multipartTextField(part.fields as Record<string, unknown>, "conversationId");
+      if (!sourceConversationId) throw new DataAssetError("更新数据必须指定 Conversation", "SOURCE_CONVERSATION_INVALID");
+
+      const asset = await ingestDataAsset({
+        projectId: request.params.projectId,
+        sourceConversationId,
+        createdBy: userIdFromRequest(request),
+        requestId: request.id,
+        target: { assetId: request.params.assetId },
+        source: {
+          name: part.filename,
+          sourceType: inferSourceType(part.filename, part.mimetype),
+          mimeType: part.mimetype,
+          bytes
+        }
+      });
+      return reply.code(201).send({ asset });
+    } catch (error) {
+      return sendDataError(reply, error);
+    }
+  });
+
+  app.post<{ Params: { projectId: string; assetId: string } }>("/api/v1/projects/:projectId/data-assets/:assetId/snapshots/paste", async (request, reply) => {
+    try {
+      assertProjectId(request.params.projectId);
+      await assertChartAction(request.params.projectId, userIdFromRequest(request), "manage_data");
+      const body = pasteDataRequestSchema.parse(request.body);
+      const asset = await ingestDataAsset({
+        projectId: request.params.projectId,
+        sourceConversationId: body.conversationId,
+        createdBy: userIdFromRequest(request),
+        requestId: request.id,
+        target: { assetId: request.params.assetId },
+        source: {
+          name: body.name,
+          sourceType: "pasted",
+          mimeType: "text/csv",
+          bytes: Buffer.from(body.content, "utf8")
+        }
+      });
+      return reply.code(201).send({ asset });
+    } catch (error) {
+      return sendDataError(reply, error);
+    }
+  });
+
   app.get<{ Params: { assetId: string } }>("/api/v1/data-assets/:assetId", async (request, reply) => {
     try {
       const asset = await getDataAsset(request.params.assetId);

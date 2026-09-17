@@ -17,7 +17,8 @@ import {
 import {
   conversationUploadObjectKey,
   deleteObject as deleteStorageObject,
-  putObject as putStorageObject
+  putObject as putStorageObject,
+  snapshotSourceObjectKey
 } from "@langreport/storage";
 
 export const MAX_DATA_ASSET_BYTES = 50 * 1024 * 1024;
@@ -27,6 +28,7 @@ export type DataAssetErrorCode =
   | "INVALID_INPUT"
   | "NOT_FOUND"
   | "DATA_ASSET_NOT_FOUND"
+  | "DATA_ASSET_NOT_UPDATABLE"
   | "DATA_ASSET_READ_FAILED"
   | "PROJECT_NOT_FOUND"
   | "DATA_ASSET_TOO_LARGE"
@@ -41,6 +43,7 @@ const knownErrorCodes = new Set<DataAssetErrorCode>([
   "INVALID_INPUT",
   "NOT_FOUND",
   "DATA_ASSET_NOT_FOUND",
+  "DATA_ASSET_NOT_UPDATABLE",
   "DATA_ASSET_READ_FAILED",
   "PROJECT_NOT_FOUND",
   "DATA_ASSET_TOO_LARGE",
@@ -56,6 +59,7 @@ const defaultStatusByCode: Record<DataAssetErrorCode, number> = {
   INVALID_INPUT: 400,
   NOT_FOUND: 404,
   DATA_ASSET_NOT_FOUND: 404,
+  DATA_ASSET_NOT_UPDATABLE: 409,
   DATA_ASSET_READ_FAILED: 500,
   PROJECT_NOT_FOUND: 404,
   DATA_ASSET_TOO_LARGE: 413,
@@ -91,9 +95,9 @@ export class DataAssetError extends Error {
   }
 }
 
-export type PublicDataAsset = Omit<typeof dataAssets.$inferSelect, "objectKey"> & {
+export type PublicDataAsset = typeof dataAssets.$inferSelect & {
   sourceConversationDeleted: boolean;
-  latestSnapshot: Omit<typeof dataSnapshots.$inferSelect, "normalizedObjectKey"> | null;
+  latestSnapshot: Omit<typeof dataSnapshots.$inferSelect, "sourceObjectKey" | "normalizedObjectKey"> | null;
 };
 
 export function toPublicDataAsset(
@@ -101,10 +105,9 @@ export function toPublicDataAsset(
   latestSnapshot: typeof dataSnapshots.$inferSelect | null,
   sourceConversationDeleted = false
 ): PublicDataAsset {
-  const { objectKey: _objectKey, ...publicAsset } = asset;
-  if (!latestSnapshot) return { ...publicAsset, sourceConversationDeleted, latestSnapshot: null };
-  const { normalizedObjectKey: _normalizedObjectKey, ...publicSnapshot } = latestSnapshot;
-  return { ...publicAsset, sourceConversationDeleted, latestSnapshot: publicSnapshot };
+  if (!latestSnapshot) return { ...asset, sourceConversationDeleted, latestSnapshot: null };
+  const { sourceObjectKey: _sourceObjectKey, normalizedObjectKey: _normalizedObjectKey, ...publicSnapshot } = latestSnapshot;
+  return { ...asset, sourceConversationDeleted, latestSnapshot: publicSnapshot };
 }
 
 export type DataAssetIntakeCommand = {
@@ -112,6 +115,7 @@ export type DataAssetIntakeCommand = {
   sourceConversationId: string;
   createdBy: string;
   requestId?: string;
+  target?: { assetId: string };
   source: {
     name: string;
     sourceType: DataSourceType;
@@ -132,7 +136,14 @@ type SnapshotPersistenceInput = {
   columnCount: number;
   schema: ParsedTable["profiles"];
   preview: ParsedTable["preview"];
+  sourceObjectKey: string;
   normalizedObjectKey: string;
+  assetMetadata: {
+    name: string;
+    sourceType: typeof dataAssetSourceType.enumValues[number];
+    mimeType: string;
+    sizeBytes: number;
+  };
 };
 
 type SnapshotPersistenceResult = {
@@ -143,6 +154,7 @@ type SnapshotPersistenceResult = {
 export type IntakeRepository = {
   findProject: (projectId: string) => Promise<ProjectContext | undefined>;
   hasConversationInProject: (projectId: string, conversationId: string) => Promise<boolean>;
+  findAssetForUpdate: (projectId: string, assetId: string) => Promise<typeof dataAssets.$inferSelect | undefined>;
   insertProcessingAsset: (asset: typeof dataAssets.$inferInsert) => Promise<void>;
   persistSnapshotAndReady: (input: SnapshotPersistenceInput) => Promise<SnapshotPersistenceResult>;
   markFailed: (assetId: string, code: DataAssetErrorCode, message: string) => Promise<void>;
@@ -193,12 +205,32 @@ const productionRepository: IntakeRepository = {
     return Boolean(conversation);
   },
 
+  async findAssetForUpdate(projectId, assetId) {
+    const [asset] = await db
+      .select()
+      .from(dataAssets)
+      .where(and(eq(dataAssets.id, assetId), eq(dataAssets.projectId, projectId)))
+      .limit(1);
+    return asset;
+  },
+
   async insertProcessingAsset(asset) {
     await db.insert(dataAssets).values(asset);
   },
 
   async persistSnapshotAndReady(input) {
     return db.transaction(async (transaction) => {
+      const [lockedAsset] = await transaction
+        .select()
+        .from(dataAssets)
+        .where(eq(dataAssets.id, input.assetId))
+        .for("update")
+        .limit(1);
+      if (!lockedAsset) throw intakeError("DATA_ASSET_NOT_FOUND", "数据资产不存在");
+      if (lockedAsset.status !== "processing" && lockedAsset.status !== "ready") {
+        throw intakeError("DATA_ASSET_NOT_UPDATABLE", "当前 Data Asset 不可更新");
+      }
+
       const [latestSnapshot] = await transaction
         .select({ version: dataSnapshots.version })
         .from(dataSnapshots)
@@ -215,13 +247,19 @@ const productionRepository: IntakeRepository = {
         columnCount: input.columnCount,
         schema: input.schema,
         preview: input.preview,
+        sourceObjectKey: input.sourceObjectKey,
         normalizedObjectKey: input.normalizedObjectKey
       }).returning();
       if (!snapshot) throw new Error("Snapshot 元数据保存失败");
 
       const [asset] = await transaction
         .update(dataAssets)
-        .set({ status: "ready", errorCode: null, errorMessage: null })
+        .set({
+          ...input.assetMetadata,
+          status: "ready",
+          errorCode: null,
+          errorMessage: null
+        })
         .where(eq(dataAssets.id, input.assetId))
         .returning();
       if (!asset) throw new Error("Data Asset 状态保存失败");
@@ -277,7 +315,7 @@ function parseFailure(error: unknown): DataAssetError {
 }
 
 function persistenceFailure(error: unknown): DataAssetError {
-  return error instanceof DataAssetError && error.code === "SNAPSHOT_PERSIST_FAILED"
+  return error instanceof DataAssetError
     ? error
     : intakeError("SNAPSHOT_PERSIST_FAILED", "Data Snapshot 保存失败，请稍后重试", { cause: error });
 }
@@ -323,44 +361,65 @@ export function createDataAssetIntake(dependencies: IntakeDependencies = {}) {
         throw intakeError("SOURCE_CONVERSATION_INVALID", "来源 Conversation 无效或不属于当前 Project");
       }
 
-      const assetId = createId();
+      let targetAsset: typeof dataAssets.$inferSelect | undefined;
+      if (command.target) {
+        if (!UUID_PATTERN.test(command.target.assetId)) {
+          throw intakeError("DATA_ASSET_NOT_FOUND", "数据资产不存在");
+        }
+        try {
+          targetAsset = await repository.findAssetForUpdate(command.projectId, command.target.assetId);
+        } catch (error) {
+          throw persistenceFailure(error);
+        }
+        if (!targetAsset) throw intakeError("DATA_ASSET_NOT_FOUND", "数据资产不存在");
+        if (targetAsset.status !== "ready") {
+          throw intakeError("DATA_ASSET_NOT_UPDATABLE", "当前 Data Asset 不可更新");
+        }
+        if (!UUID_PATTERN.test(targetAsset.sourceConversationId)) {
+          throw intakeError("DATA_ASSET_NOT_UPDATABLE", "当前 Data Asset 缺少有效的来源 Conversation");
+        }
+      }
+
+      const assetId = targetAsset?.id ?? createId();
       const snapshotId = createId();
       const normalizedName = safeName(command.source.name);
       const mimeType = command.source.mimeType || "application/octet-stream";
-      const sourceObjectKey = conversationUploadObjectKey({
+      const keyConversationId = targetAsset?.sourceConversationId ?? command.sourceConversationId;
+      const sourceObjectKey = snapshotSourceObjectKey({
         workspaceId: project.workspaceId,
         projectId: command.projectId,
-        conversationId: command.sourceConversationId,
+        conversationId: keyConversationId,
         assetId,
-        kind: "source",
+        snapshotId,
         filename: normalizedName
       });
       const normalizedObjectKey = conversationUploadObjectKey({
         workspaceId: project.workspaceId,
         projectId: command.projectId,
-        conversationId: command.sourceConversationId,
+        conversationId: keyConversationId,
         assetId,
         kind: "normalized",
         filename: `${snapshotId}.json`
       });
 
-      try {
-        await repository.insertProcessingAsset({
-          id: assetId,
-          projectId: command.projectId,
-          sourceConversationId: command.sourceConversationId,
-          name: command.source.name.trim() || normalizedName,
-          sourceType: command.source.sourceType as typeof dataAssetSourceType.enumValues[number],
-          mimeType,
-          sizeBytes: bytes.byteLength,
-          objectKey: sourceObjectKey,
-          status: "processing",
-          errorCode: null,
-          errorMessage: null,
-          createdBy: command.createdBy
-        });
-      } catch (error) {
-        throw persistenceFailure(error);
+      if (!targetAsset) {
+        try {
+          await repository.insertProcessingAsset({
+            id: assetId,
+            projectId: command.projectId,
+            sourceConversationId: command.sourceConversationId,
+            name: command.source.name.trim() || normalizedName,
+            sourceType: command.source.sourceType as typeof dataAssetSourceType.enumValues[number],
+            mimeType,
+            sizeBytes: bytes.byteLength,
+            status: "processing",
+            errorCode: null,
+            errorMessage: null,
+            createdBy: command.createdBy
+          });
+        } catch (error) {
+          throw persistenceFailure(error);
+        }
       }
 
       let parsed: ParsedTable;
@@ -404,6 +463,13 @@ export function createDataAssetIntake(dependencies: IntakeDependencies = {}) {
             columnCount: parsed.columns.length,
             schema: parsed.profiles,
             preview: parsed.preview,
+            sourceObjectKey,
+            assetMetadata: {
+              name: command.source.name.trim() || normalizedName,
+              sourceType: command.source.sourceType as typeof dataAssetSourceType.enumValues[number],
+              mimeType,
+              sizeBytes: bytes.byteLength
+            },
             normalizedObjectKey
           });
         } catch (error) {
@@ -428,11 +494,13 @@ export function createDataAssetIntake(dependencies: IntakeDependencies = {}) {
           storage,
           writeCleanupAudit
         });
-        try {
-          await repository.markFailed(assetId, failure.code, failure.message);
-        } catch {
-          // The original stable failure remains the externally meaningful error.
-          // A later cleanup/reconciliation process can inspect the processing row.
+        if (!targetAsset) {
+          try {
+            await repository.markFailed(assetId, failure.code, failure.message);
+          } catch {
+            // The original stable failure remains the externally meaningful error.
+            // A later cleanup/reconciliation process can inspect the processing row.
+          }
         }
         throw failure;
       }

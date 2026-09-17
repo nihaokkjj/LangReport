@@ -28,7 +28,7 @@ import {
   revokePluginInstallation,
   setProjectPluginBinding
 } from "@langreport/plugins";
-import { conversationUploadObjectKey, deleteObject, getObject, putObject } from "@langreport/storage";
+import { conversationUploadObjectKey, deleteObject, getObject, putObject, snapshotSourceObjectKey } from "@langreport/storage";
 import type { ColumnProfile, DataRow } from "@langreport/data-engine";
 
 const { processGenerationJob } = await import("../../src/index.js");
@@ -114,14 +114,6 @@ test("real generation and render workers persist plugin usage and historical sna
       sourceType: "pasted",
       mimeType: "text/csv",
       sizeBytes: 1,
-      objectKey: conversationUploadObjectKey({
-        workspaceId: workspace.id,
-        projectId: project.id,
-        conversationId: conversation.id,
-        assetId,
-        kind: "source",
-        filename: "phase5-worker.csv"
-      }),
       status: "ready",
       createdBy: userId
     }).returning();
@@ -144,6 +136,14 @@ test("real generation and render workers persist plugin usage and historical sna
       columnCount: profiles.length,
       schema: profiles,
       preview: rows,
+      sourceObjectKey: snapshotSourceObjectKey({
+        workspaceId: workspace.id,
+        projectId: project.id,
+        conversationId: conversation.id,
+        assetId: asset.id,
+        snapshotId,
+        filename: "phase5-worker.csv"
+      }),
       normalizedObjectKey
     }).returning();
     const [job] = await db.insert(generationJobs).values({
@@ -382,14 +382,6 @@ test("real generation and render workers persist plugin usage and historical sna
       sourceType: "pasted",
       mimeType: "text/csv",
       sizeBytes: 1,
-      objectKey: conversationUploadObjectKey({
-        workspaceId: workspace.id,
-        projectId: project.id,
-        conversationId: conversation.id,
-        assetId: foreignAssetId,
-        kind: "source",
-        filename: "foreign-snapshot.csv"
-      }),
       status: "ready",
       createdBy: userId
     });
@@ -401,6 +393,14 @@ test("real generation and render workers persist plugin usage and historical sna
       columnCount: profiles.length,
       schema: profiles,
       preview: rows,
+      sourceObjectKey: snapshotSourceObjectKey({
+        workspaceId: workspace.id,
+        projectId: project.id,
+        conversationId: conversation.id,
+        assetId: foreignAssetId,
+        snapshotId: foreignSnapshotId,
+        filename: "foreign-snapshot.csv"
+      }),
       normalizedObjectKey: conversationUploadObjectKey({
         workspaceId: workspace.id,
         projectId: project.id,

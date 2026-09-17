@@ -75,6 +75,14 @@ function createFixture() {
         asset = { id: assetId, projectId, sourceConversationId: conversationId, name: "sales-sample.csv", sourceType: "paste", sizeBytes: 42, status: "ready", errorMessage: null, createdAt: now, latestSnapshot: { id: "snapshot-sales-v1", version: 1, rowCount: rows.length, columnCount: 3, schema: [{ name: "月份", inferredType: "date", nullCount: 0, distinctCount: 3, sampleValues: ["2026-01"] }, { name: "区域", inferredType: "string", nullCount: 0, distinctCount: 1, sampleValues: ["华东"] }, { name: "销售额", inferredType: "number", nullCount: 0, distinctCount: 3, sampleValues: [120000] }], preview: rows } };
         return route.fulfill({ status: 201, json: { asset } });
       }
+      if (path === `/api/v1/projects/${projectId}/data-assets/upload` && request.method() === "POST") {
+        asset = { id: assetId, projectId, sourceConversationId: conversationId, name: "sales-v1.csv", sourceType: "csv", sizeBytes: 42, status: "ready", errorMessage: null, createdAt: now, latestSnapshot: { id: "snapshot-sales-v1", version: 1, rowCount: rows.length, columnCount: 3, schema: [{ name: "月份", inferredType: "date", nullCount: 0, distinctCount: 3, sampleValues: ["2026-01"] }, { name: "区域", inferredType: "string", nullCount: 0, distinctCount: 1, sampleValues: ["华东"] }, { name: "销售额", inferredType: "number", nullCount: 0, distinctCount: 3, sampleValues: [120000] }], preview: rows } };
+        return route.fulfill({ status: 201, json: { asset } });
+      }
+      if (path === `/api/v1/projects/${projectId}/data-assets/${assetId}/snapshots/upload` && request.method() === "POST") {
+        asset = { ...(asset ?? {}), name: "sales-v2.csv", latestSnapshot: { ...((asset?.latestSnapshot ?? {}) as Record<string, unknown>), id: "snapshot-sales-v2", version: 2 } };
+        return route.fulfill({ status: 201, json: { asset } });
+      }
       if (path === `/api/v1/projects/${projectId}/metric-definitions` && request.method() === "POST") {
         metric = { id: "metric-sales", projectId, sourceConversationId: conversationId, name: "销售额", meaning: "客户订单的销售金额总和。", formula: "sum(销售额)", unit: "人民币", timeRule: "按自然月聚合", filterRule: null, status: "confirmed", version: 1, confirmedBy: "e2e-user", confirmedAt: now };
         return route.fulfill({ status: 201, json: { definition: metric } });
@@ -110,6 +118,24 @@ function createFixture() {
 }
 
 test.describe.configure({ mode: "serial" });
+
+test("导入文件与更新当前数据保持显式分流", async ({ page }) => {
+  const fixture = createFixture();
+  await page.route("**/api/**", fixture.route);
+  await page.goto("/");
+
+  await expect(page.locator(".rail-source input[type=file]")).toBeEnabled();
+  await page.locator(".rail-source input[type=file]").setInputFiles({ name: "sales-v1.csv", mimeType: "text/csv", buffer: Buffer.from("month,amount\nJan,10") });
+  await expect(page.getByRole("status").filter({ hasText: "创建为数据快照 v1" })).toBeVisible();
+  await expect(page.locator(".context-summary-copy")).toContainText("sales-v1.csv · v1");
+  const updateButton = page.locator(".canvas-header-actions").getByRole("button", { name: "更新当前数据" });
+  await expect(updateButton).toBeVisible();
+  await updateButton.click();
+
+  await page.locator('input[aria-label="选择数据文件"]').setInputFiles({ name: "sales-v2.csv", mimeType: "text/csv", buffer: Buffer.from("month,amount\nJan,11") });
+  await expect(page.getByRole("status").filter({ hasText: "更新为数据快照 v2" })).toBeVisible();
+  await expect(page.locator(".context-summary-copy")).toContainText("sales-v2.csv · v2");
+});
 
 test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => {
   const fixture = createFixture();

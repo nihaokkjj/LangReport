@@ -27,3 +27,13 @@ test("multipart upload keeps its OpenAPI body but skips Fastify JSON body valida
   assert.ok(contract);
   assert.equal(runtimeRouteSchema(contract).body, undefined);
 });
+
+test("snapshot re-ingest contracts expose the target Asset path and multipart shape", () => {
+  const upload = getRouteContract("POST", "/api/v1/projects/:projectId/data-assets/:assetId/snapshots/upload");
+  const paste = getRouteContract("POST", "/api/v1/projects/:projectId/data-assets/:assetId/snapshots/paste");
+  assert.ok(upload);
+  assert.ok(paste);
+  assert.equal(runtimeRouteSchema(upload).body, undefined);
+  assert.deepEqual(Object.keys((upload.request?.params as { properties: Record<string, unknown> }).properties).sort(), ["assetId", "projectId"]);
+  assert.deepEqual(Object.keys((paste.request?.params as { properties: Record<string, unknown> }).properties).sort(), ["assetId", "projectId"]);
+});

@@ -106,7 +106,6 @@ export const dataAssets = pgTable("data_assets", {
   sourceType: dataAssetSourceType("source_type").notNull(),
   mimeType: text("mime_type").notNull(),
   sizeBytes: integer("size_bytes").notNull(),
-  objectKey: text("object_key").notNull(),
   status: dataAssetStatus("status").notNull().default("processing"),
   errorCode: text("error_code"),
   errorMessage: text("error_message"),
@@ -126,6 +125,7 @@ export const dataSnapshots = pgTable("data_snapshots", {
   columnCount: integer("column_count").notNull(),
   schema: jsonb("schema").notNull(),
   preview: jsonb("preview").notNull(),
+  sourceObjectKey: text("source_object_key").notNull(),
   normalizedObjectKey: text("normalized_object_key").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => [

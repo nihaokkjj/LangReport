@@ -78,6 +78,15 @@ async function run() {
             VALUES ('00000000-0000-0000-0000-000000000002', 'economist', 1, '{"ink":"#111111"}'::jsonb, 'historical-user');
           `);
         }
+
+        if (migration === "0021_data_asset_intake_lifecycle.sql") {
+          await transaction.unsafe(`
+            INSERT INTO "data_assets" ("id", "project_id", "source_conversation_id", "name", "source_type", "mime_type", "size_bytes", "object_key", "status", "created_by")
+            VALUES ('00000000-0000-0000-0000-000000000009', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000005', 'historical-v1.csv', 'pasted', 'text/csv', 10, 'workspaces/00000000-0000-0000-0000-000000000001/projects/00000000-0000-0000-0000-000000000002/conversations/00000000-0000-0000-0000-000000000005/user-data/uploads/00000000-0000-0000-0000-000000000009/source/historical-v1.csv', 'ready', 'historical-user');
+            INSERT INTO "data_snapshots" ("id", "asset_id", "version", "row_count", "column_count", "schema", "preview", "normalized_object_key")
+            VALUES ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-000000000009', 1, 2, 1, '[{"name":"sales","type":"number"}]'::jsonb, '[{"sales":10}]'::jsonb, 'historical-snapshot-v1.json');
+          `);
+        }
       }
 
       const [historical] = await transaction.unsafe(`
@@ -105,6 +114,35 @@ async function run() {
         WHERE "id" = '00000000-0000-0000-0000-000000000003'
       `);
       assert.equal(legacyAssets.count, 0, "legacy Data Asset metadata must not survive the provenance migration");
+
+      const [sourceKey] = await transaction.unsafe(`
+        SELECT s."source_object_key"
+        FROM "data_snapshots" s
+        WHERE s."id" = '00000000-0000-0000-0000-00000000000a'
+      `);
+      assert.equal(
+        sourceKey.source_object_key,
+        'workspaces/00000000-0000-0000-0000-000000000001/projects/00000000-0000-0000-0000-000000000002/conversations/00000000-0000-0000-0000-000000000005/user-data/uploads/00000000-0000-0000-0000-000000000009/source/historical-v1.csv',
+        "historical source object keys must be moved to their Data Snapshot"
+      );
+
+      const [legacyObjectColumn] = await transaction.unsafe(`
+        SELECT count(*)::integer AS count
+        FROM information_schema.columns
+        WHERE table_schema = '${schemaName}'
+          AND table_name = 'data_assets'
+          AND column_name = 'object_key'
+      `);
+      assert.equal(legacyObjectColumn.count, 0, "Data Asset must not retain a project-level source object key");
+
+      const [snapshotSourceColumn] = await transaction.unsafe(`
+        SELECT is_nullable
+        FROM information_schema.columns
+        WHERE table_schema = '${schemaName}'
+          AND table_name = 'data_snapshots'
+          AND column_name = 'source_object_key'
+      `);
+      assert.equal(snapshotSourceColumn.is_nullable, "NO", "Data Snapshot source object keys must be non-null");
 
       const [sourceColumn] = await transaction.unsafe(`
         SELECT is_nullable

@@ -95,3 +95,29 @@ export function conversationUploadObjectKey(input: {
     input.filename.replace(/[^a-zA-Z0-9._-]/g, "_")
   ].join("/");
 }
+
+/** Keep each raw input isolated by the immutable Data Snapshot it created. */
+export function snapshotSourceObjectKey(input: {
+  workspaceId: string;
+  projectId: string;
+  conversationId: string;
+  assetId: string;
+  snapshotId: string;
+  filename: string;
+}): string {
+  return [
+    "workspaces",
+    input.workspaceId,
+    "projects",
+    input.projectId,
+    "conversations",
+    input.conversationId,
+    "user-data",
+    "uploads",
+    input.assetId,
+    "snapshots",
+    input.snapshotId,
+    "source",
+    input.filename.replace(/[^a-zA-Z0-9._-]/g, "_")
+  ].join("/");
+}

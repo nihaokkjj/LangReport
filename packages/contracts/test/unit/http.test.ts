@@ -34,6 +34,8 @@ const expectedRoutes = [
   "GET /api/v1/projects/:projectId/data-assets",
   "POST /api/v1/projects/:projectId/data-assets/upload",
   "POST /api/v1/projects/:projectId/data-assets/paste",
+  "POST /api/v1/projects/:projectId/data-assets/:assetId/snapshots/upload",
+  "POST /api/v1/projects/:projectId/data-assets/:assetId/snapshots/paste",
   "GET /api/v1/data-assets/:assetId",
   "POST /api/v1/projects/:projectId/conversations",
   "GET /api/v1/projects/:projectId/conversations",

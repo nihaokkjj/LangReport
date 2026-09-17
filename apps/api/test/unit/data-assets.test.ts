@@ -10,7 +10,7 @@ import {
   type IntakeDependencies,
   type IntakeRepository
 } from "../../src/data-assets.js";
-import { conversationUploadObjectKey } from "@langreport/storage";
+import { conversationUploadObjectKey, snapshotSourceObjectKey } from "@langreport/storage";
 
 test("public data asset DTO omits storage object keys and reports source status", () => {
   const asset = {
@@ -21,7 +21,6 @@ test("public data asset DTO omits storage object keys and reports source status"
     sourceType: "csv" as const,
     mimeType: "text/csv",
     sizeBytes: 12,
-    objectKey: "private/source-key",
     status: "ready" as const,
     errorCode: null,
     errorMessage: null,
@@ -36,12 +35,14 @@ test("public data asset DTO omits storage object keys and reports source status"
     columnCount: 1,
     schema: [],
     preview: [],
+    sourceObjectKey: "private/source-key",
     normalizedObjectKey: "private/normalized-key",
     createdAt: new Date("2026-09-03T00:00:00.000Z")
   };
 
   const result = toPublicDataAsset(asset, snapshot, true);
   assert.equal("objectKey" in result, false);
+  assert.equal("sourceObjectKey" in (result.latestSnapshot ?? {}), false);
   assert.equal("normalizedObjectKey" in (result.latestSnapshot ?? {}), false);
   assert.equal(result.sourceConversationId, "00000000-0000-4000-8000-000000000001");
   assert.equal(result.sourceConversationDeleted, true);
@@ -60,6 +61,17 @@ test("conversation uploads use an isolated, snapshot-addressable object path", (
     }),
     "workspaces/workspace-1/projects/project-1/conversations/conversation-1/user-data/uploads/asset-1/snapshots/snapshot-1.json"
   );
+  assert.equal(
+    snapshotSourceObjectKey({
+      workspaceId: "workspace-1",
+      projectId: "project-1",
+      conversationId: "conversation-1",
+      assetId: "asset-1",
+      snapshotId: "snapshot-1",
+      filename: "sales v2.csv"
+    }),
+    "workspaces/workspace-1/projects/project-1/conversations/conversation-1/user-data/uploads/asset-1/snapshots/snapshot-1/source/sales_v2.csv"
+  );
 });
 
 type Asset = typeof dataAssets.$inferSelect;
@@ -75,6 +87,7 @@ function createRepository(options: { persistError?: Error } = {}): {
   const repository: IntakeRepository = {
     findProject: async () => ({ workspaceId: "workspace-1" }),
     hasConversationInProject: async () => true,
+    findAssetForUpdate: async (_projectId, assetId) => assets.get(assetId),
     insertProcessingAsset: async (input) => {
       if (!input.id) throw new Error("asset id missing");
       assets.set(input.id, {
@@ -85,7 +98,6 @@ function createRepository(options: { persistError?: Error } = {}): {
         sourceType: input.sourceType as Asset["sourceType"],
         mimeType: input.mimeType as string,
         sizeBytes: input.sizeBytes as number,
-        objectKey: input.objectKey as string,
         status: "processing",
         errorCode: null,
         errorMessage: null,
@@ -97,19 +109,27 @@ function createRepository(options: { persistError?: Error } = {}): {
       if (options.persistError) throw options.persistError;
       const asset = assets.get(input.assetId);
       if (!asset) throw new Error("asset missing");
+      const latestVersion = Math.max(0, ...[...snapshots.values()]
+        .filter((snapshot) => snapshot.assetId === input.assetId)
+        .map((snapshot) => snapshot.version));
       const snapshot: Snapshot = {
         id: input.snapshotId,
         assetId: input.assetId,
-        version: 1,
+        version: latestVersion + 1,
         rowCount: input.rowCount,
         columnCount: input.columnCount,
         schema: input.schema,
         preview: input.preview,
+        sourceObjectKey: input.sourceObjectKey,
         normalizedObjectKey: input.normalizedObjectKey,
         createdAt: new Date("2026-09-16T00:00:00.000Z")
       };
       snapshots.set(snapshot.id, snapshot);
       asset.status = "ready";
+      asset.name = input.assetMetadata.name;
+      asset.sourceType = input.assetMetadata.sourceType;
+      asset.mimeType = input.assetMetadata.mimeType;
+      asset.sizeBytes = input.assetMetadata.sizeBytes;
       asset.errorCode = null;
       asset.errorMessage = null;
       return { asset, snapshot };
@@ -160,11 +180,11 @@ function command(overrides: Partial<DataAssetIntakeCommand["source"]> = {}): Dat
   };
 }
 
-function fixedIds(): () => string {
-  const ids = [
+function fixedIds(values = [
     "00000000-0000-4000-8000-000000000010",
     "00000000-0000-4000-8000-000000000011"
-  ];
+  ]): () => string {
+  const ids = [...values];
   return () => {
     const id = ids.shift();
     if (!id) throw new Error("unexpected id request");
@@ -201,6 +221,65 @@ test("intake writes both objects and commits one ready snapshot", async () => {
   assert.equal(storage.objects.size, 2);
   assert.equal("objectKey" in asset, false);
   assert.equal("normalizedObjectKey" in (asset.latestSnapshot ?? {}), false);
+});
+
+test("intake updates one asset by appending a new snapshot and preserving v1", async () => {
+  const fixture = createRepository();
+  const storage = createStorage();
+  const intake = createDataAssetIntake({ repository: fixture.repository, storage: storage.storage, createId: fixedIds() });
+  const first = await intake.ingest(command());
+  const firstSnapshot = fixture.snapshots.get(first.latestSnapshot?.id ?? "");
+
+  const second = await createDataAssetIntake({
+    repository: fixture.repository,
+    storage: storage.storage,
+    createId: fixedIds(["00000000-0000-4000-8000-000000000012"])
+  }).ingest({
+    ...command({
+      name: "sales-v2.csv",
+      bytes: Buffer.from("month,sales\n2026-01,120\n2026-02,150\n", "utf8")
+    }),
+    target: { assetId: first.id }
+  });
+
+  assert.equal(second.id, first.id);
+  assert.equal(second.latestSnapshot?.version, 2);
+  assert.equal(fixture.snapshots.size, 2);
+  assert.equal(firstSnapshot?.version, 1);
+  const secondSnapshot = fixture.snapshots.get(second.latestSnapshot?.id ?? "");
+  assert.equal(secondSnapshot?.version, 2);
+  assert.notEqual(firstSnapshot?.sourceObjectKey, secondSnapshot?.sourceObjectKey);
+  assert.match(secondSnapshot?.sourceObjectKey ?? "", new RegExp(`/snapshots/${secondSnapshot?.id}/source/`));
+  assert.equal(storage.objects.size, 4);
+});
+
+test("failed updates clean up only new objects and preserve the ready asset", async () => {
+  const fixture = createRepository();
+  const storage = createStorage();
+  const intake = createDataAssetIntake({ repository: fixture.repository, storage: storage.storage, createId: fixedIds() });
+  const first = await intake.ingest(command());
+  const firstSnapshotId = first.latestSnapshot?.id;
+
+  const updateIntake = createDataAssetIntake({
+    repository: fixture.repository,
+    storage: storage.storage,
+    createId: fixedIds(["00000000-0000-4000-8000-000000000012"])
+  });
+  storage.storage.putObject = async (input) => {
+    if (input.key.includes("/snapshots/00000000-0000-4000-8000-000000000012/source/")) throw new Error("source provider failed");
+    throw new Error("unexpected object write");
+  };
+
+  await assert.rejects(() => updateIntake.ingest({
+    ...command({ name: "sales-v2.csv" }),
+    target: { assetId: first.id }
+  }), (error: unknown) => error instanceof DataAssetError && error.code === "SOURCE_OBJECT_WRITE_FAILED");
+
+  assert.equal(fixture.assets.get(first.id)?.status, "ready");
+  assert.equal(fixture.assets.get(first.id)?.errorCode, null);
+  assert.equal(fixture.snapshots.size, 1);
+  assert.equal(fixture.snapshots.has(firstSnapshotId ?? ""), true);
+  assert.equal(storage.objects.size, 2);
 });
 
 test("source object failure persists a typed failure without creating a snapshot", async () => {
