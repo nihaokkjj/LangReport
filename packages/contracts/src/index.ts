@@ -431,6 +431,29 @@ export const pluginEnableRequestSchema = z.object({
   idempotencyKey: z.string().trim().min(1).max(200)
 }).strict();
 
+export const generationDecisionSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("accept_recommendation"),
+    parentJobId: z.string().uuid(),
+    questionCode: z.string().trim().min(1).max(120),
+    target: z.literal("x_field"),
+    selectedValue: z.string().trim().min(1).max(160)
+  }).strict(),
+  z.object({
+    action: z.literal("select_candidate"),
+    parentJobId: z.string().uuid(),
+    questionCode: z.string().trim().min(1).max(120),
+    target: z.literal("x_field"),
+    selectedValue: z.string().trim().min(1).max(160)
+  }).strict(),
+  z.object({
+    action: z.literal("adjust_direction"),
+    parentJobId: z.string().uuid(),
+    questionCode: z.string().trim().min(1).max(120).optional(),
+    text: z.string().trim().min(1).max(4000)
+  }).strict()
+]);
+
 export const chartGenerationRequestSchema = z.object({
   projectId: z.string().uuid(),
   conversationId: z.string().uuid().optional(),
@@ -441,6 +464,7 @@ export const chartGenerationRequestSchema = z.object({
   plan: transformPlanSchema.optional(),
   theme: themePresetSchema.default("economist"),
   themeVersion: z.string().min(1).max(40).default("v1"),
+  generationDecision: generationDecisionSchema.optional(),
   idempotencyKey: z.string().trim().min(1).max(200).optional()
 });
 
@@ -457,6 +481,7 @@ export const createConversationMessageRequestSchema = z.object({
   dataAssetId: z.string().uuid().optional(),
   metricDefinitionId: z.string().uuid().optional(),
   renderer: z.literal("vega-lite").default("vega-lite"),
+  generationDecision: generationDecisionSchema.optional(),
   clientRequestId: z.string().trim().min(1).max(200).optional()
 });
 
@@ -680,12 +705,22 @@ export const clarificationOptionSchema = z.object({
   label: z.string().trim().min(1).max(200)
 }).strict();
 
+export const clarificationEvidenceSchema = z.object({
+  label: z.string().trim().min(1).max(120),
+  value: z.string().trim().min(1).max(300)
+}).strict();
+
 export const clarificationQuestionSchema = z.object({
   code: z.string().trim().min(1).max(120),
+  target: z.enum(["x_field"]).optional(),
   question: z.string().trim().min(1).max(1000),
   reason: z.string().trim().min(1).max(1000).optional(),
   field: z.string().trim().min(1).max(160).optional(),
-  options: z.array(clarificationOptionSchema).min(2).max(8).optional()
+  stage: z.enum(["profiling", "planning", "transforming", "compiling", "validating"]).default("planning"),
+  severity: z.enum(["blocking", "warning"]).default("blocking"),
+  options: z.array(clarificationOptionSchema).min(1).max(8).optional(),
+  recommendedOption: clarificationOptionSchema.optional(),
+  evidence: z.array(clarificationEvidenceSchema).max(8).default([])
 }).strict();
 
 export const chartSelectionSchema = z.object({
@@ -1001,7 +1036,9 @@ export type HistoryPolicy = z.infer<typeof historyPolicySchema>;
 export type CanonicalTextContextMessage = z.infer<typeof canonicalTextContextMessageSchema>;
 export type CanonicalTextContextProjection = z.infer<typeof canonicalTextContextProjectionSchema>;
 export type ClarificationOption = z.infer<typeof clarificationOptionSchema>;
+export type ClarificationEvidence = z.infer<typeof clarificationEvidenceSchema>;
 export type ClarificationQuestion = z.infer<typeof clarificationQuestionSchema>;
+export type GenerationDecision = z.infer<typeof generationDecisionSchema>;
 export type ChartSelection = z.infer<typeof chartSelectionSchema>;
 export type ChartPlanDecision = z.infer<typeof chartPlanDecisionSchema>;
 export type StructuredOutputCapability = z.infer<typeof structuredOutputCapabilitySchema>;

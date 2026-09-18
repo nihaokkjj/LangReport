@@ -42,6 +42,15 @@ _Avoid_: Chat、Thread、Session
 **Generation Cycle**：围绕一个明确 Analysis Brief，从用户意图到一个候选 Evidence Block 的完整生成尝试。一次 Cycle 有明确输入、输出、校验结果和结束原因。
 _Avoid_: Infinite Loop、Chat Response
 
+**Generation Readiness Gate**：对当前 Generation Cycle 的输入、字段、指标口径、变换结果和图表要求进行前提判断的决策门；它只判断是否可以继续、需要用户澄清或不能继续，不把一次判断写成长期项目规范。
+_Avoid_: Generic Agent、Auto Approval、Project Rule
+
+**Clarification Proposal**：Generation Readiness Gate 根据可验证的数据和计划证据提出的、需要用户决定的生成建议，必须说明原因、候选项和证据；它可以由模型辅助表达，但不允许模型凭空创造字段或口径。
+_Avoid_: Model Guess、Error Message、Formula Guess
+
+**Generation Decision**：用户针对 Clarification Proposal 做出的、只对当前 Generation Cycle 生效的选择；它可以接受建议、选择其他候选、补充分析方向或停止生成，不自动成为 Project Memory、Metric Definition 或 Visual Template。
+_Avoid_: Project Rule、Auto Memory、Final Approval
+
 **Plan Validation**：对 TransformPlan、Flint Spec 与其字段、语义和 Visual Template 约束的校验记录。它证明候选图表计划可以进入渲染，不证明渲染产物已经可用。
 _Avoid_: Render Check、Final Approval
 

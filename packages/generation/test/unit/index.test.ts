@@ -167,6 +167,77 @@ test("Generation Cycle 将 Gateway 的有界模型调用摘要保留在审计中
   assert.equal(result.audit.modelInvocation?.errorCode, "MODEL_RATE_LIMITED");
 });
 
+test("Generation Cycle 在 Compile 缺少横轴时返回可执行的 Clarification Proposal", async () => {
+  const gateway: ModelGateway = {
+    async generateStructured<T>(request: RuntimeModelRequest<T>): Promise<ModelResult<T>> {
+      return {
+        status: "ok",
+        data: request.output.parse({
+          decision: "ready",
+          intent: {
+            version: "v1",
+            language: "zh-CN",
+            originalPrompt: cycleInput.prompt,
+            chartType: "line",
+            timeColumn: "月份",
+            timeGrain: "month",
+            dimensionColumns: ["区域"],
+            measureColumns: ["销售额"],
+            comparison: "none",
+            title: "销售额趋势",
+            confidence: 0.72
+          },
+          plan: {
+            version: "v1",
+            rationale: "测试一个没有保留月份字段的 TransformPlan",
+            steps: [{ kind: "aggregate", groupBy: ["区域"], measures: [{ column: "销售额", operation: "sum", outputColumn: "销售额_sum" }] }],
+            expectedColumns: ["区域", "销售额_sum"]
+          },
+          chartSelection: { chartType: "line", xField: "月份", yField: "销售额_sum", seriesField: null, tooltipFields: [] },
+          questions: []
+        }),
+        invocationId: request.invocationId
+      };
+    }
+  };
+
+  const result = await new GenerationCycle(gateway).run(cycleInput);
+
+  assert.equal(result.status, "needs_clarification");
+  if (result.status !== "needs_clarification") return;
+  assert.equal(result.questions[0]?.code, "MISSING_X_FIELD");
+  assert.equal(result.questions[0]?.target, "x_field");
+  assert.equal(result.questions[0]?.recommendedOption?.value, "月份");
+  assert.equal(result.audit.stages.find((stage) => stage.name === "compiling")?.status, "needs_clarification");
+  assert.equal(result.audit.planValidation.status, "failed");
+});
+
+test("Generation Cycle 只在当前周期应用用户选择的候选横轴", async () => {
+  const result = await new GenerationCycle().run({
+    ...cycleInput,
+    generationDecision: {
+      action: "select_candidate",
+      parentJobId: "00000000-0000-4000-8000-000000000099",
+      questionCode: "MISSING_X_FIELD",
+      target: "x_field",
+      selectedValue: "区域"
+    }
+  });
+
+  assert.equal(result.status, "drafted");
+  if (result.status !== "drafted") return;
+  assert.equal(result.artifacts.intent.timeColumn, undefined);
+  assert.deepEqual(result.artifacts.intent.dimensionColumns, ["区域"]);
+  assert.equal(result.artifacts.flintSpec.chartSpec.encodings.x.field, "区域");
+  assert.deepEqual(result.audit.generationDecision, {
+    action: "select_candidate",
+    parentJobId: "00000000-0000-4000-8000-000000000099",
+    questionCode: "MISSING_X_FIELD",
+    target: "x_field",
+    selectedValue: "区域"
+  });
+});
+
 test("Generation Cycle 在无法识别指标时返回 needs_clarification 而不是抛出异常", async () => {
   const result = await new GenerationCycle().run({
     ...cycleInput,

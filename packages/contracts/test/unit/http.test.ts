@@ -61,6 +61,7 @@ const expectedRoutes = [
   "GET /api/v1/chart-revisions/:revisionId/memory-context",
   "GET /api/v1/generation-jobs/:jobId",
   "POST /api/v1/generation-jobs/:jobId/retry",
+  "POST /api/v1/generation-jobs/:jobId/cancel",
   "GET /api/v1/generation-jobs/:jobId/outputs/:format",
   "GET /api/v1/projects/:projectId/chart-artifacts",
   "GET /api/v1/projects/:projectId/chart-artifacts/:artifactId",

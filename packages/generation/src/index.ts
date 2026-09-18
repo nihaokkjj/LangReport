@@ -11,6 +11,7 @@ import {
   type ClarificationQuestion,
   type ConversationIntent,
   type FlintSpec,
+  type GenerationDecision,
   type ModelBudget,
   type ModelErrorCode,
   type MemoryContext,
@@ -32,6 +33,10 @@ import { evaluatePluginValidators, type ParsedPluginManifest, type ResolvedCapab
 import { CANONICAL_TEXT_CONTEXT_VERSION, projectConversationToCanonicalTextContext, validateCanonicalTextContextProjection } from "./context-projection.js";
 import { runEvidenceGenerationGraph } from "./evidence-generation-graph/graph.js";
 import type { EvidenceGenerationGraphPort, EvidenceGenerationGraphState } from "./evidence-generation-graph/state.js";
+import { evaluateGenerationReadiness, type GenerationReadinessStage } from "./readiness-gate.js";
+
+export { evaluateGenerationReadiness } from "./readiness-gate.js";
+export type { GenerationReadinessInput, GenerationReadinessResult, GenerationReadinessStage } from "./readiness-gate.js";
 
 export {
   CANONICAL_TEXT_CONTEXT_VERSION,
@@ -442,6 +447,7 @@ function titleForPrompt(prompt: string): string {
 
 export type GenerationCycleInput = GenerationInput & {
   plan?: TransformPlan;
+  generationDecision?: GenerationDecision;
   cycle: {
     workspaceId: string;
     projectId: string;
@@ -459,8 +465,8 @@ export type GenerationCycleInput = GenerationInput & {
   effectiveOptions?: Record<string, unknown>;
 };
 
-type GenerationCycleStageName = "planning" | "transforming" | "compiling" | "validating";
-type GenerationCycleStageStatus = "pending" | "succeeded" | "failed" | "skipped";
+type GenerationCycleStageName = GenerationReadinessStage;
+type GenerationCycleStageStatus = "pending" | "succeeded" | "failed" | "needs_clarification" | "skipped";
 
 export type GenerationCycleAudit = {
   version: "v1";
@@ -477,6 +483,7 @@ export type GenerationCycleAudit = {
   renderValidation: ValidationRecord;
   repairCount: number;
   contextFallbacks: string[];
+  generationDecision: GenerationDecision | null;
 };
 
 type GenerationCycleFailureCode = ModelErrorCode
@@ -648,7 +655,7 @@ async function runGenerationCycleGraph(input: GenerationCycleInput, gateway: Mod
       try { prepared = buildPreparedModelContext(input); } catch (error) { return fail(createAudit(input), "GENERATION_CONTEXT_INVALID", errorMessage(error, "模型上下文无效"), false, "planning"); }
       const audit = createAudit(input, prepared);
       const conflicts = input.memoryContext?.conflicts.filter((conflict) => conflict.requiresDecision) ?? [];
-      if (conflicts.length) return { audit: setStage(audit, "planning", "succeeded"), terminal: "needs_clarification", questions: conflicts.slice(0, 8).map((conflict) => ({ code: "memory_conflict", question: `请确认 Memory「${conflict.memoryKey}」应采用哪一条规则`, reason: "项目级与 Workspace 级记忆存在冲突，Cycle 不能静默选择", field: conflict.memoryKey })) };
+      if (conflicts.length) return { audit: setStage(audit, "planning", "succeeded"), terminal: "needs_clarification", questions: conflicts.slice(0, 8).map((conflict) => ({ code: "memory_conflict", question: `请确认 Memory「${conflict.memoryKey}」应采用哪一条规则`, reason: "项目级与 Workspace 级记忆存在冲突，Cycle 不能静默选择", field: conflict.memoryKey, stage: "planning" as const, severity: "blocking" as const, evidence: [] })) };
       if (Date.now() >= input.cycle.budget.deadlineAt) return fail(audit, "MODEL_BUDGET_EXCEEDED", "Generation Cycle 在模型调用前已超过截止时间预算", false, "planning");
       return { audit };
     },
@@ -667,8 +674,8 @@ async function runGenerationCycleGraph(input: GenerationCycleInput, gateway: Mod
       const parsed = chartPlanDecisionSchema.safeParse(modelResult.data);
       if (!parsed.success) return fail(nextAudit, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的 chart-plan 不符合版本化合同", false, "planning");
       if (parsed.data.decision === "needs_clarification") return { audit: nextAudit, terminal: "needs_clarification", questions: parsed.data.questions };
-      decision = parsed.data;
-      return { audit: nextAudit, decision, transformPlan: input.plan ? transformPlanSchema.parse(input.plan) : decision.plan };
+      decision = applyGenerationDecision(parsed.data, input.generationDecision, input.profiles);
+      return { audit: nextAudit, decision, transformPlan: input.plan && !input.generationDecision ? transformPlanSchema.parse(input.plan) : decision.plan };
     },
     async transform(state) {
       const audit = state.audit as GenerationCycleAudit;
@@ -678,7 +685,18 @@ async function runGenerationCycleGraph(input: GenerationCycleInput, gateway: Mod
     async compile(state) {
       const audit = state.audit as GenerationCycleAudit;
       try { flintSpec = generateFlintSpec({ intent: decision!.intent, transform: transform!, theme: input.theme, themeVersion: input.themeVersion, themeConfig: input.themeConfig ?? {}, chartTypeOverride }); return { audit: setStage(audit, "compiling", "succeeded"), compiledFlintSpec: flintSpec }; }
-      catch (error) { return fail(audit, "GENERATION_COMPILATION_FAILED", errorMessage(error, "生成阶段失败"), false, "compiling"); }
+      catch (error) {
+        const message = errorMessage(error, "生成阶段失败");
+        const readiness = evaluateGenerationReadiness({ stage: "compiling", profiles: input.profiles, intent: decision!.intent, transform, error });
+        if (readiness.decision === "needs_clarification") {
+          const nextAudit = {
+            ...setStage(audit, "compiling", "needs_clarification", readiness.questions[0]?.code),
+            planValidation: validationRecordFromError(readiness.questions[0]?.code ?? "GENERATION_NEEDS_CLARIFICATION", message)
+          };
+          return { audit: nextAudit, terminal: "needs_clarification", questions: readiness.questions };
+        }
+        return fail(audit, "GENERATION_COMPILATION_FAILED", message, false, "compiling");
+      }
     },
     async validate(state) {
       const audit = state.audit as GenerationCycleAudit;
@@ -843,6 +861,33 @@ function buildPreparedModelContext(input: GenerationCycleInput): PreparedGenerat
   };
 }
 
+function applyGenerationDecision(
+  decision: Extract<ChartPlanDecision, { decision: "ready" }>,
+  generationDecision: GenerationDecision | undefined,
+  profiles: ColumnProfile[]
+): Extract<ChartPlanDecision, { decision: "ready" }> {
+  if (!generationDecision || generationDecision.action === "adjust_direction" || generationDecision.target !== "x_field") return decision;
+  const selectedProfile = profiles.find((profile) => profile.name === generationDecision.selectedValue);
+  if (!selectedProfile) return decision;
+  if (selectedProfile.inferredType !== "date" && decision.intent.comparison !== "none") return decision;
+  const selectedIsTime = selectedProfile.inferredType === "date";
+  const intent = conversationIntentSchema.parse({
+    ...decision.intent,
+    timeColumn: selectedIsTime ? selectedProfile.name : undefined,
+    timeGrain: selectedIsTime ? inferTimeGrain(selectedProfile, decision.intent.originalPrompt) : undefined,
+    dimensionColumns: selectedIsTime
+      ? decision.intent.dimensionColumns
+      : [selectedProfile.name, ...decision.intent.dimensionColumns.filter((column) => column !== selectedProfile.name)]
+  });
+  const plan = generateTransformPlan(intent, profiles);
+  return {
+    ...decision,
+    intent,
+    plan,
+    chartSelection: { ...decision.chartSelection, xField: selectedProfile.name }
+  };
+}
+
 function createAudit(input: GenerationCycleInput, preparedContext?: PreparedGenerationModelContext): GenerationCycleAudit {
   const contextProjectionHash = preparedContext?.conversationProjection.hash ?? "unavailable";
   const requestedProfile = input.requestedProfile ?? "deterministic-offline";
@@ -876,7 +921,8 @@ function createAudit(input: GenerationCycleInput, preparedContext?: PreparedGene
     planValidation: pendingValidationRecord("plan-validator-v1"),
     renderValidation: pendingValidationRecord("flint-render-v1"),
     repairCount: 0,
-    contextFallbacks: preparedContext?.contextFallbacks ?? []
+    contextFallbacks: preparedContext?.contextFallbacks ?? [],
+    generationDecision: input.generationDecision ?? null
   };
 }
 

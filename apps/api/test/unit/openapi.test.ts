@@ -87,12 +87,14 @@ test("documents the Generation Job async state and failure trace contract", asyn
     const createJobProperties = createJobSchema?.properties?.job as { properties?: Record<string, { enum?: unknown[] }> } | undefined;
     const getJobProperties = getJobSchema?.properties?.job as { properties?: Record<string, unknown> } | undefined;
     const statusEnum = createJobProperties?.properties?.status?.enum ?? [];
-    assert.deepEqual(statusEnum, ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "needs_clarification", "succeeded", "failed"]);
+    assert.deepEqual(statusEnum, ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "needs_clarification", "succeeded", "failed", "cancelled"]);
     assert.ok(getJobProperties?.properties?.errorCode);
     assert.ok(getJobProperties?.properties?.errorMessage);
     assert.ok(getJobProperties?.properties?.snapshotId);
     assert.ok(getJobProperties?.properties?.metricDefinitionId);
     assert.ok(getJobProperties?.properties?.generationAudit);
+    assert.ok(getJobProperties?.properties?.parentGenerationJobId);
+    assert.ok(getJobProperties?.properties?.generationDecision);
     assert.ok(getJobProperties?.properties?.planValidation);
     assert.ok(getJobProperties?.properties?.renderValidation);
   } finally {

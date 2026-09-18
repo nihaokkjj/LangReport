@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
-import { acceptMemoryCandidateRequestSchema, chartGenerationRequestSchema, createAnalysisBriefRequestSchema, createConversationMessageRequestSchema, createConversationRequestSchema, createMetricDefinitionRequestSchema, createProjectRequestSchema, executionAssemblySchema, memoryDeleteRequestSchema, pasteDataRequestSchema, pluginEnableRequestSchema, rejectMemoryCandidateRequestSchema, updateAnalysisBriefRequestSchema, updateWorkspaceModelCredentialRequestSchema, type ModelRouteSnapshot } from "@langreport/contracts";
+import { acceptMemoryCandidateRequestSchema, chartGenerationRequestSchema, clarificationQuestionSchema, createAnalysisBriefRequestSchema, createConversationMessageRequestSchema, createConversationRequestSchema, createMetricDefinitionRequestSchema, createProjectRequestSchema, executionAssemblySchema, memoryDeleteRequestSchema, pasteDataRequestSchema, pluginEnableRequestSchema, rejectMemoryCandidateRequestSchema, updateAnalysisBriefRequestSchema, updateWorkspaceModelCredentialRequestSchema, type GenerationDecision, type ModelRouteSnapshot } from "@langreport/contracts";
 import { assertChartAction, ChartServiceError, getProjectAccess, getProjectTheme, getRevision } from "@langreport/chart";
 import { analysisBriefs, auditEvents, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, db, evidenceBlocks, generationJobs, members, metricDefinitions, projectMembers, projects, workspaces, workspaceModelCredentials, withAdvisoryLock } from "@langreport/db";
 import { getObject } from "@langreport/storage";
@@ -19,6 +19,21 @@ const RENDERER_VERSION = "vega-lite-svg-v1";
 const MAX_GENERATION_ATTEMPTS = 3;
 const retryableGenerationErrors = new Set(["GENERATION_FAILED", "RENDER_FAILED", "MODEL_RATE_LIMITED", "MODEL_TIMEOUT", "MODEL_PROVIDER_UNAVAILABLE"]);
 const projectIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function assertGenerationDecisionMatchesParent(parentJob: typeof generationJobs.$inferSelect, decision: GenerationDecision): void {
+  if (decision.action === "adjust_direction") return;
+  const questions = Array.isArray(parentJob.clarificationQuestions)
+    ? parentJob.clarificationQuestions.map((question) => clarificationQuestionSchema.safeParse(question)).filter((result): result is { success: true; data: ReturnType<typeof clarificationQuestionSchema.parse> } => result.success).map((result) => result.data)
+    : [];
+  const question = questions.find((candidate) => candidate.code === decision.questionCode && candidate.target === decision.target);
+  const option = question?.options?.find((candidate) => candidate.value === decision.selectedValue);
+  if (!question || !option) {
+    throw new ChartServiceError("GENERATION_DECISION_OPTION_INVALID", "Generation Decision 只能选择父 Job 提供且已校验的候选字段", 409);
+  }
+  if (decision.action === "accept_recommendation" && question.recommendedOption?.value !== decision.selectedValue) {
+    throw new ChartServiceError("GENERATION_DECISION_OPTION_INVALID", "接受建议时必须选择父 Job 标记的推荐候选", 409);
+  }
+}
 
 function assertProjectId(projectId: string): void {
   if (!projectIdPattern.test(projectId)) throw new DataAssetError("项目 ID 无效");
@@ -592,6 +607,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
               metricDefinitionId: body.metricDefinitionId,
               prompt: body.content,
               renderer: body.renderer,
+              generationDecision: body.generationDecision,
               idempotencyKey: body.clientRequestId
             },
             id: request.id
@@ -793,6 +809,8 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
             previewData: job.previewData,
             clarificationQuestions: job.clarificationQuestions,
             generationAudit: job.generationAudit,
+            parentGenerationJobId: job.parentGenerationJobId,
+            generationDecision: job.generationDecision,
             repairCount: job.repairCount,
             errorCode: job.errorCode,
             errorMessage: job.errorMessage
@@ -822,6 +840,21 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       });
       const userId = options.userId ?? userIdFromRequest(request);
       await assertChartAction(request.params.projectId, userId, "create_revision");
+      const parentJob = body.generationDecision
+        ? (await db.select().from(generationJobs).where(eq(generationJobs.id, body.generationDecision.parentJobId)).limit(1))[0]
+        : undefined;
+      if (body.generationDecision) {
+        if (!parentJob || parentJob.projectId !== request.params.projectId || parentJob.status !== "needs_clarification") {
+          throw new ChartServiceError("GENERATION_DECISION_PARENT_INVALID", "Generation Decision 的父 Job 不存在、作用域不匹配或已不能继续", 409);
+        }
+        assertGenerationDecisionMatchesParent(parentJob, body.generationDecision);
+        if (body.conversationId && body.conversationId !== parentJob.conversationId) {
+          throw new ChartServiceError("GENERATION_DECISION_PARENT_INVALID", "Generation Decision 必须属于同一个 Conversation", 409);
+        }
+        if (body.dataAssetId !== parentJob.dataAssetId || (body.metricDefinitionId && body.metricDefinitionId !== parentJob.metricDefinitionId)) {
+          throw new ChartServiceError("GENERATION_DECISION_INPUT_CHANGED", "Generation Decision 必须基于父 Job 的数据资产和指标口径继续", 409);
+        }
+      }
       const precondition = options.precondition ?? await checkGenerationPreconditions({
         projectId: request.params.projectId,
         dataAssetId: body.dataAssetId,
@@ -833,6 +866,9 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
           precondition.nextAction?.message ?? "生成所需输入尚未准备好",
           400
         );
+      }
+      if (parentJob && (precondition.assetRecord.snapshot.id !== parentJob.snapshotId || precondition.metricDefinition.id !== parentJob.metricDefinitionId)) {
+        throw new ChartServiceError("GENERATION_DECISION_INPUT_CHANGED", "父 Job 的 Snapshot 或指标口径已变化，请重新开始生成", 409);
       }
       const modelRoute = resolveModelRouteSnapshot(environment);
       const executionAssembly = freezeExecutionAssembly(modelRoute);
@@ -857,9 +893,10 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       const resolvedThemeSource = hasThemeOverride || hasThemeVersionOverride ? "request" : "project";
       const resolvedThemeConfig = resolvedThemeSource === "project" ? projectTheme.config : {};
       const assetRecord = precondition.assetRecord;
+      const generationConversationId = body.conversationId ?? parentJob?.conversationId;
       const conversationProjection = options.conversationProjection ?? await projectConversationForGeneration({
         projectId: request.params.projectId,
-        conversationId: body.conversationId,
+        conversationId: generationConversationId,
         prompt: body.prompt
       });
       const preGenerationMemory = await getMemoryContextForGeneration({
@@ -869,7 +906,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       });
       const fingerprint = fingerprintFor({
         snapshotId: assetRecord.snapshot.id,
-        conversationId: body.conversationId ?? null,
+        conversationId: generationConversationId ?? null,
         conversationProjection: {
           version: conversationProjection.version,
           hash: conversationProjection.hash
@@ -878,6 +915,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
         analysisBrief,
         prompt: body.prompt,
         plan: body.plan ?? null,
+        generationDecision: body.generationDecision ?? null,
         theme: resolvedTheme,
         themeVersion: resolvedThemeVersion,
         themeConfig: resolvedThemeConfig,
@@ -900,7 +938,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
         return { job: existing, reused: true };
       }
 
-      const conversationId = body.conversationId ?? await createConversationForGeneration(request.params.projectId, body.prompt, userId);
+      const conversationId = generationConversationId ?? await createConversationForGeneration(request.params.projectId, body.prompt, userId);
       if (body.conversationId && !options.triggerMessage) {
         const [message] = await db.insert(conversationMessages).values({ conversationId, role: "user", content: body.prompt }).returning({ id: conversationMessages.id });
         await syncConversationTurn(conversationId, userId, message.id, body.prompt);
@@ -923,6 +961,8 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
           themeSource: resolvedThemeSource,
           themeConfig: resolvedThemeConfig,
           transformPlan: body.plan ?? null,
+          parentGenerationJobId: body.generationDecision?.parentJobId ?? null,
+          generationDecision: body.generationDecision ?? null,
           memoryContext,
           conversationProjection,
           modelRoute,
@@ -986,6 +1026,35 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
         return reply.send({ job: current ?? job, reused: true });
       }
       return reply.code(202).send({ job: requeued, reused: false });
+    } catch (error) {
+      return sendDataError(reply, error);
+    }
+  });
+
+  app.post<{ Params: { jobId: string } }>("/api/v1/generation-jobs/:jobId/cancel", async (request, reply) => {
+    try {
+      const [job] = await db.select().from(generationJobs).where(eq(generationJobs.id, request.params.jobId)).limit(1);
+      if (!job) throw new ChartServiceError("GENERATION_JOB_NOT_FOUND", "生成任务不存在", 404);
+      await assertChartAction(job.projectId, userIdFromRequest(request), "create_revision");
+      if (job.status === "cancelled") return reply.send({ job });
+      if (job.status !== "needs_clarification") {
+        throw new ChartServiceError("GENERATION_CANCEL_NOT_ALLOWED", "只有等待澄清的生成任务可以停止", 409);
+      }
+      const [cancelled] = await db.update(generationJobs).set({
+        status: "cancelled",
+        errorCode: "GENERATION_STOPPED_BY_USER",
+        errorMessage: "用户停止了本次生成",
+        leaseOwner: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
+        leaseHeartbeatAt: null,
+        updatedAt: new Date()
+      }).where(and(eq(generationJobs.id, job.id), eq(generationJobs.status, "needs_clarification"))).returning();
+      if (!cancelled) {
+        const [current] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id)).limit(1);
+        return reply.send({ job: current ?? job });
+      }
+      return reply.send({ job: cancelled });
     } catch (error) {
       return sendDataError(reply, error);
     }

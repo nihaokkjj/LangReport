@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  clarificationQuestionSchema,
   chartPlanDecisionSchema,
   createChartPlanOutputDescriptor,
   executionAssemblySchema,
@@ -14,6 +15,7 @@ import {
   type ModelGateway,
   type RuntimeModelRequest,
   generationValidationSchema,
+  generationDecisionSchema,
   validationRecordSchema
 } from "../../src/index.js";
 
@@ -145,6 +147,51 @@ test("chart-plan needs_clarification decision contains actionable questions and 
   assert.equal(decision.decision, "needs_clarification");
   assert.equal(decision.plan, null);
   assert.equal(decision.questions[0]?.code, "metric_ambiguous");
+});
+
+test("clarification questions carry stage, candidate evidence, and an explicit recommendation", () => {
+  const question = clarificationQuestionSchema.parse({
+    code: "MISSING_X_FIELD",
+    target: "x_field",
+    stage: "compiling",
+    severity: "blocking",
+    question: "请确认横轴字段",
+    options: [{ value: "月份", label: "按「月份」作为横轴" }],
+    recommendedOption: { value: "月份", label: "按「月份」作为横轴" },
+    evidence: [{ label: "类型", value: "date" }]
+  });
+
+  assert.equal(question.target, "x_field");
+  assert.equal(question.recommendedOption?.value, "月份");
+  assert.deepEqual(question.evidence, [{ label: "类型", value: "date" }]);
+});
+
+test("generation decisions accept only current-cycle actions and bounded targets", () => {
+  assert.deepEqual(generationDecisionSchema.parse({
+    action: "accept_recommendation",
+    parentJobId: "00000000-0000-4000-8000-000000000099",
+    questionCode: "MISSING_X_FIELD",
+    target: "x_field",
+    selectedValue: "月份"
+  }), {
+    action: "accept_recommendation",
+    parentJobId: "00000000-0000-4000-8000-000000000099",
+    questionCode: "MISSING_X_FIELD",
+    target: "x_field",
+    selectedValue: "月份"
+  });
+  assert.deepEqual(generationDecisionSchema.parse({
+    action: "adjust_direction",
+    parentJobId: "00000000-0000-4000-8000-000000000099",
+    text: "改成按区域比较"
+  }).action, "adjust_direction");
+  assert.throws(() => generationDecisionSchema.parse({
+    action: "select_candidate",
+    parentJobId: "not-a-uuid",
+    questionCode: "MISSING_X_FIELD",
+    target: "y_field",
+    selectedValue: "销售额"
+  }));
 });
 
 test("chart-plan decisions cannot contain both a plan and clarification questions", () => {

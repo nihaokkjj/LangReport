@@ -22,7 +22,7 @@ export const conversationMessageRole = pgEnum("conversation_message_role", ["use
 export const analysisBriefStatus = pgEnum("analysis_brief_status", ["draft", "confirmed"]);
 export const metricDefinitionStatus = pgEnum("metric_definition_status", ["inferred", "confirmed"]);
 export const evidenceBlockStatus = pgEnum("evidence_block_status", ["draft", "in_review", "approved", "changes_requested"]);
-export const generationJobStatus = pgEnum("generation_job_status", ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "needs_clarification", "succeeded", "failed"]);
+export const generationJobStatus = pgEnum("generation_job_status", ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "needs_clarification", "succeeded", "failed", "cancelled"]);
 export const generationJobOperation = pgEnum("generation_job_operation", ["generate", "edit", "rollback", "copy"]);
 export const chartArtifactStatus = pgEnum("chart_artifact_status", ["active", "archived"]);
 export const chartRevisionStatus = pgEnum("chart_revision_status", ["draft", "in_review", "approved", "changes_requested", "archived"]);
@@ -225,6 +225,8 @@ export const generationJobs = pgTable("generation_jobs", {
   operation: generationJobOperation("operation").notNull().default("generate"),
   artifactId: uuid("artifact_id"),
   baseRevisionId: uuid("base_revision_id"),
+  parentGenerationJobId: uuid("parent_generation_job_id"),
+  generationDecision: jsonb("generation_decision"),
   editPatch: jsonb("edit_patch"),
   status: generationJobStatus("status").notNull().default("queued"),
   intent: jsonb("intent"),

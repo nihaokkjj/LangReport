@@ -5,7 +5,7 @@ import { GenerationJobLeaseLostError, assertGenerationJobLease, claimGenerationJ
 import { getObject } from "@langreport/storage";
 import { applyRevisionPatch } from "@langreport/chart";
 import { executeTransformPlan } from "@langreport/data-engine";
-import { chartEditPatchSchema, flintSpecSchema, memoryContextSchema, modelRouteSnapshotSchema, pluginUsageSchema, themePresetSchema, transformPlanSchema, type ModelRouteSnapshot, type TransformPlan, type ValidationRecord, type ValidationReport } from "@langreport/contracts";
+import { chartEditPatchSchema, flintSpecSchema, generationDecisionSchema, memoryContextSchema, modelRouteSnapshotSchema, pluginUsageSchema, themePresetSchema, transformPlanSchema, type ModelRouteSnapshot, type TransformPlan, type ValidationRecord, type ValidationReport } from "@langreport/contracts";
 import { getMemoryContextForGeneration, processMemoryExtractionJob } from "@langreport/memory";
 import { createBailianQwenGateway, decryptWorkspaceModelCredential, ModelCredentialEncryptionError, ModelGatewayConfigurationError, resolveModelRouteSnapshot } from "@langreport/model-gateway";
 import { pluginContextSchema } from "@langreport/contracts";
@@ -189,6 +189,13 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
     }
     await setStatus(jobId, lease, "planning", { memoryContext });
     const theme = themePresetSchema.parse(job.job.theme);
+    const generationDecisionResult = job.job.generationDecision === null || job.job.generationDecision === undefined
+      ? { success: true as const, data: undefined }
+      : generationDecisionSchema.safeParse(job.job.generationDecision);
+    if (!generationDecisionResult.success) {
+      await failJob(jobId, lease, "GENERATION_DECISION_INVALID", "已保存的 Generation Decision 不符合版本化合同");
+      return;
+    }
     const budget = { deadlineAt: Date.now() + 30_000, maxOutputTokens: 2_000 };
     const cycleResult = await generationCycle.run({
       cycle: {
@@ -212,6 +219,7 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
       memoryContext,
       pluginManifests,
       plan: isTransformPlan(job.job.transformPlan) ? job.job.transformPlan : undefined,
+      generationDecision: generationDecisionResult.data,
       requestedProfile: modelRoute.profileId,
       effectiveProfile: modelRoute.profileId,
       requestedOptions: { ...modelRoute.requestedOptions, maxOutputTokens: budget.maxOutputTokens },
