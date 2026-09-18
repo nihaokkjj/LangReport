@@ -11,6 +11,7 @@ const parameterLocations = ["path", "query", "header"] as const;
 type JsonSchema = {
   type?: string | string[];
   format?: string;
+  title?: string;
   description?: string;
   default?: unknown;
   example?: unknown;
@@ -19,6 +20,9 @@ type JsonSchema = {
   required?: string[];
   items?: JsonSchema;
   oneOf?: JsonSchema[];
+  anyOf?: JsonSchema[];
+  nullable?: boolean;
+  additionalProperties?: boolean | JsonSchema;
 };
 
 type OpenApiParameter = {
@@ -29,7 +33,7 @@ type OpenApiParameter = {
   schema?: JsonSchema;
 };
 
-type OpenApiMediaType = { schema?: JsonSchema };
+type OpenApiMediaType = { schema?: JsonSchema; example?: unknown };
 
 type OpenApiResponse = {
   description?: string;
@@ -113,6 +117,20 @@ type ResponseState = {
   errorDetails: unknown;
 };
 
+type SchemaField = {
+  path: string;
+  schema: JsonSchema;
+  required: boolean;
+  depth: number;
+};
+
+type ResponseExample = {
+  status: string;
+  description: string;
+  contentType: string | null;
+  example: unknown;
+};
+
 type ScenarioStepStatus = "idle" | "running" | "passed" | "failed";
 
 type ScenarioStep = {
@@ -127,6 +145,7 @@ type ScenarioJob = {
   status: string;
   errorCode?: string | null;
   errorMessage?: string | null;
+  clarificationProposal?: Record<string, unknown> | null;
   snapshotId?: string | null;
   metricDefinitionId?: string | null;
   theme?: string | null;
@@ -163,12 +182,12 @@ type ScenarioState = {
   phase: "idle" | "running" | "succeeded" | "failed";
   steps: ScenarioStep[];
   job: ScenarioJob | null;
-  failureJob: ScenarioJob | null;
+  clarificationJob: ScenarioJob | null;
   trace: ScenarioTrace | null;
-  failureRequestId: string | null;
+  clarificationRequestId: string | null;
   requestIds: string[];
   statusHistory: string[];
-  failureStatusHistory: string[];
+  clarificationStatusHistory: string[];
   error: string | null;
 };
 
@@ -189,7 +208,7 @@ class ScenarioRequestError extends Error {
   }
 }
 
-const scenarioPipeline = ["queued", "profiling", "planning", "transforming", "compiling", "validating", "rendering", "succeeded", "failed"] as const;
+const scenarioPipeline = ["queued", "profiling", "planning", "transforming", "compiling", "validating", "needs_clarification", "rendering", "succeeded", "failed", "cancelled"] as const;
 
 const scenarioStepDefinitions: Array<Pick<ScenarioStep, "id" | "label">> = [
   { id: "health", label: "健康检查" },
@@ -202,7 +221,7 @@ const scenarioStepDefinitions: Array<Pick<ScenarioStep, "id" | "label">> = [
   { id: "idempotency-conflict", label: "幂等冲突" },
   { id: "result", label: "Evidence 追溯" },
   { id: "invalid", label: "错误输入" },
-  { id: "failure", label: "失败 Job" }
+  { id: "clarification", label: "澄清提案" }
 ];
 
 const scenarioSalesCsv = [
@@ -217,23 +236,25 @@ const scenarioSalesCsv = [
   "2025-04,华南,117"
 ].join("\n");
 
-const scenarioFailureCsv = [
+const scenarioClarificationCsv = [
   "月份,区域,备注",
   "2025-01,华东,缺少数值字段",
   "2025-02,华南,缺少数值字段"
 ].join("\n");
+
+const terminalScenarioStatuses = new Set(["succeeded", "failed", "needs_clarification", "cancelled"]);
 
 function initialScenarioState(): ScenarioState {
   return {
     phase: "idle",
     steps: scenarioStepDefinitions.map((step) => ({ ...step, status: "idle", detail: "等待运行" })),
     job: null,
-    failureJob: null,
+    clarificationJob: null,
     trace: null,
-    failureRequestId: null,
+    clarificationRequestId: null,
     requestIds: [],
     statusHistory: [],
-    failureStatusHistory: [],
+    clarificationStatusHistory: [],
     error: null
   };
 }
@@ -279,6 +300,15 @@ function schemaType(schema?: JsonSchema): string {
   return Array.isArray(schema.type) ? schema.type.find((type) => type !== "null") ?? "object" : schema.type;
 }
 
+function schemaTypeLabel(schema?: JsonSchema): string {
+  const type = schemaType(schema);
+  return schema?.format ? `${type} · ${schema.format}` : type;
+}
+
+function preferredSchema(schema?: JsonSchema): JsonSchema | undefined {
+  return schema?.oneOf?.[0] ?? schema?.anyOf?.[0] ?? schema;
+}
+
 function inputValue(value: unknown): string {
   if (value === undefined || value === null) return "";
   if (typeof value === "string") return value;
@@ -290,16 +320,90 @@ function schemaExample(schema?: JsonSchema): unknown {
   if (schema.default !== undefined) return schema.default;
   if (schema.example !== undefined) return schema.example;
   if (schema.enum?.length) return schema.enum[0];
-  if (schema.oneOf?.length) return schemaExample(schema.oneOf[0]);
+  const selectedSchema = preferredSchema(schema);
+  if (selectedSchema !== schema) return schemaExample(selectedSchema);
   if (schema.properties) {
     return Object.fromEntries(Object.entries(schema.properties).map(([name, property]) => [name, schemaExample(property)]));
   }
-  if (schemaType(schema) === "array") return [];
+  if (schemaType(schema) === "array") return schema.items ? [schemaExample(schema.items)] : [];
   if (schemaType(schema) === "boolean") return false;
   if (schemaType(schema) === "integer" || schemaType(schema) === "number") return 0;
+  if (schema.format === "uuid") return "00000000-0000-4000-8000-000000000000";
   if (schema.format === "date-time") return "2026-01-01T00:00:00Z";
+  if (schema.format === "date") return "2026-01-01";
+  if (schema.format === "email") return "user@example.com";
+  if (schema.format === "uri" || schema.format === "url") return "https://example.com";
   if (schema.format === "binary") return "";
+  if (schema.additionalProperties && typeof schema.additionalProperties === "object") {
+    return { key: schemaExample(schema.additionalProperties) };
+  }
   return "";
+}
+
+function collectSchemaFields(schema?: JsonSchema, prefix = "", required = false, depth = 0): SchemaField[] {
+  const selectedSchema = preferredSchema(schema);
+  if (!selectedSchema) return [];
+
+  if (!prefix && selectedSchema.properties) {
+    return Object.entries(selectedSchema.properties).flatMap(([name, property]) => {
+      const path = name;
+      const isRequired = selectedSchema.required?.includes(name) ?? false;
+      return [{ path, schema: property, required: isRequired, depth }, ...collectSchemaFields(property, path, isRequired, depth + 1)];
+    });
+  }
+
+  if (!prefix && selectedSchema.items) {
+    return [{ path: "[]", schema: selectedSchema.items, required, depth }, ...collectSchemaFields(selectedSchema.items, "[]", required, depth + 1)];
+  }
+
+  if (!prefix) return [{ path: "body", schema: selectedSchema, required, depth }];
+
+  if (selectedSchema.properties) {
+    return Object.entries(selectedSchema.properties).flatMap(([name, property]) => {
+      const path = `${prefix}.${name}`;
+      const isRequired = selectedSchema.required?.includes(name) ?? false;
+      return [{ path, schema: property, required: isRequired, depth }, ...collectSchemaFields(property, path, isRequired, depth + 1)];
+    });
+  }
+
+  if (selectedSchema.items) {
+    return [{ path: `${prefix}[]`, schema: selectedSchema.items, required, depth }, ...collectSchemaFields(selectedSchema.items, `${prefix}[]`, required, depth + 1)];
+  }
+
+  return [];
+}
+
+function responseStatusSort([left]: [string, OpenApiResponse], [right]: [string, OpenApiResponse]): number {
+  const leftNumber = Number(left);
+  const rightNumber = Number(right);
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber - rightNumber;
+  if (Number.isFinite(leftNumber)) return -1;
+  if (Number.isFinite(rightNumber)) return 1;
+  return left.localeCompare(right);
+}
+
+function responseExampleEntries(operation?: OpenApiOperation): ResponseExample[] {
+  return Object.entries(operation?.responses ?? {}).sort(responseStatusSort).flatMap(([status, response]): ResponseExample[] => {
+    const contentEntries = Object.entries(response.content ?? {});
+    if (contentEntries.length === 0) {
+      return [{
+        status,
+        description: response.description ?? "未提供响应描述",
+        contentType: null,
+        example: null
+      }];
+    }
+    return contentEntries.map(([contentType, mediaType]) => ({
+      status,
+      description: response.description ?? "未提供响应描述",
+      contentType,
+      example: mediaType.example !== undefined ? mediaType.example : mediaType.schema ? schemaExample(mediaType.schema) : null
+    }));
+  });
+}
+
+function exampleText(value: unknown): string {
+  return value === null || value === undefined ? "(无响应正文)" : formatJson(value);
 }
 
 function bodyContentTypes(operation: OpenApiOperation): string[] {
@@ -579,6 +683,46 @@ function statusTone(status: number): string {
   return styles.statusSuccess;
 }
 
+type ParameterTableProps = {
+  parameters: OpenApiParameter[];
+  values: Record<string, string>;
+  onChange: (key: string, value: string) => void;
+};
+
+function ParameterTable({ parameters, values, onChange }: ParameterTableProps) {
+  return <div className={styles.parameterTableScroll}><table className={styles.parameterTable}><caption className={styles.tableCaption}>接口请求参数</caption><thead><tr><th scope="col">参数</th><th scope="col">位置</th><th scope="col">类型</th><th scope="col">必填</th><th scope="col">填写值</th><th scope="col">说明</th></tr></thead><tbody>{parameters.map((parameter) => {
+    const schema = parameter.schema;
+    const key = parameterKey(parameter);
+    const value = values[key] ?? "";
+    const options = schema?.enum ?? [];
+    return <tr key={key}><th scope="row"><code>{parameter.name}</code></th><td><span className={styles.parameterLocation}>{parameter.in}</span></td><td><code>{schemaTypeLabel(schema)}</code></td><td>{parameter.required ? <span className={styles.requiredMarker}>必填</span> : <span className={styles.optionalMarker}>可选</span>}</td><td>{options.length > 0 ? <select className={styles.tableControl} value={value} onChange={(event) => onChange(key, event.target.value)} aria-label={`${parameter.name} 参数` }><option value="">请选择</option>{options.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}</select> : <input className={styles.tableControl} value={value} onChange={(event) => onChange(key, event.target.value)} placeholder={schema?.format === "uuid" ? "UUID" : parameter.required ? "必填" : "可选"} aria-label={`${parameter.name} 参数`} />}</td><td>{parameter.description ?? "—"}</td></tr>;
+  })}</tbody></table></div>;
+}
+
+function BodySchemaTable({ fields }: { fields: SchemaField[] }) {
+  return <div className={styles.parameterTableScroll}><table className={styles.parameterTable}><caption className={styles.tableCaption}>Request Body 参数</caption><thead><tr><th scope="col">参数</th><th scope="col">类型</th><th scope="col">必填</th><th scope="col">示例</th><th scope="col">说明</th></tr></thead><tbody>{fields.map((field) => {
+    const type = schemaType(field.schema);
+    const isContainer = type === "object" || type === "array";
+    return <tr key={field.path}><th scope="row"><code>{field.path}</code></th><td><code>{schemaTypeLabel(field.schema)}</code></td><td>{field.required ? <span className={styles.requiredMarker}>必填</span> : <span className={styles.optionalMarker}>可选</span>}</td><td><code>{isContainer ? type === "array" ? "[]" : "{}" : inputValue(schemaExample(field.schema))}</code></td><td>{field.schema.description ?? "—"}</td></tr>;
+  })}</tbody></table></div>;
+}
+
+type MultipartTableProps = {
+  properties: Array<[string, JsonSchema]>;
+  required: string[];
+  values: Record<string, string>;
+  file: File | null;
+  onValueChange: (name: string, value: string) => void;
+  onFileChange: (value: File | null) => void;
+};
+
+function MultipartTable({ properties, required, values, file, onValueChange, onFileChange }: MultipartTableProps) {
+  return <div className={styles.parameterTableScroll}><table className={styles.parameterTable}><caption className={styles.tableCaption}>Multipart Request Body 参数</caption><thead><tr><th scope="col">参数</th><th scope="col">类型</th><th scope="col">必填</th><th scope="col">填写值</th><th scope="col">说明</th></tr></thead><tbody>{properties.map(([name, property]) => {
+    const isFile = property.format === "binary";
+    return <tr key={name}><th scope="row"><code>{name}</code></th><td><code>{schemaTypeLabel(property)}</code></td><td>{required.includes(name) ? <span className={styles.requiredMarker}>必填</span> : <span className={styles.optionalMarker}>可选</span>}</td><td>{isFile ? <input className={styles.tableControl} type="file" onChange={(event) => onFileChange(event.target.files?.[0] ?? null)} aria-label={`${name} 文件`} /> : <input className={styles.tableControl} value={values[name] ?? ""} onChange={(event) => onValueChange(name, event.target.value)} placeholder="填写表单字段" aria-label={`${name} 参数`} />}</td><td>{isFile ? file?.name ?? "选择一个文件" : property.description ?? "—"}</td></tr>;
+  })}</tbody></table></div>;
+}
+
 async function copyText(value: string): Promise<void> {
   await navigator.clipboard.writeText(value);
 }
@@ -650,11 +794,11 @@ export default function ApiConsolePage() {
         }
         : {
           ...current,
-          failureJob: job,
-          failureStatusHistory: current.failureStatusHistory.includes(job.status) ? current.failureStatusHistory : [...current.failureStatusHistory, job.status]
+          clarificationJob: job,
+          clarificationStatusHistory: current.clarificationStatusHistory.includes(job.status) ? current.clarificationStatusHistory : [...current.clarificationStatusHistory, job.status]
         });
       updateScenarioStep(stepId, job.status === "failed" ? "failed" : "running", `HTTP ${result.status} · ${job.status}`);
-      if (job.status === "succeeded" || job.status === "failed") return { job, result };
+      if (terminalScenarioStatuses.has(job.status)) return { job, result };
       await new Promise((resolve) => window.setTimeout(resolve, 750));
     }
     throw new Error(`Generation Job ${jobId} 在 60 秒内没有进入结束状态`);
@@ -812,38 +956,42 @@ export default function ApiConsolePage() {
         updateScenarioStep("invalid", "passed", `HTTP ${error.status} · ${String(error.payload.code ?? "INVALID_INPUT")}`);
       }
 
-      updateScenarioStep("failure", "running", "粘贴缺少数值字段的数据，验证 failed Job");
-      const failureDataResult = await requestScenario(entries, "pasteDataAsset", { projectId }, {
-        name: "loop4-failure.csv",
-        content: scenarioFailureCsv,
+      updateScenarioStep("clarification", "running", "粘贴缺少数值字段的数据，验证 needs_clarification 与提案");
+      const clarificationDataResult = await requestScenario(entries, "pasteDataAsset", { projectId }, {
+        name: "loop4-clarification.csv",
+        content: scenarioClarificationCsv,
         conversationId
       });
-      rememberScenarioRequest(failureDataResult.requestId);
-      const failureAsset = isRecord(failureDataResult.payload.asset) ? failureDataResult.payload.asset : null;
-      if (!failureAsset || typeof failureAsset.id !== "string") throw new Error("失败场景数据资产创建失败");
-      const failureJobResult = await requestScenario(entries, "createGenerationJob", { projectId }, {
+      rememberScenarioRequest(clarificationDataResult.requestId);
+      const clarificationAsset = isRecord(clarificationDataResult.payload.asset) ? clarificationDataResult.payload.asset : null;
+      if (!clarificationAsset || typeof clarificationAsset.id !== "string") throw new Error("澄清场景数据资产创建失败");
+      const clarificationJobResult = await requestScenario(entries, "createGenerationJob", { projectId }, {
         conversationId,
-        dataAssetId: failureAsset.id,
-        prompt: "验证缺少数值指标时生成任务应失败",
+        dataAssetId: clarificationAsset.id,
+        prompt: "验证缺少数值指标时生成任务应请求澄清",
         renderer: "vega-lite",
-        idempotencyKey: `api-console-loop4-failure-${Date.now()}`
+        idempotencyKey: `api-console-loop4-clarification-${Date.now()}`
       });
-      rememberScenarioRequest(failureJobResult.requestId);
-      const failureJob = scenarioJobFromPayload(failureJobResult.payload);
-      setScenario((current) => ({ ...current, failureJob }));
-      const failedResult = await pollScenarioJob(failureJob.id, "failure");
-      rememberScenarioRequest(failedResult.result.requestId);
-      if (failedResult.job.status !== "failed") throw new Error("失败场景没有进入 failed 状态");
-      setScenario((current) => ({ ...current, failureJob: failedResult.job, failureRequestId: failedResult.result.requestId }));
-      const failureEvidenceResult = await requestScenario(entries, "listEvidenceBlocks", { projectId });
-      rememberScenarioRequest(failureEvidenceResult.requestId);
-      const failureEvidenceList = Array.isArray(failureEvidenceResult.payload.evidence) ? failureEvidenceResult.payload.evidence : [];
-      if (failureEvidenceList.some((item) => isRecord(item) && isRecord(item.block) && item.block.generationJobId === failedResult.job.id)) {
-        throw new Error("失败 Job 错误地生成了 Evidence Block");
+      rememberScenarioRequest(clarificationJobResult.requestId);
+      const clarificationJob = scenarioJobFromPayload(clarificationJobResult.payload);
+      setScenario((current) => ({ ...current, clarificationJob }));
+      const clarificationResult = await pollScenarioJob(clarificationJob.id, "clarification");
+      rememberScenarioRequest(clarificationResult.result.requestId);
+      if (clarificationResult.job.status !== "needs_clarification") throw new Error(`澄清场景没有进入 needs_clarification，而是 ${clarificationResult.job.status}`);
+      const proposal = clarificationResult.job.clarificationProposal;
+      if (!isRecord(proposal) || typeof proposal.code !== "string" || typeof proposal.question !== "string" || proposal.requiresUserDecision !== true) {
+        throw new Error("needs_clarification Job 缺少有效的 clarificationProposal");
       }
-      updateScenarioStep("failure", "passed", `${failedResult.job.errorCode ?? "GENERATION_FAILED"} · failed · 无 Evidence`);
+      setScenario((current) => ({ ...current, clarificationJob: clarificationResult.job, clarificationRequestId: clarificationResult.result.requestId }));
+      const clarificationEvidenceResult = await requestScenario(entries, "listEvidenceBlocks", { projectId });
+      rememberScenarioRequest(clarificationEvidenceResult.requestId);
+      const clarificationEvidenceList = Array.isArray(clarificationEvidenceResult.payload.evidence) ? clarificationEvidenceResult.payload.evidence : [];
+      if (clarificationEvidenceList.some((item) => isRecord(item) && isRecord(item.block) && item.block.generationJobId === clarificationResult.job.id)) {
+        throw new Error("needs_clarification Job 错误地生成了 Evidence Block");
+      }
+      updateScenarioStep("clarification", "passed", `${proposal.code} · needs_clarification · 提案已保存`);
       setScenario((current) => ({ ...current, phase: "succeeded" }));
-      setNotice("Loop 4 场景已完成：成功、复用、错误输入和失败 Job 均已验证");
+      setNotice("Loop 4 场景已完成：成功、复用、错误输入和澄清提案均已验证");
     } catch (error) {
       setScenario((current) => ({ ...current, phase: "failed", error: scenarioErrorMessage(error) }));
       setScenario((current) => {
@@ -993,7 +1141,11 @@ export default function ApiConsolePage() {
 
   const bodySchema = selectedEntry?.operation.requestBody?.content?.[contentType]?.schema;
   const bodyProperties = Object.entries(bodySchema?.properties ?? {});
+  const bodySchemaFields = collectSchemaFields(bodySchema);
+  const responseExamples = responseExampleEntries(selectedEntry?.operation);
   const parametersByLocation = Object.fromEntries(parameterLocations.map((location) => [location, (selectedEntry?.operation.parameters ?? []).filter((parameter) => parameter.in === location)])) as Record<typeof parameterLocations[number], OpenApiParameter[]>;
+  const inspectorJob = scenario.clarificationJob ?? scenario.job;
+  const inspectorStatusHistory = scenario.clarificationJob ? scenario.clarificationStatusHistory : scenario.statusHistory;
   return <main className={styles.page}>
     <header className={styles.topbar}>
       <a className={styles.brand} href="/" aria-label="返回 LangReport 工作台"><span className={styles.brandMark}>LR</span><span>LangReport</span></a>
@@ -1006,7 +1158,7 @@ export default function ApiConsolePage() {
         <div>
           <span className={styles.eyebrow}>LOOP 4 / GENERATION JOB SCENARIO</span>
           <h1 id="loop4-title">Generation Job 场景</h1>
-          <p>从健康检查开始，使用本地销售示例数据跑通异步生成、幂等复用、错误输入、失败任务和 Evidence 追溯。</p>
+          <p>从健康检查开始，使用本地销售示例数据跑通异步生成、幂等复用、错误输入、澄清提案和 Evidence 追溯。</p>
         </div>
         <button type="button" className={styles.primaryButton} onClick={() => void runScenario()} disabled={isLoading || entries.length === 0 || scenario.phase === "running"}>
           {scenario.phase === "running" ? "场景运行中…" : scenario.phase === "succeeded" ? "再次运行 Loop 4 ↗" : "运行 Loop 4 ↗"}
@@ -1023,18 +1175,18 @@ export default function ApiConsolePage() {
         </div>
 
         <div className={styles.scenarioInspector}>
-          {scenario.phase === "idle" && <div className={styles.scenarioEmpty}><span>04</span><strong>一键验证异步生成链路</strong><p>运行后会自动创建或复用本地 Demo Project。失败场景使用不含数值字段的隔离 Data Snapshot，不会伪造 Evidence。</p></div>}
+          {scenario.phase === "idle" && <div className={styles.scenarioEmpty}><span>04</span><strong>一键验证异步生成链路</strong><p>运行后会自动创建或复用本地 Demo Project。澄清场景使用不含数值字段的隔离 Data Snapshot，保存提案但不会伪造 Evidence。</p></div>}
           {scenario.phase !== "idle" && <>
-            <div className={styles.scenarioInspectorHead}><div><span className={styles.eyebrow}>JOB STATE / POLLING</span><h2>{scenario.job ? scenario.job.status : "准备中"}</h2></div>{scenario.job && <code>{scenario.job.id}</code>}</div>
+            <div className={styles.scenarioInspectorHead}><div><span className={styles.eyebrow}>JOB STATE / POLLING</span><h2>{inspectorJob ? inspectorJob.status : "准备中"}</h2></div>{inspectorJob && <code>{inspectorJob.id}</code>}</div>
             <div className={styles.scenarioPipeline} aria-label="Generation Job 状态">
               {scenarioPipeline.map((status, index) => {
-                const currentIndex = scenario.job ? scenarioPipeline.indexOf(scenario.job.status as (typeof scenarioPipeline)[number]) : -1;
-                const isCurrent = scenario.job?.status === status;
-                const isDone = currentIndex > index || scenario.job?.status === "succeeded";
+                const currentIndex = inspectorJob ? scenarioPipeline.indexOf(inspectorJob.status as (typeof scenarioPipeline)[number]) : -1;
+                const isCurrent = inspectorJob?.status === status;
+                const isDone = currentIndex > index || inspectorJob?.status === "succeeded";
                 return <div className={`${styles.scenarioPipelineStep} ${isDone ? styles.scenarioPipelineDone : ""} ${isCurrent ? styles.scenarioPipelineCurrent : ""}`} key={status}><i /><span>{status}</span></div>;
               })}
             </div>
-            {scenario.statusHistory.length > 0 && <p className={styles.scenarioTimeline}>状态变化：{scenario.statusHistory.join(" → ")}</p>}
+            {inspectorStatusHistory.length > 0 && <p className={styles.scenarioTimeline}>状态变化：{inspectorStatusHistory.join(" → ")}</p>}
             {scenario.error && <div className={styles.scenarioError} role="alert"><strong>场景未完成</strong><p>{scenario.error}</p><small>建议：确认 API、PostgreSQL、MinIO、Generation Worker 和 Render Worker 均已启动后重试。</small></div>}
             {scenario.trace && <div className={styles.scenarioTrace}>
               <div className={styles.scenarioTraceHeader}><div><span className={styles.eyebrow}>EVIDENCE BLOCK / TRACE</span><h3>成功结果追溯</h3></div><span className={styles.tracePassed}>链路完整</span></div>
@@ -1051,7 +1203,7 @@ export default function ApiConsolePage() {
                 <div className={styles.scenarioJsonGrid}><div><span>TransformPlan</span><pre>{formatJson(scenario.trace.transformPlan)}</pre></div><div><span>字段血缘</span><pre>{formatJson(scenario.trace.fieldLineage)}</pre></div><div><span>Flint Spec</span><pre>{formatJson(scenario.trace.flintSpec)}</pre></div><div><span>校验结果</span><pre>{formatJson(scenario.trace.validation)}</pre></div></div>
               </details>
             </div>}
-            {scenario.failureJob && <div className={styles.scenarioFailure} role="status"><div><span className={styles.failureMark}>!</span><div><span className={styles.eyebrow}>EXPECTED FAILURE</span><h3>失败 Job 可解释</h3></div></div><strong>{scenario.failureJob.errorCode ?? "GENERATION_FAILED"}</strong><p>{scenario.failureJob.errorMessage ?? "任务已进入 failed 状态"}</p>{scenario.failureStatusHistory.length > 0 && <small>状态变化 · {scenario.failureStatusHistory.join(" → ")}</small>}<small>generationJobId · {scenario.failureJob.id}<br />requestId · {scenario.failureRequestId ?? "已由轮询请求记录"}</small><em>没有生成伪造的 Evidence Block。下一步：检查 Data Snapshot 是否包含可识别的数值指标，再重新提交。</em></div>}
+            {scenario.clarificationJob && <div className={styles.scenarioClarification} role="status"><div><span className={styles.clarificationMark}>?</span><div><span className={styles.eyebrow}>NEEDS CLARIFICATION</span><h3>澄清提案已保存</h3></div></div><strong>{String(scenario.clarificationJob.clarificationProposal?.code ?? scenario.clarificationJob.errorCode ?? "GENERATION_NEEDS_CLARIFICATION")}</strong><p>{String(scenario.clarificationJob.clarificationProposal?.question ?? scenario.clarificationJob.errorMessage ?? "任务已进入 needs_clarification 状态")}</p><small>阶段 · {String(scenario.clarificationJob.clarificationProposal?.stage ?? "unknown")} · 目标 · {String(scenario.clarificationJob.clarificationProposal?.target ?? "未指定")} · 用户决策 · {scenario.clarificationJob.clarificationProposal?.requiresUserDecision === true ? "必需" : "未标记"}</small>{scenario.clarificationStatusHistory.length > 0 && <small>状态变化 · {scenario.clarificationStatusHistory.join(" → ")}</small>}<small>generationJobId · {scenario.clarificationJob.id}<br />requestId · {scenario.clarificationRequestId ?? "已由轮询请求记录"}</small>{scenario.clarificationJob.clarificationProposal && <details className={styles.scenarioDetails}><summary>查看候选与证据 <span>⌄</span></summary><pre>{formatJson({ candidates: scenario.clarificationJob.clarificationProposal.candidates ?? [], recommendedCandidate: scenario.clarificationJob.clarificationProposal.recommendedCandidate ?? null, diagnostic: scenario.clarificationJob.clarificationProposal.diagnostic ?? null })}</pre></details>}<em>没有生成 Evidence Block。下一步：根据候选提案做出当前 Cycle 决策，或停止本次生成。</em></div>}
           </>}
         </div>
       </div>
@@ -1084,15 +1236,16 @@ export default function ApiConsolePage() {
 
           <section className={styles.requestPanel} aria-label="请求编辑器">
             <div className={styles.panelHeader}><div><span className={styles.eyebrow}>请求编辑 REQUEST BUILDER</span><h3>编辑请求</h3></div><div className={styles.panelHeaderActions}><span className={styles.contractHint}>来自 OpenAPI</span><button type="button" className={styles.secondaryButton} onClick={resetRequest}>重置</button></div></div>
-            {parameterLocations.map((location) => parametersByLocation[location].length > 0 && <div className={styles.parameterSection} key={location}><div className={styles.subsectionTitle}><strong>{location === "path" ? "Path 参数" : location === "query" ? "Query 参数" : "Header 参数"}</strong><span>{parametersByLocation[location].length.toString().padStart(2, "0")}</span></div><div className={styles.parameterGrid}>{parametersByLocation[location].map((parameter) => { const schema = parameter.schema; const value = parameterValues[parameterKey(parameter)] ?? ""; const options = schema?.enum ?? []; return <label className={styles.field} key={parameterKey(parameter)}><span className={styles.fieldLabel}><b>{parameter.name}</b><em>{parameter.in}</em>{parameter.required && <i>必填</i>}</span>{options.length > 0 ? <select value={value} onChange={(event) => setParameterValues((current) => ({ ...current, [parameterKey(parameter)]: event.target.value }))}><option value="">请选择</option>{options.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}</select> : <input value={value} onChange={(event) => setParameterValues((current) => ({ ...current, [parameterKey(parameter)]: event.target.value }))} placeholder={schema?.format === "uuid" ? "UUID" : parameter.required ? "必填" : "可选"} />}{parameter.description && <small>{parameter.description}</small>}</label>; })}</div></div>)}
-            {bodyContentTypes(selectedEntry.operation).length > 0 && <div className={styles.bodySection}><div className={styles.subsectionTitle}><strong>Request Body</strong><span>{selectedEntry.operation.requestBody?.required ? "必填" : "可选"}</span></div>{bodyContentTypes(selectedEntry.operation).length > 1 && <label className={styles.contentTypeSelect}><span>Content-Type</span><select value={contentType} onChange={(event) => { const next = seedRequestState(selectedEntry, event.target.value); setContentType(next.contentType); setBodyText(next.bodyText); setBodyFields(next.bodyFields); setFile(null); }}><option value="">选择类型</option>{bodyContentTypes(selectedEntry.operation).map((type) => <option key={type} value={type}>{type}</option>)}</select></label>}{contentType === "multipart/form-data" ? <div className={styles.multipartGrid}>{bodyProperties.map(([name, property]) => property.format === "binary" ? <label className={`${styles.fileField} ${file ? styles.fileChosen : ""}`} key={name}><span className={styles.fieldLabel}><b>{name}</b><em>file</em>{bodySchema?.required?.includes(name) && <i>必填</i>}</span><input type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /><strong>{file?.name ?? "选择一个文件"}</strong><small>文件只发送到当前请求，不写入请求历史</small></label> : <label className={styles.field} key={name}><span className={styles.fieldLabel}><b>{name}</b>{bodySchema?.required?.includes(name) && <i>必填</i>}</span><input value={bodyFields[name] ?? ""} onChange={(event) => setBodyFields((current) => ({ ...current, [name]: event.target.value }))} placeholder={property.description ?? "填写表单字段"} /><small>{property.description ?? `字段类型：${schemaType(property)}`}</small></label>)}</div> : <label className={styles.jsonField}><span><b>JSON Body</b><em>{contentType || "application/json"}</em></span><textarea value={bodyText} onChange={(event) => setBodyText(event.target.value)} spellCheck={false} aria-label="JSON 请求体" /></label>}</div>}
+            {parameterLocations.map((location) => parametersByLocation[location].length > 0 && <div className={styles.parameterSection} key={location}><div className={styles.subsectionTitle}><strong>{location === "path" ? "Path 参数" : location === "query" ? "Query 参数" : "Header 参数"}</strong><span>{parametersByLocation[location].length.toString().padStart(2, "0")}</span></div><ParameterTable parameters={parametersByLocation[location]} values={parameterValues} onChange={(key, value) => setParameterValues((current) => ({ ...current, [key]: value }))} /></div>)}
+            {bodyContentTypes(selectedEntry.operation).length > 0 && <div className={styles.bodySection}><div className={styles.subsectionTitle}><strong>Request Body</strong><span>{selectedEntry.operation.requestBody?.required ? "必填" : "可选"}</span></div>{bodyContentTypes(selectedEntry.operation).length > 1 && <label className={styles.contentTypeSelect}><span>Content-Type</span><select value={contentType} onChange={(event) => { const next = seedRequestState(selectedEntry, event.target.value); setContentType(next.contentType); setBodyText(next.bodyText); setBodyFields(next.bodyFields); setFile(null); }}><option value="">选择类型</option>{bodyContentTypes(selectedEntry.operation).map((type) => <option key={type} value={type}>{type}</option>)}</select></label>}{contentType !== "multipart/form-data" && bodySchema && <div className={styles.bodyContract}><div className={styles.subsectionTitle}><strong>可填参数</strong><span>{bodySchemaFields.length.toString().padStart(2, "0")} 个字段</span></div><p className={styles.contractDescription}>以下字段来自当前 Content-Type 的 OpenAPI schema；JSON Body 仍可直接编辑完整嵌套结构。</p>{bodySchemaFields.length > 0 ? <BodySchemaTable fields={bodySchemaFields} /> : <p className={styles.contractDescription}>该请求体未声明可枚举字段，请按接口约定填写 JSON。</p>}</div>}{contentType === "multipart/form-data" ? <MultipartTable properties={bodyProperties} required={bodySchema?.required ?? []} values={bodyFields} file={file} onValueChange={(name, value) => setBodyFields((current) => ({ ...current, [name]: value }))} onFileChange={setFile} /> : <label className={styles.jsonField}><span><b>JSON Body</b><em>{contentType || "application/json"}</em></span><textarea value={bodyText} onChange={(event) => setBodyText(event.target.value)} spellCheck={false} aria-label="JSON 请求体" /></label>}</div>}
             {requestError && <div className={styles.requestError} role="alert"><strong>请求未发送</strong><span>{requestError}</span></div>}
             <div className={styles.requestFooter}><div><span className={styles.safetyDot} />当前请求不会修改 OpenAPI 契约</div><button type="button" className={styles.primaryButton} onClick={() => void sendRequest()} disabled={isSending}>{isSending ? "发送中…" : "发送请求 ↗"}</button></div>
           </section>
 
           <section className={styles.responsePanel} aria-label="响应结果">
             <div className={styles.panelHeader}><div><span className={styles.eyebrow}>响应 RESPONSE</span><h3>响应结果</h3></div>{response && <div className={styles.responseActions}><button type="button" className={styles.secondaryButton} onClick={() => void copyValue(response.requestPreview, "请求内容")}>复制请求</button><button type="button" className={styles.secondaryButton} onClick={() => void copyValue(responseContent, "响应内容")}>复制响应</button><button type="button" className={styles.secondaryButton} onClick={() => void copyValue(response.curl, "cURL")}>复制 cURL</button><button type="button" className={styles.primaryButton} onClick={() => void sendRequest()} disabled={isSending}>重新发送 ↗</button></div>}</div>
-            {!response && <div className={styles.responseEmpty}><span>200</span><p>发送请求后，这里会显示状态码、耗时、Header、requestId 和格式化响应。</p></div>}
+            {responseExamples.length > 0 && <div className={styles.responseExamples} aria-label="OpenAPI 响应示例"><div className={styles.subsectionTitle}><strong>结果示例</strong><span>来自 OpenAPI responses</span></div><div className={styles.responseExampleList}>{responseExamples.map((item) => <article className={styles.responseExample} key={`${item.status}-${item.contentType ?? "empty"}`}><div className={styles.responseExampleHeader}><span className={`${styles.exampleStatus} ${statusTone(Number(item.status) || 200)}`}>{item.status}</span><strong>{item.description}</strong>{item.contentType && <code>{item.contentType}</code>}</div><pre>{exampleText(item.example)}</pre></article>)}</div></div>}
+            {!response && <div className={styles.responseEmpty}><span>200</span><p>上方先展示接口契约中的结果示例；发送请求后，这里会追加真实状态码、耗时、Header、requestId 和响应。</p></div>}
             {response && <><div className={styles.responseMeta}><span className={`${styles.statusBadge} ${statusTone(response.status)}`}><i />{response.status} {response.statusText || (response.status < 400 ? "OK" : "ERROR")}</span><span>{response.duration} ms</span><span className={styles.truncate}>{response.requestUrl}</span>{response.requestId && <span className={styles.requestId}>requestId · {response.requestId}</span>}</div>{response.errorCode && <div className={styles.errorSummary} role="alert"><strong>{response.errorCode}</strong><span>错误响应</span>{response.errorDetails !== null && response.errorDetails !== undefined && <code>{formatJson(response.errorDetails)}</code>}</div>}<div className={styles.responseBody}><div className={styles.responseBlock}><div className={styles.subsectionTitle}><strong>JSON / Text</strong><button type="button" className={styles.textButton} onClick={() => void copyValue(responseContent, "响应内容")}>复制</button></div><pre>{response.formatted}</pre></div><div className={styles.responseBlock}><div className={styles.subsectionTitle}><strong>Response Headers</strong><span>{Object.keys(response.headers).length.toString().padStart(2, "0")}</span></div><pre>{formatJson(response.headers)}</pre></div></div><details className={styles.rawDetails}><summary>查看原始响应与请求 <span>⌄</span></summary><div className={styles.rawGrid}><div><span>原始响应</span><pre>{response.raw || "(empty response)"}</pre></div><div><span>请求预览</span><pre>{response.requestPreview}</pre></div></div></details></>}
           </section>
         </>}
