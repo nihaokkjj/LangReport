@@ -113,7 +113,20 @@ test("Generation Cycle 将冻结的 Conversation 投影交给 Model Gateway，�
           intent: null,
           plan: null,
           chartSelection: null,
-          questions: [{ code: "test", question: "请确认分析期间" }]
+          proposal: {
+            version: "v1",
+            diagnostic: { version: "v1", code: "test", stage: "planning", severity: "blocking", source: "model_output", message: "请确认分析期间", field: null, evidence: [] },
+            code: "test",
+            target: "metric",
+            stage: "planning",
+            severity: "blocking",
+            question: "请确认分析期间",
+            reason: "需要用户确认后才能继续生成。",
+            field: null,
+            candidates: [],
+            recommendedCandidate: null,
+            requiresUserDecision: true
+          }
         }),
         invocationId: request.invocationId
       };
@@ -194,7 +207,7 @@ test("Generation Cycle 在 Compile 缺少横轴时返回可执行的 Clarificati
             expectedColumns: ["区域", "销售额_sum"]
           },
           chartSelection: { chartType: "line", xField: "月份", yField: "销售额_sum", seriesField: null, tooltipFields: [] },
-          questions: []
+          proposal: null
         }),
         invocationId: request.invocationId
       };
@@ -205,9 +218,10 @@ test("Generation Cycle 在 Compile 缺少横轴时返回可执行的 Clarificati
 
   assert.equal(result.status, "needs_clarification");
   if (result.status !== "needs_clarification") return;
-  assert.equal(result.questions[0]?.code, "MISSING_X_FIELD");
-  assert.equal(result.questions[0]?.target, "x_field");
-  assert.equal(result.questions[0]?.recommendedOption?.value, "月份");
+  assert.equal(result.diagnostic.code, "MISSING_X_FIELD");
+  assert.equal(result.proposal.target, "x_field");
+  assert.equal(result.proposal.recommendedCandidate?.value, "月份");
+  assert.equal(result.audit.readinessDiagnostic?.code, "MISSING_X_FIELD");
   assert.equal(result.audit.stages.find((stage) => stage.name === "compiling")?.status, "needs_clarification");
   assert.equal(result.audit.planValidation.status, "failed");
 });
@@ -247,7 +261,8 @@ test("Generation Cycle 在无法识别指标时返回 needs_clarification 而不
 
   assert.equal(result.status, "needs_clarification");
   if (result.status !== "needs_clarification") return;
-  assert.ok(result.questions.some((question) => question.code === "measure_missing"));
+  assert.equal(result.proposal.code, "measure_missing");
+  assert.equal(result.diagnostic.code, "measure_missing");
   assert.equal(result.audit.planValidation.status, "pending");
 });
 

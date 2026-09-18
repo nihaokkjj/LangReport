@@ -700,28 +700,51 @@ export const preparedModelContextSchema = z.object({
   }
 });
 
-export const clarificationOptionSchema = z.object({
-  value: z.string().trim().min(1).max(200),
-  label: z.string().trim().min(1).max(200)
-}).strict();
-
 export const clarificationEvidenceSchema = z.object({
   label: z.string().trim().min(1).max(120),
   value: z.string().trim().min(1).max(300)
 }).strict();
 
-export const clarificationQuestionSchema = z.object({
+export const generationDiagnosticSchema = z.object({
+  version: z.literal("v1"),
   code: z.string().trim().min(1).max(120),
-  target: z.enum(["x_field"]).optional(),
-  question: z.string().trim().min(1).max(1000),
-  reason: z.string().trim().min(1).max(1000).optional(),
-  field: z.string().trim().min(1).max(160).optional(),
-  stage: z.enum(["profiling", "planning", "transforming", "compiling", "validating"]).default("planning"),
-  severity: z.enum(["blocking", "warning"]).default("blocking"),
-  options: z.array(clarificationOptionSchema).min(1).max(8).optional(),
-  recommendedOption: clarificationOptionSchema.optional(),
-  evidence: z.array(clarificationEvidenceSchema).max(8).default([])
+  stage: z.enum(["profiling", "planning", "transforming", "compiling", "validating"]),
+  severity: z.enum(["blocking", "warning"]),
+  source: z.enum(["deterministic_gate", "model_output", "memory_context"]),
+  message: z.string().trim().min(1).max(1000),
+  field: z.string().trim().min(1).max(160).nullable(),
+  evidence: z.array(clarificationEvidenceSchema).max(8)
 }).strict();
+
+export const generationCandidateSchema = z.object({
+  value: z.string().trim().min(1).max(160),
+  label: z.string().trim().min(1).max(200),
+  source: z.enum(["transform_output", "snapshot_requires_transform"]),
+  requiresTransformAdjustment: z.boolean(),
+  evidence: z.array(clarificationEvidenceSchema).max(8)
+}).strict();
+
+export const generationClarificationProposalSchema = z.object({
+  version: z.literal("v1"),
+  diagnostic: generationDiagnosticSchema,
+  code: z.string().trim().min(1).max(120),
+  target: z.enum(["x_field", "metric", "memory"]).nullable(),
+  stage: z.enum(["profiling", "planning", "transforming", "compiling", "validating"]),
+  severity: z.enum(["blocking", "warning"]),
+  question: z.string().trim().min(1).max(1000),
+  reason: z.string().trim().min(1).max(1000),
+  field: z.string().trim().min(1).max(160).nullable(),
+  candidates: z.array(generationCandidateSchema).max(8),
+  recommendedCandidate: generationCandidateSchema.nullable(),
+  requiresUserDecision: z.literal(true)
+}).strict().superRefine((proposal, issue) => {
+  if (proposal.code !== proposal.diagnostic.code) issue.addIssue({ code: "custom", path: ["code"], message: "Proposal code 必须与 Diagnostic code 一致" });
+  if (proposal.stage !== proposal.diagnostic.stage) issue.addIssue({ code: "custom", path: ["stage"], message: "Proposal stage 必须与 Diagnostic stage 一致" });
+  if (proposal.severity !== proposal.diagnostic.severity) issue.addIssue({ code: "custom", path: ["severity"], message: "Proposal severity 必须与 Diagnostic severity 一致" });
+  if (proposal.recommendedCandidate && !proposal.candidates.some((candidate) => candidate.value === proposal.recommendedCandidate?.value)) {
+    issue.addIssue({ code: "custom", path: ["recommendedCandidate"], message: "推荐候选必须属于 candidates" });
+  }
+});
 
 export const chartSelectionSchema = z.object({
   chartType: z.enum(["line", "bar", "area"]),
@@ -736,7 +759,7 @@ const readyChartPlanDecisionSchema = z.object({
   intent: conversationIntentSchema,
   plan: transformPlanSchema,
   chartSelection: chartSelectionSchema,
-  questions: z.array(clarificationQuestionSchema).length(0).default([])
+  proposal: z.null().default(null)
 }).strict();
 
 const needsClarificationChartPlanDecisionSchema = z.object({
@@ -744,7 +767,7 @@ const needsClarificationChartPlanDecisionSchema = z.object({
   intent: conversationIntentSchema.nullable().default(null),
   plan: z.null().default(null),
   chartSelection: z.null().default(null),
-  questions: z.array(clarificationQuestionSchema).min(1).max(8)
+  proposal: generationClarificationProposalSchema
 }).strict();
 
 /** A model may either return an executable candidate or ask for clarification, never both. */
@@ -1035,9 +1058,10 @@ export type StructuredOutputMethod = z.infer<typeof structuredOutputMethodSchema
 export type HistoryPolicy = z.infer<typeof historyPolicySchema>;
 export type CanonicalTextContextMessage = z.infer<typeof canonicalTextContextMessageSchema>;
 export type CanonicalTextContextProjection = z.infer<typeof canonicalTextContextProjectionSchema>;
-export type ClarificationOption = z.infer<typeof clarificationOptionSchema>;
 export type ClarificationEvidence = z.infer<typeof clarificationEvidenceSchema>;
-export type ClarificationQuestion = z.infer<typeof clarificationQuestionSchema>;
+export type GenerationDiagnostic = z.infer<typeof generationDiagnosticSchema>;
+export type GenerationCandidate = z.infer<typeof generationCandidateSchema>;
+export type GenerationClarificationProposal = z.infer<typeof generationClarificationProposalSchema>;
 export type GenerationDecision = z.infer<typeof generationDecisionSchema>;
 export type ChartSelection = z.infer<typeof chartSelectionSchema>;
 export type ChartPlanDecision = z.infer<typeof chartPlanDecisionSchema>;

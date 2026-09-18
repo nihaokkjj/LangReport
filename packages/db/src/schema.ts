@@ -255,7 +255,7 @@ export const generationJobs = pgTable("generation_jobs", {
   generationAudit: jsonb("generation_audit"),
   errorCode: text("error_code"),
   errorMessage: text("error_message"),
-  clarificationQuestions: jsonb("clarification_questions"),
+  clarificationProposal: jsonb("clarification_proposal"),
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()

@@ -5,6 +5,21 @@ import {
   regionalSalesYoyBaseline
 } from "../../src/model-baseline.js";
 
+const proposal = {
+  version: "v1" as const,
+  diagnostic: { version: "v1" as const, code: "time_range_missing", stage: "planning" as const, severity: "blocking" as const, source: "model_output" as const, message: "请确认时间范围", field: null, evidence: [] },
+  code: "time_range_missing",
+  target: "x_field" as const,
+  stage: "planning" as const,
+  severity: "blocking" as const,
+  question: "请确认需要展示的月份范围",
+  reason: "Analysis Brief 没有明确时间范围",
+  field: null,
+  candidates: [],
+  recommendedCandidate: null,
+  requiresUserDecision: true as const
+};
+
 test("the regional sales baseline contains an independent expected monthly YoY result", () => {
   assert.equal(regionalSalesYoyBaseline.id, "regional-sales-yoy-v1");
   assert.equal(regionalSalesYoyBaseline.analysisBrief.status, "confirmed");
@@ -33,7 +48,7 @@ test("a ready chart-plan decision is correct when its plan and fields reproduce 
     intent: regionalSalesYoyBaseline.intent,
     plan: regionalSalesYoyBaseline.plan,
     chartSelection: regionalSalesYoyBaseline.chartSelection,
-    questions: []
+    proposal: null
   });
 
   assert.equal(result.status, "correct");
@@ -50,7 +65,7 @@ test("an executable decision with a missing chart field is invalid with a struct
       ...regionalSalesYoyBaseline.chartSelection,
       yField: "不存在的字段"
     },
-    questions: []
+    proposal: null
   });
 
   assert.equal(result.status, "invalid");
@@ -65,11 +80,7 @@ test("a valid clarification decision is classified without executing a plan", ()
     intent: null,
     plan: null,
     chartSelection: null,
-    questions: [{
-      code: "time_range_missing",
-      question: "请确认需要展示的月份范围",
-      reason: "Analysis Brief 没有明确时间范围"
-    }]
+    proposal
   });
 
   assert.equal(result.status, "needs_clarification");
@@ -83,7 +94,7 @@ test("malformed model output is invalid before any data execution", () => {
     intent: regionalSalesYoyBaseline.intent,
     plan: null,
     chartSelection: null,
-    questions: []
+    proposal: null
   });
 
   assert.equal(result.status, "invalid");

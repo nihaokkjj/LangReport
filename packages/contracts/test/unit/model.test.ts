@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  clarificationQuestionSchema,
+  generationClarificationProposalSchema,
   chartPlanDecisionSchema,
   createChartPlanOutputDescriptor,
   executionAssemblySchema,
@@ -50,6 +50,30 @@ const validChartSelection = {
   yField: "销售额_sum",
   seriesField: "区域",
   tooltipFields: ["销售额_sum"]
+};
+
+const validProposal = {
+  version: "v1" as const,
+  diagnostic: {
+    version: "v1" as const,
+    code: "metric_ambiguous",
+    stage: "planning" as const,
+    severity: "blocking" as const,
+    source: "model_output" as const,
+    message: "请确认销售额口径",
+    field: "销售额",
+    evidence: [{ label: "可选指标", value: "销售额、净销售额" }]
+  },
+  code: "metric_ambiguous",
+  target: "metric" as const,
+  stage: "planning" as const,
+  severity: "blocking" as const,
+  question: "请确认销售额是否包含退款？",
+  reason: "数据中同时存在销售额和净销售额字段",
+  field: "销售额",
+  candidates: [],
+  recommendedCandidate: null,
+  requiresUserDecision: true as const
 };
 
 const validPreparedModelContext = {
@@ -121,49 +145,64 @@ test("chart-plan ready decision contains a plan and chart selection", () => {
     intent: validIntent,
     plan: validPlan,
     chartSelection: validChartSelection,
-    questions: []
+    proposal: null
   });
 
   assert.equal(decision.decision, "ready");
   assert.equal(decision.plan.expectedColumns[2], "销售额_sum");
   assert.equal(decision.chartSelection.yField, "销售额_sum");
-  assert.deepEqual(decision.questions, []);
+  assert.equal(decision.proposal, null);
 });
 
-test("chart-plan needs_clarification decision contains actionable questions and no plan", () => {
+test("chart-plan needs_clarification decision contains one Proposal and no plan", () => {
   const decision = chartPlanDecisionSchema.parse({
     decision: "needs_clarification",
     intent: null,
     plan: null,
     chartSelection: null,
-    questions: [{
-      code: "metric_ambiguous",
-      question: "请确认销售额是否包含退款？",
-      reason: "数据中同时存在销售额和净销售额字段",
-      field: "销售额"
-    }]
+    proposal: validProposal
   });
 
   assert.equal(decision.decision, "needs_clarification");
   assert.equal(decision.plan, null);
-  assert.equal(decision.questions[0]?.code, "metric_ambiguous");
+  assert.equal(decision.proposal.code, "metric_ambiguous");
 });
 
-test("clarification questions carry stage, candidate evidence, and an explicit recommendation", () => {
-  const question = clarificationQuestionSchema.parse({
+test("Generation Readiness Proposal carries one diagnostic and deterministic candidate provenance", () => {
+  const candidate = {
+    value: "月份",
+    label: "按「月份」作为横轴（需要保留该字段）",
+    source: "snapshot_requires_transform" as const,
+    requiresTransformAdjustment: true,
+    evidence: [{ label: "月份 字段证据", value: "Data Snapshot，需调整变换；类型=date；唯一值=2；缺失值=0" }]
+  };
+  const proposal = generationClarificationProposalSchema.parse({
+    version: "v1",
+    diagnostic: {
+      version: "v1",
+      code: "MISSING_X_FIELD",
+      stage: "compiling",
+      severity: "blocking",
+      source: "deterministic_gate",
+      message: "当前图表缺少可验证的横轴字段",
+      field: "chartSelection.xField",
+      evidence: [{ label: "当前 Transform 输出", value: "区域、销售额_sum" }]
+    },
     code: "MISSING_X_FIELD",
     target: "x_field",
     stage: "compiling",
     severity: "blocking",
-    question: "请确认横轴字段",
-    options: [{ value: "月份", label: "按「月份」作为横轴" }],
-    recommendedOption: { value: "月份", label: "按「月份」作为横轴" },
-    evidence: [{ label: "类型", value: "date" }]
+    question: "当前图表缺少可验证的横轴字段，请确认横轴使用哪个字段。",
+    reason: "系统只能推荐有证据的字段。",
+    field: "chartSelection.xField",
+    candidates: [candidate],
+    recommendedCandidate: candidate,
+    requiresUserDecision: true
   });
-
-  assert.equal(question.target, "x_field");
-  assert.equal(question.recommendedOption?.value, "月份");
-  assert.deepEqual(question.evidence, [{ label: "类型", value: "date" }]);
+  assert.equal(proposal.diagnostic.source, "deterministic_gate");
+  assert.equal(proposal.recommendedCandidate?.requiresTransformAdjustment, true);
+  assert.throws(() => generationClarificationProposalSchema.parse({ ...proposal, requiresUserDecision: false }));
+  assert.throws(() => generationClarificationProposalSchema.parse({ ...proposal, recommendedCandidate: { ...candidate, value: "不存在" } }));
 });
 
 test("generation decisions accept only current-cycle actions and bounded targets", () => {
@@ -194,16 +233,13 @@ test("generation decisions accept only current-cycle actions and bounded targets
   }));
 });
 
-test("chart-plan decisions cannot contain both a plan and clarification questions", () => {
+test("chart-plan decisions cannot contain both a plan and a Proposal", () => {
   assert.throws(() => chartPlanDecisionSchema.parse({
     decision: "ready",
     intent: validIntent,
     plan: validPlan,
     chartSelection: validChartSelection,
-    questions: [{
-      code: "extra_question",
-      question: "不应出现在 ready 结果中"
-    }]
+    proposal: validProposal
   }));
 
   assert.throws(() => chartPlanDecisionSchema.parse({
@@ -211,10 +247,7 @@ test("chart-plan decisions cannot contain both a plan and clarification question
     intent: null,
     plan: validPlan,
     chartSelection: null,
-    questions: [{
-      code: "missing_time_range",
-      question: "请确认时间范围"
-    }]
+    proposal: { ...validProposal, code: "missing_time_range" }
   }));
 
   assert.throws(() => chartPlanDecisionSchema.parse({
@@ -222,7 +255,7 @@ test("chart-plan decisions cannot contain both a plan and clarification question
     intent: null,
     plan: null,
     chartSelection: null,
-    questions: []
+    proposal: null
   }));
 });
 

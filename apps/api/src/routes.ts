@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
-import { acceptMemoryCandidateRequestSchema, chartGenerationRequestSchema, clarificationQuestionSchema, createAnalysisBriefRequestSchema, createConversationMessageRequestSchema, createConversationRequestSchema, createMetricDefinitionRequestSchema, createProjectRequestSchema, executionAssemblySchema, memoryDeleteRequestSchema, pasteDataRequestSchema, pluginEnableRequestSchema, rejectMemoryCandidateRequestSchema, updateAnalysisBriefRequestSchema, updateWorkspaceModelCredentialRequestSchema, type GenerationDecision, type ModelRouteSnapshot } from "@langreport/contracts";
+import { acceptMemoryCandidateRequestSchema, chartGenerationRequestSchema, createAnalysisBriefRequestSchema, createConversationMessageRequestSchema, createConversationRequestSchema, createMetricDefinitionRequestSchema, createProjectRequestSchema, executionAssemblySchema, generationClarificationProposalSchema, memoryDeleteRequestSchema, pasteDataRequestSchema, pluginEnableRequestSchema, rejectMemoryCandidateRequestSchema, updateAnalysisBriefRequestSchema, updateWorkspaceModelCredentialRequestSchema, type GenerationDecision, type ModelRouteSnapshot } from "@langreport/contracts";
 import { assertChartAction, ChartServiceError, getProjectAccess, getProjectTheme, getRevision } from "@langreport/chart";
 import { analysisBriefs, auditEvents, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, db, evidenceBlocks, generationJobs, members, metricDefinitions, projectMembers, projects, workspaces, workspaceModelCredentials, withAdvisoryLock } from "@langreport/db";
 import { getObject } from "@langreport/storage";
@@ -22,15 +22,13 @@ const projectIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-
 
 function assertGenerationDecisionMatchesParent(parentJob: typeof generationJobs.$inferSelect, decision: GenerationDecision): void {
   if (decision.action === "adjust_direction") return;
-  const questions = Array.isArray(parentJob.clarificationQuestions)
-    ? parentJob.clarificationQuestions.map((question) => clarificationQuestionSchema.safeParse(question)).filter((result): result is { success: true; data: ReturnType<typeof clarificationQuestionSchema.parse> } => result.success).map((result) => result.data)
-    : [];
-  const question = questions.find((candidate) => candidate.code === decision.questionCode && candidate.target === decision.target);
-  const option = question?.options?.find((candidate) => candidate.value === decision.selectedValue);
-  if (!question || !option) {
+  const parsedProposal = generationClarificationProposalSchema.safeParse(parentJob.clarificationProposal);
+  const proposal = parsedProposal.success ? parsedProposal.data : null;
+  const candidate = proposal?.candidates.find((option) => option.value === decision.selectedValue);
+  if (!proposal || proposal.code !== decision.questionCode || proposal.target !== decision.target || !candidate) {
     throw new ChartServiceError("GENERATION_DECISION_OPTION_INVALID", "Generation Decision 只能选择父 Job 提供且已校验的候选字段", 409);
   }
-  if (decision.action === "accept_recommendation" && question.recommendedOption?.value !== decision.selectedValue) {
+  if (decision.action === "accept_recommendation" && proposal.recommendedCandidate?.value !== decision.selectedValue) {
     throw new ChartServiceError("GENERATION_DECISION_OPTION_INVALID", "接受建议时必须选择父 Job 标记的推荐候选", 409);
   }
 }
@@ -807,7 +805,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
             planValidation: job.planValidation,
             renderValidation: job.renderValidation,
             previewData: job.previewData,
-            clarificationQuestions: job.clarificationQuestions,
+            clarificationProposal: job.clarificationProposal,
             generationAudit: job.generationAudit,
             parentGenerationJobId: job.parentGenerationJobId,
             generationDecision: job.generationDecision,

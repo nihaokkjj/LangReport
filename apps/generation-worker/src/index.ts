@@ -119,8 +119,8 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
     await setStatus(jobId, lease, "planning", { memoryContext });
     if (cycleResult.status === "needs_clarification") {
       await assertGenerationJobLease(lease);
-      await appendAssistantMessage(job.job.conversationId, cycleResult.questions.map((question) => `需要澄清：${question.question}${question.reason ? `（${question.reason}）` : ""}`).join("\n"));
-      await setStatus(jobId, lease, "needs_clarification", { generationAudit: cycleResult.audit, ...validationFieldsFromAudit(cycleResult.audit), clarificationQuestions: cycleResult.questions, errorCode: "GENERATION_NEEDS_CLARIFICATION", errorMessage: cycleResult.questions.map((question) => question.question).join("；") }, true);
+      await appendAssistantMessage(job.job.conversationId, `需要澄清：${cycleResult.proposal.question}（${cycleResult.proposal.reason}）`);
+      await setStatus(jobId, lease, "needs_clarification", { generationAudit: cycleResult.audit, ...validationFieldsFromAudit(cycleResult.audit), clarificationProposal: cycleResult.proposal, errorCode: "GENERATION_NEEDS_CLARIFICATION", errorMessage: cycleResult.proposal.question }, true);
       return;
     }
     if (cycleResult.status === "failed") { await failJob(jobId, lease, cycleResult.error.code, cycleResult.error.message, undefined, cycleResult.audit); return; }
@@ -229,14 +229,14 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
       await assertGenerationJobLease(lease);
       await appendAssistantMessage(
         job.job.conversationId,
-        cycleResult.questions.map((question) => `需要澄清：${question.question}${question.reason ? `（${question.reason}）` : ""}`).join("\n")
+        `需要澄清：${cycleResult.proposal.question}（${cycleResult.proposal.reason}）`
       );
       await setStatus(jobId, lease, "needs_clarification", {
         generationAudit: cycleResult.audit,
         ...validationFieldsFromAudit(cycleResult.audit),
-        clarificationQuestions: cycleResult.questions,
+        clarificationProposal: cycleResult.proposal,
         errorCode: "GENERATION_NEEDS_CLARIFICATION",
-        errorMessage: cycleResult.questions.map((question) => question.question).join("；")
+        errorMessage: cycleResult.proposal.question
       }, true);
       return;
     }

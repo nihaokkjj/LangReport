@@ -72,7 +72,7 @@ function createFixture() {
     block: { id: "block-sales", projectId, conversationId, generationJobId: jobId, chartArtifactId: "artifact-sales", chartRevisionId: revisionId, snapshotId: "snapshot-sales-v1", title: "各区域月度销售额", finding: "华东销售额连续增长。", analysisBriefSnapshot: brief, metricDefinitionSnapshot: metric, qualityWarnings: [], status: revisionStatus, updatedAt: now },
     artifact: { id: "artifact-sales", projectId, name: "各区域月度销售额", headRevisionId: revisionId, status: "active" },
     revision: revision(),
-    job: { id: jobId, conversationId, status: "succeeded", operation: "generate", prompt: "按月份展示各区域销售额", snapshotId: "snapshot-sales-v1", repairCount: 0, errorCode: null, errorMessage: null, clarificationQuestions: null, intent: null, transformPlan: revision().transformPlan, fieldLineage: revision().fieldLineage, flintSpec: revision().flintSpec, validation: revision().validation, previewData: { columns: ["月份", "区域", "销售额"], rows, steps: [] }, revision: { id: revisionId, artifactId: "artifact-sales", revision: 1, status: revisionStatus } }
+    job: { id: jobId, conversationId, status: "succeeded", operation: "generate", prompt: "按月份展示各区域销售额", snapshotId: "snapshot-sales-v1", repairCount: 0, errorCode: null, errorMessage: null, clarificationProposal: null, intent: null, transformPlan: revision().transformPlan, fieldLineage: revision().fieldLineage, flintSpec: revision().flintSpec, validation: revision().validation, previewData: { columns: ["月份", "区域", "销售额"], rows, steps: [] }, revision: { id: revisionId, artifactId: "artifact-sales", revision: 1, status: revisionStatus } }
   });
   return {
     route: async (route: import("@playwright/test").Route) => {
@@ -124,7 +124,7 @@ function createFixture() {
       }
       if (path === `/api/v1/conversations/${conversationId}/messages` && request.method() === "POST") {
         const body = JSON.parse(request.postData() ?? "{}");
-        if (body.generate) return route.fulfill({ status: 202, json: { message: { id: "message-user", conversationId, role: "user", content: body.content, createdAt: now }, job: { id: jobId, conversationId, status: "queued", operation: "generate", prompt: body.content, snapshotId: "snapshot-sales-v1", repairCount: 0, errorCode: null, errorMessage: null, clarificationQuestions: null, intent: null, transformPlan: null, fieldLineage: null, flintSpec: null, validation: null, previewData: null, revision: null }, nextAction: { type: "poll_generation_job", jobId, message: "Generation Cycle 已排队。" } } });
+        if (body.generate) return route.fulfill({ status: 202, json: { message: { id: "message-user", conversationId, role: "user", content: body.content, createdAt: now }, job: { id: jobId, conversationId, status: "queued", operation: "generate", prompt: body.content, snapshotId: "snapshot-sales-v1", repairCount: 0, errorCode: null, errorMessage: null, clarificationProposal: null, intent: null, transformPlan: null, fieldLineage: null, flintSpec: null, validation: null, previewData: null, revision: null }, nextAction: { type: "poll_generation_job", jobId, message: "Generation Cycle 已排队。" } } });
         return route.fulfill({ json: { messages: [{ id: "message-metric", conversationId, role: "assistant", content: body.assistantContent ?? "已确认。", createdAt: now }] } });
       }
       if (path === `/api/v1/projects/${projectId}/analysis-brief` && request.method() === "POST") {
@@ -134,13 +134,13 @@ function createFixture() {
       }
       if (path === `/api/v1/generation-jobs/${jobId}` && request.method() === "GET") {
         const nextRevision = revision();
-        return route.fulfill({ json: { job: { id: jobId, conversationId, status: "succeeded", operation: "generate", prompt: "按月份展示各区域销售额", snapshotId: "snapshot-sales-v1", repairCount: 0, errorCode: null, errorMessage: null, clarificationQuestions: null, intent: null, transformPlan: nextRevision.transformPlan, fieldLineage: nextRevision.fieldLineage, flintSpec: nextRevision.flintSpec, validation: nextRevision.validation, previewData: { columns: ["月份", "区域", "销售额"], rows, steps: [] }, revision: { id: revisionId, artifactId: "artifact-sales", revision: 1, status: revisionStatus } }, revision: nextRevision } });
+        return route.fulfill({ json: { job: { id: jobId, conversationId, status: "succeeded", operation: "generate", prompt: "按月份展示各区域销售额", snapshotId: "snapshot-sales-v1", repairCount: 0, errorCode: null, errorMessage: null, clarificationProposal: null, intent: null, transformPlan: nextRevision.transformPlan, fieldLineage: nextRevision.fieldLineage, flintSpec: nextRevision.flintSpec, validation: nextRevision.validation, previewData: { columns: ["月份", "区域", "销售额"], rows, steps: [] }, revision: { id: revisionId, artifactId: "artifact-sales", revision: 1, status: revisionStatus } }, revision: nextRevision } });
       }
       if (path === "/api/v1/chart-artifacts/artifact-sales/revisions" && request.method() === "POST") {
         const parsedRequest = JSON.parse(request.postData() ?? "{}") as Record<string, unknown>;
         editRequest = parsedRequest;
         const patch = parsedRequest.patch as Record<string, unknown>;
-        return route.fulfill({ status: 202, json: { job: { id: "job-sales-edit", conversationId, status: "succeeded", operation: "edit", prompt: "编辑图表版本 R1", snapshotId: "snapshot-sales-v1", repairCount: 0, errorCode: null, errorMessage: null, clarificationQuestions: null, intent: null, transformPlan: patch.transformPlan, fieldLineage: null, flintSpec: null, validation: null, previewData: null, revision: null }, reused: false } });
+        return route.fulfill({ status: 202, json: { job: { id: "job-sales-edit", conversationId, status: "succeeded", operation: "edit", prompt: "编辑图表版本 R1", snapshotId: "snapshot-sales-v1", repairCount: 0, errorCode: null, errorMessage: null, clarificationProposal: null, intent: null, transformPlan: patch.transformPlan, fieldLineage: null, flintSpec: null, validation: null, previewData: null, revision: null }, reused: false } });
       }
       if (path === `/api/v1/chart-revisions/${revisionId}/submit` && request.method() === "POST") { revisionStatus = "in_review"; return route.fulfill({ json: { revision: revision() } }); }
       if (path === `/api/v1/chart-revisions/${revisionId}/approve` && request.method() === "POST") { revisionStatus = "approved"; return route.fulfill({ json: { revision: revision() } }); }

@@ -246,7 +246,20 @@ function needsClarificationDecision() {
     intent: null,
     plan: null,
     chartSelection: null,
-    questions: [{ code: "period_required", question: "请确认分析时间范围" }]
+    proposal: {
+      version: "v1",
+      diagnostic: { version: "v1", code: "period_required", stage: "planning", severity: "blocking", source: "model_output", message: "请确认分析时间范围", field: null, evidence: [] },
+      code: "period_required",
+      target: "metric",
+      stage: "planning",
+      severity: "blocking",
+      question: "请确认分析时间范围",
+      reason: "Analysis Brief 没有明确时间范围",
+      field: null,
+      candidates: [],
+      recommendedCandidate: null,
+      requiresUserDecision: true
+    }
   };
 }
 

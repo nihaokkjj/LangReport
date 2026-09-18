@@ -31,13 +31,14 @@ test("Readiness Gate 用确定性证据生成候选和推荐，但保留用户�
 
   assert.equal(result.decision, "needs_clarification");
   if (result.decision !== "needs_clarification") return;
-  const question = result.questions[0];
-  assert.equal(question.target, "x_field");
-  assert.equal(question.stage, "compiling");
-  assert.equal(question.severity, "blocking");
-  assert.equal(question.recommendedOption?.value, "月份");
-  assert.ok(question.options?.some((option) => option.value === "区域"));
-  assert.ok(question.evidence.some((item) => item.label === "当前 Transform 输出"));
+  assert.equal(result.diagnostic.code, "MISSING_X_FIELD");
+  assert.equal(result.proposal.target, "x_field");
+  assert.equal(result.proposal.stage, "compiling");
+  assert.equal(result.proposal.severity, "blocking");
+  assert.equal(result.proposal.recommendedCandidate?.value, "月份");
+  assert.ok(result.proposal.candidates.some((candidate) => candidate.value === "区域"));
+  assert.ok(result.diagnostic.evidence.some((item) => item.label === "当前 Transform 输出"));
+  assert.equal(result.proposal.candidates.find((candidate) => candidate.value === "月份")?.source, "snapshot_requires_transform");
 });
 
 test("Readiness Gate 没有候选字段时继续要求澄清，不伪造字段", () => {
@@ -61,8 +62,8 @@ test("Readiness Gate 没有候选字段时继续要求澄清，不伪造字段",
 
   assert.equal(result.decision, "needs_clarification");
   if (result.decision !== "needs_clarification") return;
-  assert.equal(result.questions[0]?.options, undefined);
-  assert.equal(result.questions[0]?.recommendedOption, undefined);
+  assert.deepEqual(result.proposal.candidates, []);
+  assert.equal(result.proposal.recommendedCandidate, null);
 });
 
 test("Readiness Gate 只有一个候选时也不会自动采用", () => {
@@ -91,11 +92,20 @@ test("Readiness Gate 只有一个候选时也不会自动采用", () => {
 
   assert.equal(result.decision, "needs_clarification");
   if (result.decision !== "needs_clarification") return;
-  assert.equal(result.questions[0]?.options?.length, 1);
-  assert.equal(result.questions[0]?.recommendedOption?.value, "月份");
+  assert.equal(result.proposal.candidates.length, 1);
+  assert.equal(result.proposal.recommendedCandidate?.value, "月份");
 });
 
 test("Readiness Gate 对未覆盖的系统错误返回 blocked", () => {
   const result = evaluateGenerationReadiness({ stage: "validating", profiles, error: { code: "PLUGIN_VALIDATION_FAILED", message: "主题校验失败" } });
-  assert.deepEqual(result, { decision: "blocked", code: "PLUGIN_VALIDATION_FAILED", message: "主题校验失败" });
+  assert.equal(result.decision, "blocked");
+  if (result.decision !== "blocked") return;
+  assert.equal(result.code, "PLUGIN_VALIDATION_FAILED");
+  assert.equal(result.message, "主题校验失败");
+  assert.equal(result.diagnostic.source, "deterministic_gate");
+});
+
+test("Readiness Gate 只按诊断代码识别缺失横轴，不从错误文案猜测", () => {
+  const result = evaluateGenerationReadiness({ stage: "compiling", profiles, error: { message: "缺少图表横轴字段" } });
+  assert.equal(result.decision, "blocked");
 });

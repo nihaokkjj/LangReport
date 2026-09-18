@@ -1,4 +1,4 @@
-import type { ChartPlanDecision, ClarificationQuestion, FlintSpec, TransformPlan, ValidationReport } from "@langreport/contracts";
+import type { ChartPlanDecision, FlintSpec, GenerationClarificationProposal, GenerationDiagnostic, TransformPlan, ValidationReport } from "@langreport/contracts";
 
 export const MAX_REPAIRS = 2;
 export type GraphTerminal = "ready_for_render" | "needs_clarification" | "failed";
@@ -11,7 +11,8 @@ export type EvidenceGenerationGraphState = {
   validation?: ValidationReport;
   repairCount: number;
   terminal?: GraphTerminal;
-  questions?: ClarificationQuestion[];
+  diagnostic?: GenerationDiagnostic;
+  proposal?: GenerationClarificationProposal;
   failure?: GraphFailure;
 };
 

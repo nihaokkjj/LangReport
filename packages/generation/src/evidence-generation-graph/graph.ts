@@ -7,7 +7,7 @@ const State = Annotation.Root({
   audit: Annotation<unknown>, decision: Annotation<EvidenceGenerationGraphState["decision"]>, transformPlan: Annotation<EvidenceGenerationGraphState["transformPlan"]>,
   compiledFlintSpec: Annotation<EvidenceGenerationGraphState["compiledFlintSpec"]>, validation: Annotation<EvidenceGenerationGraphState["validation"]>,
   repairCount: Annotation<number>({ default: () => 0, reducer: (_current, next) => next }), terminal: Annotation<EvidenceGenerationGraphState["terminal"]>,
-  questions: Annotation<EvidenceGenerationGraphState["questions"]>, failure: Annotation<EvidenceGenerationGraphState["failure"]>
+  diagnostic: Annotation<EvidenceGenerationGraphState["diagnostic"]>, proposal: Annotation<EvidenceGenerationGraphState["proposal"]>, failure: Annotation<EvidenceGenerationGraphState["failure"]>
 });
 
 export async function runEvidenceGenerationGraph(port: EvidenceGenerationGraphPort): Promise<EvidenceGenerationGraphState> {

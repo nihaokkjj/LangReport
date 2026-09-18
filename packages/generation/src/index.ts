@@ -8,9 +8,10 @@ import {
   transformPlanSchema,
   type CanonicalTextContextProjection,
   type ChartPlanDecision,
-  type ClarificationQuestion,
   type ConversationIntent,
   type FlintSpec,
+  type GenerationClarificationProposal,
+  type GenerationDiagnostic,
   type GenerationDecision,
   type ModelBudget,
   type ModelErrorCode,
@@ -34,6 +35,13 @@ import { CANONICAL_TEXT_CONTEXT_VERSION, projectConversationToCanonicalTextConte
 import { runEvidenceGenerationGraph } from "./evidence-generation-graph/graph.js";
 import type { EvidenceGenerationGraphPort, EvidenceGenerationGraphState } from "./evidence-generation-graph/state.js";
 import { evaluateGenerationReadiness, type GenerationReadinessStage } from "./readiness-gate.js";
+
+class GenerationReadinessError extends Error {
+  constructor(readonly code: string, message: string) {
+    super(message);
+    this.name = "GenerationReadinessError";
+  }
+}
 
 export { evaluateGenerationReadiness } from "./readiness-gate.js";
 export type { GenerationReadinessInput, GenerationReadinessResult, GenerationReadinessStage } from "./readiness-gate.js";
@@ -181,7 +189,7 @@ function generateFlintSpec(input: {
   if (!valueColumn) throw new Error("变换结果没有可视化指标");
   const dimension = intent.dimensionColumns[0];
   const xColumn = intent.timeColumn ?? dimension ?? transform.columns.find((column) => column !== valueColumn);
-  if (!xColumn || !transform.columns.includes(xColumn)) throw new Error("缺少图表横轴字段");
+  if (!xColumn || !transform.columns.includes(xColumn)) throw new GenerationReadinessError("MISSING_X_FIELD", "缺少图表横轴字段");
   const comparisonColumn = intent.comparison === "none" ? undefined : `${measure}_${intent.comparison}`;
   const encodings: FlintSpec["chartSpec"]["encodings"] = {
     x: { field: xColumn, type: intent.timeColumn ? "temporal" : "nominal" },
@@ -469,7 +477,7 @@ type GenerationCycleStageName = GenerationReadinessStage;
 type GenerationCycleStageStatus = "pending" | "succeeded" | "failed" | "needs_clarification" | "skipped";
 
 export type GenerationCycleAudit = {
-  version: "v1";
+  version: "v2";
   invocationId: string;
   contextPolicy: "canonical_text_context";
   modelRun: ModelRunSnapshot;
@@ -484,6 +492,8 @@ export type GenerationCycleAudit = {
   repairCount: number;
   contextFallbacks: string[];
   generationDecision: GenerationDecision | null;
+  readinessDiagnostic: GenerationDiagnostic | null;
+  readinessProposal: GenerationClarificationProposal | null;
 };
 
 type GenerationCycleFailureCode = ModelErrorCode
@@ -495,7 +505,7 @@ type GenerationCycleFailureCode = ModelErrorCode
 
 export type GenerationCycleResult =
   | { status: "drafted"; artifacts: GenerationArtifacts; audit: GenerationCycleAudit }
-  | { status: "needs_clarification"; questions: ClarificationQuestion[]; audit: GenerationCycleAudit }
+  | { status: "needs_clarification"; diagnostic: GenerationDiagnostic; proposal: GenerationClarificationProposal; audit: GenerationCycleAudit }
   | {
     status: "failed";
     error: { code: GenerationCycleFailureCode; message: string; retryable: boolean; invocationId: string };
@@ -532,17 +542,11 @@ export class GenerationCycle {
     }
 
     if (input.memoryContext?.conflicts?.some((conflict) => conflict.requiresDecision)) {
-      const questions = input.memoryContext.conflicts
+      const proposal = memoryConflictProposal(input.memoryContext.conflicts
         .filter((conflict) => conflict.requiresDecision)
-        .slice(0, 8)
-        .map((conflict) => ({
-          code: "memory_conflict",
-          question: `请确认 Memory「${conflict.memoryKey}」应采用哪一条规则`,
-          reason: "项目级与 Workspace 级记忆存在冲突，Cycle 不能静默选择",
-          field: conflict.memoryKey
-        }));
+        .at(0)!.memoryKey);
       audit = setStage(audit, "planning", "succeeded");
-      return { status: "needs_clarification", questions, audit };
+      return { status: "needs_clarification", diagnostic: proposal.diagnostic, proposal, audit };
     }
 
     if (Date.now() >= input.cycle.budget.deadlineAt) {
@@ -601,7 +605,7 @@ export class GenerationCycle {
       return failedResult(audit, input, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的 chart-plan 不符合版本化合同", false, "planning");
     }
     if (decision.data.decision === "needs_clarification") {
-      return { status: "needs_clarification", questions: decision.data.questions, audit };
+      return { status: "needs_clarification", diagnostic: decision.data.proposal.diagnostic, proposal: decision.data.proposal, audit };
     }
 
     let artifacts: GenerationArtifacts;
@@ -655,7 +659,10 @@ async function runGenerationCycleGraph(input: GenerationCycleInput, gateway: Mod
       try { prepared = buildPreparedModelContext(input); } catch (error) { return fail(createAudit(input), "GENERATION_CONTEXT_INVALID", errorMessage(error, "模型上下文无效"), false, "planning"); }
       const audit = createAudit(input, prepared);
       const conflicts = input.memoryContext?.conflicts.filter((conflict) => conflict.requiresDecision) ?? [];
-      if (conflicts.length) return { audit: setStage(audit, "planning", "succeeded"), terminal: "needs_clarification", questions: conflicts.slice(0, 8).map((conflict) => ({ code: "memory_conflict", question: `请确认 Memory「${conflict.memoryKey}」应采用哪一条规则`, reason: "项目级与 Workspace 级记忆存在冲突，Cycle 不能静默选择", field: conflict.memoryKey, stage: "planning" as const, severity: "blocking" as const, evidence: [] })) };
+      if (conflicts.length) {
+        const proposal = memoryConflictProposal(conflicts[0]!.memoryKey);
+        return { audit: { ...setStage(audit, "planning", "succeeded"), readinessDiagnostic: proposal.diagnostic, readinessProposal: proposal }, terminal: "needs_clarification", diagnostic: proposal.diagnostic, proposal };
+      }
       if (Date.now() >= input.cycle.budget.deadlineAt) return fail(audit, "MODEL_BUDGET_EXCEEDED", "Generation Cycle 在模型调用前已超过截止时间预算", false, "planning");
       return { audit };
     },
@@ -673,7 +680,10 @@ async function runGenerationCycleGraph(input: GenerationCycleInput, gateway: Mod
       if (modelResult.status === "error") return fail(nextAudit, modelResult.code, modelResult.message, modelResult.retryable, "planning");
       const parsed = chartPlanDecisionSchema.safeParse(modelResult.data);
       if (!parsed.success) return fail(nextAudit, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的 chart-plan 不符合版本化合同", false, "planning");
-      if (parsed.data.decision === "needs_clarification") return { audit: nextAudit, terminal: "needs_clarification", questions: parsed.data.questions };
+      if (parsed.data.decision === "needs_clarification") {
+        const proposal = parsed.data.proposal;
+        return { audit: { ...nextAudit, readinessDiagnostic: proposal.diagnostic, readinessProposal: proposal }, terminal: "needs_clarification", diagnostic: proposal.diagnostic, proposal };
+      }
       decision = applyGenerationDecision(parsed.data, input.generationDecision, input.profiles);
       return { audit: nextAudit, decision, transformPlan: input.plan && !input.generationDecision ? transformPlanSchema.parse(input.plan) : decision.plan };
     },
@@ -690,10 +700,12 @@ async function runGenerationCycleGraph(input: GenerationCycleInput, gateway: Mod
         const readiness = evaluateGenerationReadiness({ stage: "compiling", profiles: input.profiles, intent: decision!.intent, transform, error });
         if (readiness.decision === "needs_clarification") {
           const nextAudit = {
-            ...setStage(audit, "compiling", "needs_clarification", readiness.questions[0]?.code),
-            planValidation: validationRecordFromError(readiness.questions[0]?.code ?? "GENERATION_NEEDS_CLARIFICATION", message)
+            ...setStage(audit, "compiling", "needs_clarification", readiness.diagnostic.code),
+            readinessDiagnostic: readiness.diagnostic,
+            readinessProposal: readiness.proposal,
+            planValidation: validationRecordFromError(readiness.diagnostic.code, message)
           };
-          return { audit: nextAudit, terminal: "needs_clarification", questions: readiness.questions };
+          return { audit: nextAudit, terminal: "needs_clarification", diagnostic: readiness.diagnostic, proposal: readiness.proposal };
         }
         return fail(audit, "GENERATION_COMPILATION_FAILED", message, false, "compiling");
       }
@@ -716,7 +728,7 @@ async function runGenerationCycleGraph(input: GenerationCycleInput, gateway: Mod
   };
   const state = await runEvidenceGenerationGraph(port);
   const audit = state.audit as GenerationCycleAudit;
-  if (state.terminal === "needs_clarification") return { status: "needs_clarification", questions: state.questions ?? [], audit };
+  if (state.terminal === "needs_clarification" && state.diagnostic && state.proposal) return { status: "needs_clarification", diagnostic: state.diagnostic, proposal: state.proposal, audit };
   if (state.terminal === "failed") return { status: "failed", error: state.failure as Extract<GenerationCycleResult, { status: "failed" }>["error"], audit };
   const pluginSemanticTypes = semanticTypesFromPlugins(input.profiles, pluginManifests);
   return { status: "drafted", artifacts: { intent: decision!.intent, plan: state.transformPlan!, transform: transform!, flintSpec: flintSpec!, validation: validation!, repairCount: state.repairCount, pluginUsage: buildPluginUsage({ manifests: pluginManifests, template: pluginTemplate, themeRef: input.pluginThemeRef ?? null, semanticTypes: pluginSemanticTypes, renderer: "vega-lite" }) }, audit };
@@ -741,11 +753,7 @@ class DeterministicModelGateway implements ModelGateway {
             intent: null,
             plan: null,
             chartSelection: null,
-            questions: [{
-              code: "measure_missing",
-              question: "请确认需要分析的数值指标",
-              reason: "当前 Data Snapshot 没有可聚合的数值字段"
-            }]
+            proposal: modelClarificationProposal({ code: "measure_missing", target: "metric", question: "请确认需要分析的数值指标", reason: "当前 Data Snapshot 没有可聚合的数值字段" })
           }),
           invocationId: request.invocationId
         };
@@ -762,11 +770,7 @@ class DeterministicModelGateway implements ModelGateway {
             intent,
             plan: null,
             chartSelection: null,
-            questions: [{
-              code: "grouping_field_missing",
-              question: "请确认图表的横轴或分组字段",
-              reason: "当前 Data Snapshot 无法确定图表分组方式"
-            }]
+            proposal: modelClarificationProposal({ code: "grouping_field_missing", target: "x_field", question: "请确认图表的横轴或分组字段", reason: "当前 Data Snapshot 无法确定图表分组方式" })
           }),
           invocationId: request.invocationId
         };
@@ -785,7 +789,7 @@ class DeterministicModelGateway implements ModelGateway {
             seriesField: intent.timeColumn && intent.dimensionColumns[0] ? intent.dimensionColumns[0] : null,
             tooltipFields: comparisonField ? [comparisonField] : []
           },
-          questions: []
+          proposal: null
         }),
         invocationId: request.invocationId
       };
@@ -888,12 +892,74 @@ function applyGenerationDecision(
   };
 }
 
+function modelClarificationProposal(input: {
+  code: string;
+  target: "x_field" | "metric" | "memory" | null;
+  stage?: GenerationReadinessStage;
+  question: string;
+  reason: string;
+  field?: string | null;
+  evidence?: Array<{ label: string; value: string }>;
+}): GenerationClarificationProposal {
+  const diagnostic: GenerationDiagnostic = {
+    version: "v1",
+    code: input.code,
+    stage: input.stage ?? "planning",
+    severity: "blocking",
+    source: "model_output",
+    message: input.question,
+    field: input.field ?? null,
+    evidence: input.evidence ?? []
+  };
+  return {
+    version: "v1",
+    diagnostic,
+    code: input.code,
+    target: input.target,
+    stage: diagnostic.stage,
+    severity: diagnostic.severity,
+    question: input.question,
+    reason: input.reason,
+    field: input.field ?? null,
+    candidates: [],
+    recommendedCandidate: null,
+    requiresUserDecision: true
+  };
+}
+
+function memoryConflictProposal(memoryKey: string): GenerationClarificationProposal {
+  const diagnostic: GenerationDiagnostic = {
+    version: "v1",
+    code: "memory_conflict",
+    stage: "planning",
+    severity: "blocking",
+    source: "memory_context",
+    message: `Memory「${memoryKey}」存在冲突`,
+    field: memoryKey,
+    evidence: []
+  };
+  return {
+    version: "v1",
+    diagnostic,
+    code: diagnostic.code,
+    target: "memory",
+    stage: diagnostic.stage,
+    severity: diagnostic.severity,
+    question: `请确认 Memory「${memoryKey}」应采用哪一条规则`,
+    reason: "项目级与 Workspace 级记忆存在冲突，Cycle 不能静默选择。",
+    field: memoryKey,
+    candidates: [],
+    recommendedCandidate: null,
+    requiresUserDecision: true
+  };
+}
+
 function createAudit(input: GenerationCycleInput, preparedContext?: PreparedGenerationModelContext): GenerationCycleAudit {
   const contextProjectionHash = preparedContext?.conversationProjection.hash ?? "unavailable";
   const requestedProfile = input.requestedProfile ?? "deterministic-offline";
   const effectiveProfile = input.effectiveProfile ?? requestedProfile;
   return {
-    version: "v1",
+    version: "v2",
     invocationId: input.cycle.invocationId,
     contextPolicy: "canonical_text_context",
     modelRun: {
@@ -922,7 +988,9 @@ function createAudit(input: GenerationCycleInput, preparedContext?: PreparedGene
     renderValidation: pendingValidationRecord("flint-render-v1"),
     repairCount: 0,
     contextFallbacks: preparedContext?.contextFallbacks ?? [],
-    generationDecision: input.generationDecision ?? null
+    generationDecision: input.generationDecision ?? null,
+    readinessDiagnostic: null,
+    readinessProposal: null
   };
 }
 
