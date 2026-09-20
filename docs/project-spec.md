@@ -61,6 +61,8 @@ Web
 
 Generation Worker 与 Render Worker 通过 PostgreSQL-backed Generation Job 状态协作。Worker Lease、Fencing Token 和 Job 到业务结果的幂等关系是并发安全边界；详细状态和停止条件见 [Agent 启动与 Loop 规范](./agent/agent-loop-spec.md)。
 
+Generation Job 状态同步由 `statusVersion/statusChangedAt` 表示用户可见变化，不复用会被 Lease heartbeat 更新的 `updatedAt`。Web 工作台对同一标签页、同一 Job 只保留一个 status watcher；切换 Project、Conversation 或 Job 时 abort 旧请求并用会话令牌拒绝迟到响应。API status projection 与完整 Job 结果分离，长轮询可由 `GENERATION_STATUS_LONG_POLL=false` 关闭并回退到串行读取。
+
 ## 持久化与领域不变量
 
 - Workspace 是内部技术隔离边界；第一阶段用户直接操作自己的 Project，不显示 Workspace 管理入口。

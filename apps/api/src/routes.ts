@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { acceptMemoryCandidateRequestSchema, chartGenerationRequestSchema, createAnalysisBriefRequestSchema, createConversationMessageRequestSchema, createConversationRequestSchema, createMetricDefinitionRequestSchema, createProjectRequestSchema, executionAssemblySchema, generationClarificationProposalSchema, memoryDeleteRequestSchema, pasteDataRequestSchema, pluginEnableRequestSchema, rejectMemoryCandidateRequestSchema, updateAnalysisBriefRequestSchema, updateWorkspaceModelCredentialRequestSchema, type GenerationDecision, type ModelRouteSnapshot } from "@langreport/contracts";
 import { assertChartAction, ChartServiceError, getProjectAccess, getProjectTheme, getRevision } from "@langreport/chart";
 import { analysisBriefs, auditEvents, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, db, evidenceBlocks, generationJobs, members, metricDefinitions, projectMembers, projects, workspaces, workspaceModelCredentials, withAdvisoryLock } from "@langreport/db";
+import { createGenerationJobStatusObserver } from "./generation-job-status.js";
 import { getObject } from "@langreport/storage";
 import { MemoryServiceError, acceptMemoryCandidate, createMemoryExtractionJob, deleteMemory, getConversationMemory, getMemoryContextForGeneration, listMemoryCandidates, listProjectMemory, listWorkspaceMemory, rejectMemoryCandidate, updateConversationMemory } from "@langreport/memory";
 import { projectConversationToCanonicalTextContext } from "@langreport/generation";
@@ -18,7 +19,15 @@ import { AuthenticationError, userIdFromRequest } from "./auth.js";
 const RENDERER_VERSION = "vega-lite-svg-v1";
 const MAX_GENERATION_ATTEMPTS = 3;
 const retryableGenerationErrors = new Set(["GENERATION_FAILED", "RENDER_FAILED", "MODEL_RATE_LIMITED", "MODEL_TIMEOUT", "MODEL_PROVIDER_UNAVAILABLE"]);
+const terminalGenerationJobStatuses = new Set(["succeeded", "failed", "needs_clarification", "cancelled"]);
 const projectIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseGenerationJobStatusQuery(value: string | number | undefined, fallback: number, maximum: number): number {
+  if (value === undefined || value === "") return fallback;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > maximum) throw new DataAssetError("Generation Job 状态查询参数无效");
+  return parsed;
+}
 
 function assertGenerationDecisionMatchesParent(parentJob: typeof generationJobs.$inferSelect, decision: GenerationDecision): void {
   if (decision.action === "adjust_direction") return;
@@ -46,6 +55,9 @@ function multipartTextField(fields: Record<string, unknown>, name: string): stri
 }
 
 export async function registerRoutes(app: FastifyInstance, environment: NodeJS.ProcessEnv = process.env): Promise<void> {
+  const generationJobStatusObserver = createGenerationJobStatusObserver(app.log);
+  const generationStatusLongPollEnabled = !["0", "false", "off"].includes(String(environment.GENERATION_STATUS_LONG_POLL ?? "true").toLowerCase());
+  app.addHook("onClose", async () => generationJobStatusObserver.close());
   await registerChartRoutes(app);
 
   app.post("/api/v1/dev/bootstrap", async (request, reply) => {
@@ -1017,6 +1029,8 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
         leaseExpiresAt: null,
         errorCode: null,
         errorMessage: null,
+        statusVersion: sql`${generationJobs.statusVersion} + 1`,
+        statusChangedAt: new Date(),
         updatedAt: new Date()
       }).where(and(eq(generationJobs.id, job.id), eq(generationJobs.status, "failed"))).returning();
       if (!requeued) {
@@ -1046,6 +1060,8 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
         leaseToken: null,
         leaseExpiresAt: null,
         leaseHeartbeatAt: null,
+        statusVersion: sql`${generationJobs.statusVersion} + 1`,
+        statusChangedAt: new Date(),
         updatedAt: new Date()
       }).where(and(eq(generationJobs.id, job.id), eq(generationJobs.status, "needs_clarification"))).returning();
       if (!cancelled) {
@@ -1159,6 +1175,63 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       } });
     } catch (error) {
       return sendDataError(reply, error);
+    }
+  });
+
+  app.get<{ Params: { jobId: string }; Querystring: { afterVersion?: string | number; waitMs?: string | number } }>("/api/v1/generation-jobs/:jobId/status", async (request, reply) => {
+    const abortController = new AbortController();
+    const onClose = () => abortController.abort();
+    request.raw.once("close", onClose);
+    try {
+      const afterVersion = parseGenerationJobStatusQuery(request.query.afterVersion, 0, Number.MAX_SAFE_INTEGER);
+      const waitMs = parseGenerationJobStatusQuery(request.query.waitMs, 0, 25_000);
+
+      const readStatus = async () => {
+        const [job] = await db.select().from(generationJobs).where(eq(generationJobs.id, request.params.jobId)).limit(1);
+        if (!job) throw new ChartServiceError("GENERATION_JOB_NOT_FOUND", "生成任务不存在", 404);
+        const access = await getProjectAccess(job.projectId, userIdFromRequest(request));
+        const [revision] = await db.select({ id: chartRevisions.id, artifactId: chartRevisions.artifactId, revision: chartRevisions.revision, status: chartRevisions.status })
+          .from(chartRevisions).where(eq(chartRevisions.generationJobId, job.id)).limit(1);
+        if (access.effectiveRole === "viewer" && revision?.status !== "approved") {
+          throw new ChartServiceError("REVISION_NOT_PUBLISHED", "图表版本尚未发布", 404);
+        }
+        return {
+          job: {
+            id: job.id,
+            status: job.status,
+            operation: job.operation,
+            attemptCount: job.attemptCount,
+            repairCount: job.repairCount,
+            errorCode: job.errorCode,
+            errorMessage: job.errorMessage,
+            clarificationProposal: job.clarificationProposal,
+            statusVersion: job.statusVersion,
+            statusChangedAt: job.statusChangedAt,
+            terminal: terminalGenerationJobStatuses.has(job.status)
+          },
+          revision: revision ?? null
+        };
+      };
+
+      let projection = await readStatus();
+      const responseHeaders = {
+        "cache-control": "no-store",
+        "x-langreport-generation-job-version": String(projection.job.statusVersion),
+        "x-langreport-generation-job-long-poll": generationStatusLongPollEnabled ? "enabled" : "disabled"
+      };
+      if (generationStatusLongPollEnabled && projection.job.statusVersion <= afterVersion && !projection.job.terminal && waitMs > 0) {
+        await generationJobStatusObserver.waitForChange({ jobId: request.params.jobId, afterVersion, waitMs, signal: abortController.signal });
+        if (abortController.signal.aborted) return reply;
+        projection = await readStatus();
+      }
+      reply.headers({ ...responseHeaders, "x-langreport-generation-job-version": String(projection.job.statusVersion) });
+      if (projection.job.statusVersion <= afterVersion && !projection.job.terminal) return reply.code(204).send();
+      return reply.send(projection);
+    } catch (error) {
+      if (abortController.signal.aborted) return reply;
+      return sendDataError(reply, error);
+    } finally {
+      request.raw.off("close", onClose);
     }
   });
 

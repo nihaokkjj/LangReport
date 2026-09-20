@@ -60,6 +60,7 @@ const expectedRoutes = [
   "DELETE /api/v1/memories/:memoryId",
   "GET /api/v1/chart-revisions/:revisionId/memory-context",
   "GET /api/v1/generation-jobs/:jobId",
+  "GET /api/v1/generation-jobs/:jobId/status",
   "POST /api/v1/generation-jobs/:jobId/retry",
   "POST /api/v1/generation-jobs/:jobId/cancel",
   "GET /api/v1/generation-jobs/:jobId/outputs/:format",
@@ -297,8 +298,9 @@ test("OpenAPI document is generated from the route contracts", () => {
     for (const operation of Object.values(pathItem)) {
       const responses = (operation as Record<string, any>).responses as Record<string, any>;
       for (const status of ["400", "403", "404", "409"]) assert.ok(responses[status]);
-      for (const response of Object.values(responses)) {
+      for (const [status, response] of Object.entries(responses)) {
         assert.ok(response.description);
+        if (status === "204") continue;
         assert.ok(response.content);
         assert.ok(Object.values(response.content).every((content: any) => content.schema));
       }

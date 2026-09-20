@@ -30,6 +30,7 @@ packages/db/drizzle/*
 !packages/db/drizzle/0023_data_snapshot_preview_source_metadata.sql
 !packages/db/drizzle/0024_generation_readiness_gate.sql
 !packages/db/drizzle/0025_generation_readiness_proposal.sql
+!packages/db/drizzle/0026_generation_job_status_version.sql
 !packages/db/drizzle/meta/
 packages/db/drizzle/meta/*
 !packages/db/drizzle/meta/_journal.json

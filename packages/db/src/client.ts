@@ -40,6 +40,29 @@ const client = postgres(databaseUrl, {
   ...(integrationSchema ? { connection: { search_path: integrationSchema } } : {})
 });
 
+export async function createDatabaseChannelListener(channel: string, onNotify: (payload: string) => void): Promise<() => Promise<void>> {
+  const listenerClient = postgres(databaseUrl, {
+    max: 1,
+    prepare: false,
+    ...(integrationSchema ? { connection: { search_path: integrationSchema } } : {})
+  });
+  try {
+    const subscription = await listenerClient.listen(channel, onNotify);
+    return async () => {
+      try {
+        await subscription.unlisten();
+      } finally {
+        const listenSql = (listenerClient.listen as typeof listenerClient.listen & { sql?: { end(): Promise<void> } }).sql;
+        if (listenSql) await listenSql.end().catch(() => undefined);
+        await listenerClient.end().catch(() => undefined);
+      }
+    };
+  } catch (error) {
+    await listenerClient.end().catch(() => undefined);
+    throw error;
+  }
+}
+
 export const db = drizzle({ client, schema });
 
 export async function withAdvisoryLock<T>(key: string, callback: () => Promise<T>): Promise<T | undefined> {

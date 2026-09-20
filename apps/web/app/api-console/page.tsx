@@ -143,6 +143,7 @@ type ScenarioStep = {
 type ScenarioJob = {
   id: string;
   status: string;
+  statusVersion?: number;
   errorCode?: string | null;
   errorMessage?: string | null;
   clarificationProposal?: Record<string, unknown> | null;
@@ -573,7 +574,7 @@ function buildRequest(
 function buildScenarioRequest(
   entries: OperationEntry[],
   operationId: string,
-  pathValues: Record<string, string> = {},
+  pathValues: Record<string, string | number> = {},
   body?: Record<string, unknown>
 ): BuiltRequest {
   const entry = entries.find((candidate) => candidate.operation.operationId === operationId);
@@ -581,8 +582,8 @@ function buildScenarioRequest(
   const parameterValues = {
     ...seedParameterValues(entry.operation),
     ...Object.fromEntries((entry.operation.parameters ?? [])
-      .filter((parameter) => parameter.in === "path" && pathValues[parameter.name] !== undefined)
-      .map((parameter) => [parameterKey(parameter), pathValues[parameter.name]]))
+      .filter((parameter) => (parameter.in === "path" || parameter.in === "query") && pathValues[parameter.name] !== undefined)
+      .map((parameter) => [parameterKey(parameter), String(pathValues[parameter.name])]))
   };
   const contentType = body === undefined ? "" : bodyContentTypes(entry.operation)[0] ?? "application/json";
   return buildRequest(entry, {
@@ -596,7 +597,7 @@ function buildScenarioRequest(
 async function requestScenario(
   entries: OperationEntry[],
   operationId: string,
-  pathValues: Record<string, string> = {},
+  pathValues: Record<string, string | number> = {},
   body?: Record<string, unknown>
 ): Promise<ScenarioHttpResult> {
   const request = buildScenarioRequest(entries, operationId, pathValues, body);
@@ -782,9 +783,11 @@ export default function ApiConsolePage() {
   };
 
   const pollScenarioJob = async (jobId: string, stepId: string): Promise<{ job: ScenarioJob; result: ScenarioHttpResult }> => {
+    let afterVersion = 0;
     for (let attempt = 0; attempt < 80; attempt += 1) {
-      const result = await requestScenario(entries, "getGenerationJob", { jobId });
+      const result = await requestScenario(entries, "getGenerationJobStatus", { jobId, afterVersion, waitMs: 750 });
       rememberScenarioRequest(result.requestId);
+      if (result.status === 204) continue;
       const job = scenarioJobFromPayload(result.payload);
       setScenario((current) => stepId === "job"
         ? {
@@ -798,8 +801,8 @@ export default function ApiConsolePage() {
           clarificationStatusHistory: current.clarificationStatusHistory.includes(job.status) ? current.clarificationStatusHistory : [...current.clarificationStatusHistory, job.status]
         });
       updateScenarioStep(stepId, job.status === "failed" ? "failed" : "running", `HTTP ${result.status} · ${job.status}`);
+      if (Number.isSafeInteger(job.statusVersion)) afterVersion = job.statusVersion as number;
       if (terminalScenarioStatuses.has(job.status)) return { job, result };
-      await new Promise((resolve) => window.setTimeout(resolve, 750));
     }
     throw new Error(`Generation Job ${jobId} 在 60 秒内没有进入结束状态`);
   };

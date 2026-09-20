@@ -50,6 +50,8 @@ export async function claimGenerationJobLease(input: {
     leaseFencingToken: sql`${generationJobs.leaseFencingToken} + 1`,
     leaseExpiresAt: new Date(now.getTime() + input.leaseDurationMs),
     leaseHeartbeatAt: now,
+    statusVersion: sql`${generationJobs.statusVersion} + 1`,
+    statusChangedAt: now,
     ...(input.incrementAttempt ? { attemptCount: sql`${generationJobs.attemptCount} + 1` } : {}),
     updatedAt: now
   } as never).where(and(
@@ -92,6 +94,8 @@ export async function updateGenerationJobUnderLease(input: {
       leaseToken: null,
       leaseExpiresAt: null
     } : {}),
+    statusVersion: sql`${generationJobs.statusVersion} + 1`,
+    statusChangedAt: now,
     updatedAt: now
   } as never).where(ownedLeaseCondition(input.lease, now)).returning({ id: generationJobs.id });
   return Boolean(updated);
@@ -105,6 +109,8 @@ export async function recoverExpiredGenerationJobLeases(): Promise<string[]> {
     leaseExpiresAt: null,
     errorCode: "WORKER_LEASE_EXPIRED",
     errorMessage: "Worker 租约已过期，任务已重新排队",
+    statusVersion: sql`${generationJobs.statusVersion} + 1`,
+    statusChangedAt: now,
     updatedAt: now
   };
   const generationRecovered = await db.update(generationJobs).set({

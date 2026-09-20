@@ -132,6 +132,8 @@ workspaces/{workspaceId}/projects/{projectId}/conversations/{conversationId}/use
 
 初期使用 PostgreSQL-backed Queue 与事务性任务记录，保证业务写入和任务投递的一致性。Job 领取以数据库条件更新写入 owner、随机 lease token、单调 fencing token、到期时间和 heartbeat；只有这些字段仍匹配且未到期的 Worker 可以推进状态。超期的生成阶段 Job 回到 `queued`，超期的渲染阶段 Job 回到 `rendering` 以复用已通过的计划。任务量增长后可以替换为 Redis-backed Queue，但 Generation Job 的业务状态、租约和 fencing 仍由数据库保存。
 
+Generation Job 的浏览器状态观察使用独立的 `statusVersion/statusChangedAt`。状态提交、领取、恢复、retry 和 cancel 递增版本；纯 Lease heartbeat 不递增版本。数据库触发器在版本变化后通过 PostgreSQL `LISTEN/NOTIFY` 发出仅含 Job ID 和版本的通知，API 进程以一个共享监听连接唤醒多个 HTTP waiter，唤醒后重新读取数据库并再次执行 Project/Viewer 权限检查。`GET /api/v1/generation-jobs/:jobId/status` 只返回轻量投影，最长等待 25 秒；终态由 Web 读取一次现有完整 GET。`GENERATION_STATUS_LONG_POLL=false` 可关闭等待，Web 仍通过串行、自适应 fallback 保持状态可读。
+
 ## 8. 记忆策略
 
 ```text

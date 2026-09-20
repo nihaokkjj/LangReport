@@ -380,10 +380,12 @@ const generationJobDto = dto({
   attemptCount: integer(),
   errorCode: nullable(string()),
   errorMessage: nullable(string()),
+  statusVersion: integer(),
+  statusChangedAt: dateTime(),
   createdBy: string(),
   createdAt: dateTime(),
   updatedAt: dateTime()
-}, ["id", "projectId", "conversationId", "dataAssetId", "snapshotId", "prompt", "renderer", "rendererVersion", "theme", "themeVersion", "themeSource", "operation", "status", "repairCount", "attemptCount", "createdBy", "createdAt", "updatedAt"]);
+}, ["id", "projectId", "conversationId", "dataAssetId", "snapshotId", "prompt", "renderer", "rendererVersion", "theme", "themeVersion", "themeSource", "operation", "status", "repairCount", "attemptCount", "statusVersion", "statusChangedAt", "createdBy", "createdAt", "updatedAt"]);
 
 const generationJobSummaryDto = dto({
   id: uuid(),
@@ -451,6 +453,20 @@ const revisionSummaryDto = dto({
   revision: integer(),
   status: { type: "string", enum: ["draft", "in_review", "approved", "changes_requested", "archived"] }
 }, ["id", "artifactId", "revision", "status"]);
+
+const generationJobStatusDto = dto({
+  id: uuid(),
+  status: { type: "string", enum: ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "needs_clarification", "succeeded", "failed", "cancelled"] },
+  operation: { type: "string", enum: ["generate", "edit", "rollback", "copy"] },
+  attemptCount: integer(),
+  repairCount: integer(),
+  errorCode: nullable(string()),
+  errorMessage: nullable(string()),
+  clarificationProposal: nullable(anyJson),
+  statusVersion: integer(),
+  statusChangedAt: dateTime(),
+  terminal: boolean()
+}, ["id", "status", "operation", "attemptCount", "repairCount", "errorCode", "errorMessage", "clarificationProposal", "statusVersion", "statusChangedAt", "terminal"]);
 
 const evidenceDto = dto({
   id: uuid(),
@@ -628,6 +644,7 @@ const binaryResponse = {
 
 const objectResponse = json({});
 const textResponse = string();
+const noContentResponse: JsonSchema = { type: "null" };
 
 const route = (
   input: Omit<RouteContract, keyof RouteMetadata> & RouteMetadata
@@ -725,6 +742,7 @@ export const routeContracts: RouteContract[] = [
   contract("DELETE", "/api/v1/memories/:memoryId", "deleteMemory", ["Memory"], "删除一个 Memory", { 200: dto({ memory: memoryDto }, ["memory"]) }, { request: pathRequest("/api/v1/memories/:memoryId", { body: zodJson(memoryDeleteRequestSchema) }) }),
   contract("GET", "/api/v1/chart-revisions/:revisionId/memory-context", "getRevisionMemoryContext", ["Memory"], "查询 Chart Revision 使用的 Memory 快照", { 200: dto({ memorySnapshot: array(objectResponse) }, ["memorySnapshot"]) }),
   contract("GET", "/api/v1/generation-jobs/:jobId", "getGenerationJob", ["Generation Jobs"], "查询 Generation Job 状态和产物", { 200: dto({ job: generationJobDto, revision: nullable(revisionSummaryDto), result: objectResponse }, ["job", "revision", "result"]) }),
+  contract("GET", "/api/v1/generation-jobs/:jobId/status", "getGenerationJobStatus", ["Generation Jobs"], "等待并查询 Generation Job 轻量状态", { 200: dto({ job: generationJobStatusDto, revision: nullable(revisionSummaryDto) }, ["job", "revision"]), 204: noContentResponse }, { request: pathRequest("/api/v1/generation-jobs/:jobId/status", { querystring: query({ afterVersion: { ...integer(), minimum: 0 }, waitMs: { ...integer(), minimum: 0, maximum: 25_000 } }) }) }),
   contract("POST", "/api/v1/generation-jobs/:jobId/retry", "retryGenerationJob", ["Generation Jobs"], "重试一个可恢复失败的 Generation Job", { 202: dto({ job: generationJobDto, reused: boolean() }, ["job", "reused"]), 200: dto({ job: generationJobDto, reused: boolean() }, ["job", "reused"]) }),
   contract("POST", "/api/v1/generation-jobs/:jobId/cancel", "cancelGenerationJob", ["Generation Jobs"], "停止一个等待用户澄清的 Generation Job", { 200: dto({ job: generationJobDto }, ["job"]) }),
   contract("GET", "/api/v1/generation-jobs/:jobId/outputs/:format", "getGenerationJobOutput", ["Generation Jobs"], "下载 Generation Job 输出", { 200: binaryResponse }, { request: pathRequest("/api/v1/generation-jobs/:jobId/outputs/:format", {}), extraResponses: { 404: errorResponseSchema } }),
@@ -881,6 +899,7 @@ function responseContentType(contract: RouteContract, statusCode: number, schema
 }
 
 function openApiResponse(contract: RouteContract, statusCode: number, schema: JsonSchema): Record<string, unknown> {
+  if (statusCode === 204) return { description: responseDescription(statusCode, schema) };
   const contentType = responseContentType(contract, statusCode, schema);
   return {
     description: responseDescription(statusCode, schema),

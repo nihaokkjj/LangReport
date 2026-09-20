@@ -6,7 +6,9 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node ../api/node_modules/tsx/dist/cli.mjs --test test/unit/generation-job-status-watcher.test.ts",
     "test:e2e": "playwright test -c playwright.config.ts",
+    "test:coverage": "node --experimental-test-coverage ../api/node_modules/tsx/dist/cli.mjs --test test/unit/generation-job-status-watcher.test.ts",
     "test:typecheck": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
