@@ -1,0 +1,1 @@
+ALTER TABLE "memory_candidates" ADD COLUMN "version" integer DEFAULT 1 NOT NULL;

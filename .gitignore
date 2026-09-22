@@ -9,29 +9,11 @@ coverage/
 **/playwright-report/
 .turbo/
 drizzle/
-# Keep the Phase 3 database migrations versionable while preserving older local-only snapshots.
+# Every executable migration must be versioned. Keep generated metadata snapshots allowlisted.
 !packages/db/
 !packages/db/drizzle/
 packages/db/drizzle/*
-!packages/db/drizzle/0002_organic_praxagora.sql
-!packages/db/drizzle/0003_polite_maddog.sql
-!packages/db/drizzle/0004_thin_warstar.sql
-!packages/db/drizzle/0010_plugin_usage.sql
-!packages/db/drizzle/0011_generation_cycle_audit.sql
-!packages/db/drizzle/0012_canonical_text_context_projection.sql
-!packages/db/drizzle/0013_generation_validation_layers.sql
-!packages/db/drizzle/0014_generation_job_leases.sql
-!packages/db/drizzle/0015_bailian_model_route_snapshot.sql
-!packages/db/drizzle/0018_execution_assembly.sql
-!packages/db/drizzle/0019_nervous_pestilence.sql
-!packages/db/drizzle/0020_project_onboarding.sql
-!packages/db/drizzle/0021_data_asset_intake_lifecycle.sql
-!packages/db/drizzle/0022_data_asset_snapshot_reingest.sql
-!packages/db/drizzle/0023_data_snapshot_preview_source_metadata.sql
-!packages/db/drizzle/0024_generation_readiness_gate.sql
-!packages/db/drizzle/0025_generation_readiness_proposal.sql
-!packages/db/drizzle/0026_generation_job_status_version.sql
-!packages/db/drizzle/0027_generation_result_summary.sql
+!packages/db/drizzle/*.sql
 !packages/db/drizzle/meta/
 packages/db/drizzle/meta/*
 !packages/db/drizzle/meta/_journal.json
