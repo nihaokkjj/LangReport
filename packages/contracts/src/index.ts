@@ -131,6 +131,27 @@ export const validationReportSchema = z.object({
   })
 });
 
+export const resultSummarySchema = z.object({
+  version: z.literal("v1"),
+  sourceRowCount: z.number().int().nonnegative(),
+  transformedRowCount: z.number().int().nonnegative(),
+  previewRowCount: z.number().int().nonnegative(),
+  columns: z.array(z.string()),
+  numericSummaries: z.array(z.object({
+    field: z.string().min(1),
+    count: z.number().int().nonnegative(),
+    sum: z.number().finite(),
+    min: z.number().finite(),
+    max: z.number().finite()
+  }).strict()),
+  topGroups: z.array(z.object({
+    field: z.string().min(1),
+    value: z.number().finite(),
+    dimensions: z.record(z.string(), scalarSchema)
+  }).strict()),
+  qualityWarnings: z.array(z.string())
+}).strict();
+
 export const chartArtifactStatusSchema = z.enum(["active", "archived"]);
 export const chartRevisionStatusSchema = z.enum([
   "draft",
@@ -542,6 +563,7 @@ export type ConversationIntent = z.infer<typeof conversationIntentSchema>;
 export type FlintSpec = z.infer<typeof flintSpecSchema>;
 export type ValidationIssue = z.infer<typeof validationIssueSchema>;
 export type ValidationReport = z.infer<typeof validationReportSchema>;
+export type ResultSummary = z.infer<typeof resultSummarySchema>;
 export type ChartArtifactStatus = z.infer<typeof chartArtifactStatusSchema>;
 export type ChartRevisionStatus = z.infer<typeof chartRevisionStatusSchema>;
 export type ChartReviewAction = z.infer<typeof chartReviewActionSchema>;

@@ -13,7 +13,8 @@ const rows = [
   { 月份: "2026-03", 区域: "华东", 销售额: 145000 }
 ];
 
-function createFixture() {
+function createFixture(options: { initialMessages?: Array<{ id: string; conversationId: string; role: "user" | "assistant" | "system"; content: string; createdAt: string }> } = {}) {
+  const initialMessages = options.initialMessages ?? [];
   let asset: Record<string, unknown> | null = null;
   let snapshots: Record<string, unknown>[] = [];
   let metric: Record<string, unknown> | null = null;
@@ -99,7 +100,7 @@ function createFixture() {
       if (path === `/api/v1/projects/${projectId}/evidence-blocks` && request.method() === "GET") return route.fulfill({ json: { evidence: asset && brief && metric ? [evidence()] : [] } });
       if (path === `/api/v1/projects/${projectId}/theme` && request.method() === "GET") return route.fulfill({ json: { theme: { preset: "economist" } } });
       if (path === "/api/v1/workspaces/workspace-sales/model-credential" && request.method() === "GET") return route.fulfill({ json: { credential: { workspaceId: "workspace-sales", provider: "bailian", configured: false, keySuffix: null, updatedAt: null } } });
-      if (path === `/api/v1/conversations/${conversationId}/messages` && request.method() === "GET") return route.fulfill({ json: { messages: [] } });
+      if (path === `/api/v1/conversations/${conversationId}/messages` && request.method() === "GET") return route.fulfill({ json: { messages: initialMessages } });
       if (path === `/api/v1/projects/${projectId}/data-assets/paste` && request.method() === "POST") {
         const snapshot = createSnapshot(1, "sales-sample.csv", "pasted");
         snapshots = [snapshot];
@@ -351,4 +352,33 @@ test("准备度不足时提交问题不会触发前端异常", async ({ page }) 
 
   await expect(page.getByRole("status").filter({ hasText: "问题已记录" })).toBeVisible();
   expect(pageErrors).not.toContain("Cannot read properties of undefined (reading 'id')");
+});
+
+test("长对话消息可以滚动到完整末尾", async ({ page }) => {
+  const content = Array.from({ length: 36 }, (_, index) => `第 ${index + 1} 行：这是一段需要完整阅读的分析说明。`).join("\n");
+  const fixture = createFixture({ initialMessages: [{ id: "message-long", conversationId, role: "assistant", content, createdAt: now }] });
+  await page.route("**/api/**", fixture.route);
+  await page.goto("/");
+
+  const conversationLog = page.locator(".conversation-log");
+  await conversationLog.locator("summary").click();
+  const messages = conversationLog.locator(".conversation-messages");
+  const message = conversationLog.locator(".conversation-message");
+  await expect(message).toContainText("第 36 行：这是一段需要完整阅读的分析说明。");
+
+  const layout = await messages.evaluate((container) => {
+    const messageElement = container.querySelector<HTMLElement>(".conversation-message");
+    if (!messageElement) throw new Error("长消息未渲染");
+    container.scrollTop = container.scrollHeight;
+    const containerRect = container.getBoundingClientRect();
+    const messageRect = messageElement.getBoundingClientRect();
+    return {
+      scrollable: container.scrollHeight > container.clientHeight,
+      messageBottom: messageRect.bottom,
+      containerBottom: containerRect.bottom
+    };
+  });
+
+  expect(layout.scrollable).toBe(true);
+  expect(layout.messageBottom).toBeLessThanOrEqual(layout.containerBottom + 1);
 });

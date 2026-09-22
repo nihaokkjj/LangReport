@@ -817,6 +817,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
             planValidation: job.planValidation,
             renderValidation: job.renderValidation,
             previewData: job.previewData,
+            resultSummary: job.resultSummary,
             clarificationProposal: job.clarificationProposal,
             generationAudit: job.generationAudit,
             parentGenerationJobId: job.parentGenerationJobId,
@@ -1169,6 +1170,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
         planValidation: job.planValidation,
         renderValidation: job.renderValidation,
         previewData: job.previewData,
+        resultSummary: job.resultSummary,
         generationAudit: job.generationAudit,
         vegaLiteSpec: job.vegaLiteSpec,
         outputs: job.outputs
@@ -1238,7 +1240,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
   app.get<{ Params: { jobId: string; format: string } }>("/api/v1/generation-jobs/:jobId/outputs/:format", async (request, reply) => {
     try {
       const format = request.params.format;
-      if (!(["png", "svg", "vegaLite"] as string[]).includes(format)) throw new DataAssetError("不支持的导出格式");
+      if (!(["png", "svg", "html", "vegaLite"] as string[]).includes(format)) throw new DataAssetError("不支持的导出格式");
       const [job] = await db.select().from(generationJobs).where(eq(generationJobs.id, request.params.jobId)).limit(1);
       if (!job || job.status !== "succeeded" || !job.outputs) throw new DataAssetError("生成结果尚未就绪");
       const access = await getProjectAccess(job.projectId, userIdFromRequest(request));
@@ -1247,11 +1249,17 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
       if (access.effectiveRole === "viewer" && revision?.status !== "approved") {
         throw new ChartServiceError("REVISION_NOT_PUBLISHED", "图表版本尚未发布", 404);
       }
-      const outputs = job.outputs as { png?: string; svg?: string; vegaLite?: string };
+      const outputs = job.outputs as { png?: string; svg?: string; html?: string; vegaLite?: string };
       const key = outputs[format as keyof typeof outputs];
       if (!key) throw new DataAssetError("导出文件不存在");
       const body = await getObject(key);
-      const contentType = format === "png" ? "image/png" : format === "svg" ? "image/svg+xml" : "application/json";
+      const contentType = format === "png"
+        ? "image/png"
+        : format === "svg"
+          ? "image/svg+xml"
+          : format === "html"
+            ? "text/html; charset=utf-8"
+            : "application/json";
       return reply.header("content-type", contentType).header("content-disposition", `attachment; filename="langreport-${request.params.jobId}.${format === "vegaLite" ? "json" : format}"`).send(body);
     } catch (error) {
       return sendDataError(reply, error);

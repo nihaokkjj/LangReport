@@ -54,7 +54,7 @@ _Avoid_: Project Rule、Auto Memory、Final Approval
 **Plan Validation**：对 TransformPlan、Flint Spec 与其字段、语义和 Visual Template 约束的校验记录。它证明候选图表计划可以进入渲染，不证明渲染产物已经可用。
 _Avoid_: Render Check、Final Approval
 
-**Render Validation**：对已生成的 Vega-Lite、SVG 和 PNG 图表产物的校验记录。它证明实际渲染输出可用，不替代 Plan Validation 或 Review。
+**Render Validation**：对已生成的 Vega-Lite、SVG、PNG 和静态 HTML 图表产物的校验记录。它证明实际渲染输出可用，不替代 Plan Validation 或 Review。
 _Avoid_: Plan Check、Review Approval
 
 **TransformPlan**：根据 Analysis Brief 和 Metric Definition 形成的结构化数据变换计划，由受限执行者执行；它不改变 Data Snapshot。

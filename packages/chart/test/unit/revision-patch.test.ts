@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ChartEditPatch, FlintSpec } from "@langreport/contracts";
-import { applyRevisionPatch } from "../../src/index.js";
+import type { ChartEditPatch, FlintSpec, ResultSummary } from "@langreport/contracts";
+import { applyRevisionPatch, buildEvidenceFinding } from "../../src/index.js";
 
 const sourceSpec: FlintSpec = {
   version: "v1",
@@ -53,4 +53,22 @@ test("the Chart public patch returns isolated material for a new Revision", () =
   assert.equal(sourceSpec.chartSpec.subtitle, "原始副标题");
   assert.equal(sourceSpec.chartSpec.chartType, "Line Chart");
   assert.equal(sourceSpec.chartSpec.encodings.x.field, "月份");
+});
+
+test("Evidence finding reads the frozen complete result summary", () => {
+  const summary: ResultSummary = {
+    version: "v1",
+    sourceRowCount: 600,
+    transformedRowCount: 600,
+    previewRowCount: 500,
+    columns: ["月份", "销售额_sum"],
+    numericSummaries: [{ field: "销售额_sum", count: 600, sum: 180300, min: 1, max: 600 }],
+    topGroups: [{ field: "销售额_sum", value: 600, dimensions: { 月份: "2026-600" } }],
+    qualityWarnings: []
+  };
+
+  assert.equal(
+    buildEvidenceFinding(sourceSpec, summary),
+    "当前快照产生 600 个完整变换结果行，2026-600 的 销售额_sum 数值最高（600）。该候选发现不解释因果，也不替代人工审核。"
+  );
 });

@@ -208,12 +208,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .trace-grid strong { font-size: var(--type-body-sm); font-weight: 600; }
 .trace-grid small { font-size: var(--type-meta); line-height: 1.35; }
 
-.conversation-log { display: flex; max-height: min(34vh, 360px); min-height: 0; flex: 1 1 0; flex-direction: column; margin-top: 16px; overflow: hidden; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.conversation-log { --conversation-max-height: min(34vh, 360px); display: flex; max-height: var(--conversation-max-height); min-height: 0; flex: 0 0 auto; flex-direction: column; margin-top: 16px; overflow: hidden; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .conversation-log:not([open]) { flex: 0 0 auto; }
 .conversation-log summary { display: flex; align-items: center; gap: 10px; list-style: none; cursor: pointer; padding: 12px 0; }
 .conversation-log summary::-webkit-details-marker { display: none; }
 .conversation-log summary strong { flex: 1; font-size: var(--type-label); font-weight: 600; }
-.conversation-messages { display: grid; min-height: 0; flex: 1 1 auto; gap: 1px; overflow-y: auto; padding-bottom: 12px; }
+.conversation-messages { display: grid; max-height: calc(var(--conversation-max-height) - 55px); min-height: 0; flex: 1 1 auto; gap: 1px; overflow-y: auto; padding-bottom: 12px; }
 .conversation-message { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 11px 0; border-top: 1px solid var(--border); }
 .conversation-message > span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--canvas); font-family: var(--font-mono); font-size: var(--type-micro); }
 .conversation-message.from-user > span { background: var(--surface-muted); color: var(--ink); }
@@ -429,7 +429,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .composer-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .composer-actions button { width: 100%; min-height: 44px; }
   .prompt-row { justify-content: center; }
-  .conversation-log { max-height: min(42vh, 320px); flex: 0 0 auto; }
+  .conversation-log { --conversation-max-height: min(42vh, 320px); max-height: var(--conversation-max-height); flex: 0 0 auto; }
   .conversation-log[open] { flex: 0 0 auto; }
   .context-rail { top: 0; width: min(92vw, 360px); padding-top: 18px; transform: translateX(100%); }
   .context-rail.mobile-open { transform: translateX(0); }

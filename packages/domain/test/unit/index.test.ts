@@ -63,7 +63,7 @@ test("chart edit patch returns a new spec without mutating the source", () => {
 });
 
 test("revision comparison is deterministic", () => {
-  const left = { snapshotId: "s1", transformPlan: { b: 1, a: 2 }, fieldLineage: [], flintSpec: spec, themeSnapshot: { version: 1 }, vegaLiteSpec: {}, outputObjects: {} };
+  const left = { snapshotId: "s1", transformPlan: { b: 1, a: 2 }, fieldLineage: [], flintSpec: spec, themeSnapshot: { version: 1 }, vegaLiteSpec: {}, resultSummary: null, outputObjects: {} };
   const right = { ...left, transformPlan: { a: 2, b: 1 } };
   assert.equal(compareRevisions("r1", left, "r2", right).sections.transformPlan.changed, false);
 });

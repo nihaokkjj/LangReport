@@ -1,6 +1,11 @@
 import { parse } from "csv-parse/sync";
 import * as XLSX from "xlsx";
-import { transformPlanSchema, type TransformPlan } from "@langreport/contracts";
+import {
+  resultSummarySchema,
+  transformPlanSchema,
+  type ResultSummary,
+  type TransformPlan
+} from "@langreport/contracts";
 
 export const MAX_DATA_ROWS = 1_000_000;
 export const MAX_DATA_COLUMNS = 200;
@@ -48,6 +53,73 @@ export type TransformResult = {
   lineage: FieldLineage[];
   steps: TransformStepResult[];
 };
+
+export function summarizeTransformResult(input: {
+  sourceRowCount: number;
+  transform: TransformResult;
+  previewLimit?: number;
+  qualityWarnings?: string[];
+}): ResultSummary {
+  const previewLimit = input.previewLimit ?? 500;
+  if (!Number.isInteger(input.sourceRowCount) || input.sourceRowCount < 0) {
+    throw new TransformExecutionError("sourceRowCount 必须是非负整数");
+  }
+  if (!Number.isInteger(previewLimit) || previewLimit < 0) {
+    throw new TransformExecutionError("previewLimit 必须是非负整数");
+  }
+
+  const statsByField = new Map<string, {
+    count: number;
+    sum: number;
+    min: number;
+    max: number;
+    topRow: DataRow;
+  }>();
+  for (const field of input.transform.columns) {
+    for (const row of input.transform.rows) {
+      const value = row[field];
+      if (typeof value !== "number" || !Number.isFinite(value)) continue;
+      const stats = statsByField.get(field);
+      if (!stats) {
+        statsByField.set(field, { count: 1, sum: value, min: value, max: value, topRow: row });
+        continue;
+      }
+      stats.count += 1;
+      stats.sum += value;
+      stats.min = Math.min(stats.min, value);
+      if (value > stats.max) {
+        stats.max = value;
+        stats.topRow = row;
+      }
+    }
+  }
+  const numericFields = new Set(statsByField.keys());
+  const numericSummaries: ResultSummary["numericSummaries"] = [];
+  const topGroups: ResultSummary["topGroups"] = [];
+  for (const field of input.transform.columns) {
+    const stats = statsByField.get(field);
+    if (!stats) continue;
+    numericSummaries.push({ field, count: stats.count, sum: stats.sum, min: stats.min, max: stats.max });
+    topGroups.push({
+      field,
+      value: stats.max,
+      dimensions: Object.fromEntries(
+        Object.entries(stats.topRow).filter(([column]) => !numericFields.has(column))
+      )
+    });
+  }
+
+  return resultSummarySchema.parse({
+    version: "v1",
+    sourceRowCount: input.sourceRowCount,
+    transformedRowCount: input.transform.rows.length,
+    previewRowCount: Math.min(input.transform.rows.length, previewLimit),
+    columns: [...input.transform.columns],
+    numericSummaries,
+    topGroups,
+    qualityWarnings: [...(input.qualityWarnings ?? [])]
+  });
+}
 
 export class TransformExecutionError extends Error {
   constructor(message: string, public readonly stepIndex?: number) {

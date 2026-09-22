@@ -16,6 +16,19 @@ export type RenderedChart = {
   png: Buffer;
 };
 
+export type StaticSvgHtmlInput = {
+  svg: string;
+  revisionId: string;
+  revision: number;
+  title: string;
+  finding: string;
+  snapshotId: string;
+  metricDefinition?: unknown;
+  theme: string;
+  themeVersion: string;
+  generatedAt?: string;
+};
+
 export type RendererAdapter = {
   id: string;
   version: string;
@@ -86,6 +99,88 @@ export function validateRenderedChart(rendered: RenderedChart): ValidationRecord
     status: errors.length === 0 ? "passed" : "failed",
     errors,
     validatorVersion: "flint-render-v1",
+    checkedAt: new Date().toISOString()
+  };
+}
+
+/**
+ * Build the first-version downloadable HTML artifact. It deliberately embeds
+ * only server-rendered SVG and escaped revision metadata; it does not contain
+ * a script, external stylesheet, or executable user content.
+ */
+export function createStaticSvgHtml(input: StaticSvgHtmlInput): string {
+  const svg = input.svg.trim();
+  if (!svg) throw new Error("静态 HTML 缺少 SVG 输出");
+  if (containsExecutableMarkup(svg)) throw new Error("SVG 输出包含不允许的可执行标记");
+  const metric = metricSummary(input.metricDefinition);
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="LangReport static revision export">
+    <title>${escapeHtml(input.title)} · LangReport</title>
+    <style>
+      :root { color-scheme: light; font-family: Inter, "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17212b; background: #f5f7fa; }
+      body { margin: 0; padding: 32px; }
+      main { max-width: 1080px; margin: 0 auto; background: #fff; border: 1px solid #d7dee6; border-radius: 12px; padding: 32px; box-sizing: border-box; }
+      h1, h2, p { margin: 0; }
+      h1 { font-size: 26px; line-height: 1.25; font-weight: 600; }
+      h2 { font-size: 16px; line-height: 1.5; font-weight: 600; margin-bottom: 8px; }
+      .eyebrow, .meta { font-family: "JetBrains Mono", Consolas, monospace; font-size: 11px; line-height: 1.4; letter-spacing: .2px; color: #5b6875; }
+      .eyebrow { margin-bottom: 8px; }
+      .chart { margin: 24px 0; overflow-x: auto; }
+      .chart svg { display: block; max-width: 100%; height: auto; }
+      .finding { border-top: 1px solid #e8edf2; padding-top: 20px; font-size: 16px; line-height: 1.6; }
+      .metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e8edf2; }
+      .metadata span { display: block; }
+      @media (max-width: 640px) { body { padding: 12px; } main { padding: 20px; } .metadata { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="eyebrow">LANGREPORT / FIXED REVISION / R${escapeHtml(String(input.revision))}</div>
+      <h1>${escapeHtml(input.title)}</h1>
+      <div class="chart" aria-label="${escapeHtml(input.title)}">${svg}</div>
+      <section class="finding" aria-labelledby="finding-title">
+        <h2 id="finding-title">发现</h2>
+        <p>${escapeHtml(input.finding)}</p>
+      </section>
+      <div class="metadata" aria-label="证据来源">
+        <div><span class="meta">REVISION</span><span>${escapeHtml(input.revisionId)}</span></div>
+        <div><span class="meta">SNAPSHOT</span><span>${escapeHtml(input.snapshotId)}</span></div>
+        <div><span class="meta">METRIC</span><span>${escapeHtml(metric)}</span></div>
+        <div><span class="meta">THEME</span><span>${escapeHtml(`${input.theme} · ${input.themeVersion}`)}</span></div>
+        <div><span class="meta">GENERATED</span><span>${escapeHtml(generatedAt)}</span></div>
+      </div>
+    </main>
+  </body>
+</html>`;
+}
+
+export function validateStaticSvgHtml(value: string): ValidationRecord {
+  const errors: ValidationRecord["errors"] = [];
+  if (!value.trim()) {
+    errors.push({ code: "RENDER_HTML_EMPTY", path: "html", message: "静态 HTML 输出为空", severity: "error" });
+  } else {
+    if (!/^<!doctype html>/i.test(value.trim()) || !/<html[\s>]/i.test(value) || !/<\/html>/i.test(value)) {
+      errors.push({ code: "RENDER_HTML_INVALID", path: "html", message: "HTML 输出缺少完整文档结构", severity: "error" });
+    }
+    if (!/<svg[\s>]/i.test(value) || !/<\/svg>/i.test(value)) {
+      errors.push({ code: "RENDER_HTML_SVG_MISSING", path: "html", message: "HTML 输出缺少 SVG 内容", severity: "error" });
+    }
+    if (containsExecutableMarkup(value) || /<script\b|javascript:|\son[a-z]+\s*=/i.test(value)) {
+      errors.push({ code: "RENDER_HTML_UNSAFE", path: "html", message: "HTML 输出包含不允许的脚本或事件处理器", severity: "error" });
+    }
+    if (/<(?:link|img|iframe|object|embed)\b[^>]*(?:src|href)\s*=/i.test(value) || /\b(?:src|href|xlink:href)\s*=\s*["'](?:https?:|\/\/)/i.test(value) || /@import\b|url\(\s*["']?(?:https?:|\/\/)/i.test(value)) {
+      errors.push({ code: "RENDER_HTML_EXTERNAL_RESOURCE", path: "html", message: "HTML 输出不能依赖外部资源", severity: "error" });
+    }
+  }
+  return {
+    status: errors.length === 0 ? "passed" : "failed",
+    errors,
+    validatorVersion: "langreport-static-svg-html-v1",
     checkedAt: new Date().toISOString()
   };
 }
@@ -229,6 +324,22 @@ function formatNumber(value: number): string {
 
 function escapeXml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[character] ?? character);
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
+}
+
+function containsExecutableMarkup(value: string): boolean {
+  return /<script\b|javascript:|\son[a-z]+\s*=/i.test(value);
+}
+
+function metricSummary(value: unknown): string {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return "未提供";
+  const record = value as Record<string, unknown>;
+  const name = typeof record.name === "string" ? record.name : "未命名指标";
+  const formula = typeof record.formula === "string" ? record.formula : "未提供公式";
+  return `${name} · ${formula}`;
 }
 
 function readNestedString(value: Record<string, unknown>, path: string[]): string | undefined {

@@ -271,7 +271,7 @@ export async function registerChartRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Params: { revisionId: string; format: string } }>("/api/v1/chart-revisions/:revisionId/outputs/:format", async (request, reply) => {
     try {
-      if (!("png" === request.params.format || "svg" === request.params.format || "vegaLite" === request.params.format)) {
+      if (!("png" === request.params.format || "svg" === request.params.format || "html" === request.params.format || "vegaLite" === request.params.format)) {
         throw new ChartServiceError("OUTPUT_FORMAT_UNSUPPORTED", "不支持的导出格式");
       }
       const record = await recordRevisionExport({ revisionId: request.params.revisionId, userId: userIdFromRequest(request), format: request.params.format });
@@ -279,7 +279,13 @@ export async function registerChartRoutes(app: FastifyInstance): Promise<void> {
       const key = outputs[request.params.format];
       if (typeof key !== "string") throw new ChartServiceError("OUTPUT_NOT_FOUND", "导出文件不存在", 404);
       const body = await getObject(key);
-      const contentType = request.params.format === "png" ? "image/png" : request.params.format === "svg" ? "image/svg+xml" : "application/json";
+      const contentType = request.params.format === "png"
+        ? "image/png"
+        : request.params.format === "svg"
+          ? "image/svg+xml"
+          : request.params.format === "html"
+            ? "text/html; charset=utf-8"
+            : "application/json";
       return reply.header("content-type", contentType)
         .header("content-disposition", `attachment; filename="langreport-${record.revision.id}.${request.params.format === "vegaLite" ? "json" : request.params.format}"`)
         .send(body);

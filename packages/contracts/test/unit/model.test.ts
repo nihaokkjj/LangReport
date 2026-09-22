@@ -12,6 +12,7 @@ import {
   modelRunSnapshotSchema,
   persistedModelRequestSchema,
   preparedModelContextSchema,
+  resultSummarySchema,
   type ModelGateway,
   type RuntimeModelRequest,
   generationValidationSchema,
@@ -319,6 +320,24 @@ test("execution assembly is versioned, non-secret, and does not fabricate legacy
     ...assembly,
     structuredOutput: { ...assembly.structuredOutput, rawProviderResponse: "must-not-persist" }
   }));
+});
+
+test("result summary preserves complete transformed facts without preview rows", () => {
+  const summary = resultSummarySchema.parse({
+    version: "v1",
+    sourceRowCount: 600,
+    transformedRowCount: 600,
+    previewRowCount: 500,
+    columns: ["月份", "销售额"],
+    numericSummaries: [{ field: "销售额", count: 600, sum: 180300, min: 1, max: 600 }],
+    topGroups: [{ field: "销售额", value: 600, dimensions: { 月份: "2026-600" } }],
+    qualityWarnings: []
+  });
+
+  assert.equal(summary.transformedRowCount, 600);
+  assert.equal(summary.previewRowCount, 500);
+  assert.equal(summary.numericSummaries[0]?.max, 600);
+  assert.throws(() => resultSummarySchema.parse({ ...summary, rows: [{ 月份: "不应持久化" }] }));
 });
 
 test("persisted request excludes runtime parser and cancellation objects", () => {

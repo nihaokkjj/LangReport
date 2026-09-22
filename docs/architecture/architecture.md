@@ -13,7 +13,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ## 2. MVP 边界
 
-第一阶段目标支持咨询 Project、Project 内 Conversation、CSV/XLSX/JSON/粘贴表格、Analysis Brief、已确认 Metric Definition、有限 TransformPlan、Line/Bar/Area 主图表、Evidence Block、Visual Template、Chart Revision、Review，以及浏览器交互预览和固定 Revision 导出。当前渲染/下载合同已实现 Vega-Lite JSON、PNG 和 SVG；HTML 尚未实现，是第一阶段未完成项。
+第一阶段目标支持咨询 Project、Project 内 Conversation、CSV/XLSX/JSON/粘贴表格、Analysis Brief、已确认 Metric Definition、有限 TransformPlan、Line/Bar/Area 主图表、Evidence Block、Visual Template、Chart Revision、Review，以及浏览器交互预览和固定 Revision 导出。当前渲染/下载合同已实现 Vega-Lite JSON、PNG、SVG 和服务端生成的静态 HTML；HTML 是自包含 SVG 包装页，不执行用户脚本。
 
 第一阶段不支持数据库、外部 API、实时数据源、跨文件 Join、Dashboard、实时多人编辑、Workspace 外部公开分享、用户自定义服务器端代码、插件市场、完整 PPT 排版或强监管行业合规承诺。单次 Generation Cycle 只绑定一个 Data Snapshot 和一个 Visual Template 版本，并创建一个主 Evidence Block。
 
@@ -94,9 +94,9 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 2. API 的 Data 模块解析指定 Data Asset，生成 Data Snapshot 和字段画像；当前没有独立的 Data Worker 部署单元。
 3. Generation Worker 原子领取带 Worker Lease 和 Fencing Token 的 Job。进入 `GenerationCycle` 前，Worker 通过 `Snapshot access module` 校验 `Generation Job → Data Snapshot → Data Asset → Project` 关系、来源 Conversation 和当前 Conversation-scoped canonical object key，再读取并验证快照 payload。该 module 只向 Workflow 返回 `rows`、`profiles` 以及 Snapshot/Asset 标识；原始 `Buffer`、JSON 解析细节和 object key 不跨 seam 泄漏。之后 Worker 只传递 Job 已固化的 Brief、Metric Definition、Data Snapshot、Memory、Conversation projection、Visual Template、Plugin Context、Model Route Snapshot 和 Execution Assembly；`GenerationCycle` 在内部构造 `PreparedModelContext`，按 `canonical_text_context` 交给 Model Gateway，不直接回放供应商私有历史字段或重新读取可变 Conversation。
 4. `GenerationCycle` 通过内部有限 `EvidenceGenerationGraph` 统一形成 `drafted`、`needs_clarification` 或 `failed` 结果；节点执行 TransformPlan、记录每一步输入/输出/空值处理/字段血缘，并确定性编译和校验 Flint Spec。Graph 不直接写数据库，业务提交仍由持有有效 Lease 的 Worker 完成。
-5. 系统根据通过计划校验的 TransformPlan 和固定 Visual Template 确定性编译 Flint Spec，并将结构、语义、数据字段和模板规则写入 Job 的 `planValidation`；渲染完成后将 Vega-Lite、SVG、PNG 产物检查写入独立的 `renderValidation`。
+5. 系统根据通过计划校验的 TransformPlan 和固定 Visual Template 确定性编译 Flint Spec，并将结构、语义、数据字段和模板规则写入 Job 的 `planValidation`；渲染完成后将 Vega-Lite、SVG、PNG 和静态 HTML 产物检查写入独立的 `renderValidation`。
 6. 计划或渲染校验失败时最多执行两轮受控修复；模型能力降级、工具调用失败或协议不兼容时，结束当前 Cycle 并提示用户选择模型。用户补充澄清或选择新模型后创建新的 Generation Cycle，不在原 Job 上覆盖输入。
-7. Generation Worker 交接到 `rendering` 时释放租约；Render Worker 重新原子领取同一 Job，并按 Job 中冻结的 Renderer 名称从内部 `RendererAdapter` registry 解析 Adapter。当前 registry 只注册 `vega-lite`，由固定版本的 `flint-chart` 编译 Flint Spec，生成 Vega-Lite JSON、SVG 和 PNG；HTML 尚未实现。
+7. Generation Worker 交接到 `rendering` 时释放租约；Render Worker 重新原子领取同一 Job，并按 Job 中冻结的 Renderer 名称从内部 `RendererAdapter` registry 解析 Adapter。当前 registry 只注册 `vega-lite`，由固定版本的 `flint-chart` 编译 Flint Spec，生成 Vega-Lite JSON、SVG 和 PNG，再使用已验证 SVG 生成固定 Revision 的静态 HTML 包装页。
 8. 系统以当前、未超期 Worker Lease 的 owner、token 和 fencing token 条件写入不可变 Chart Revision 和 Evidence Block 的完成状态，保存输入、口径、计划、规范、字段血缘、Visual Template 快照、输出对象地址、校验结果和生成版本。
 
 ## 6. Flint 集成边界
@@ -113,7 +113,7 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ### 私有对象存储
 
-存储原始上传文件、标准化快照、Vega-Lite JSON、PNG、SVG 和其他导出产物。对象路径必须包含 Workspace 和 Project 作用域，访问使用短时授权地址或 Worker 的受控凭据。
+存储原始上传文件、标准化快照、Vega-Lite JSON、PNG、SVG、静态 HTML 和其他导出产物。对象路径必须包含 Workspace 和 Project 作用域，访问使用短时授权地址或 Worker 的受控凭据。
 
 由 Conversation 发起的上传使用以下可审计路径：
 

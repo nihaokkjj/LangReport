@@ -10,6 +10,7 @@ import {
   detectSourceType,
   executeTransformPlan,
   parseData,
+  summarizeTransformResult,
   type DataRow,
   type FieldLineage
 } from "../../src/index.js";
@@ -131,4 +132,29 @@ test("unsupported source types and missing TransformPlan fields fail with an act
     assert.match(error.message, /第 1 步缺少字段：不存在/);
     return true;
   });
+});
+
+test("result summary uses all transformed rows while preview remains bounded", () => {
+  const rows = Array.from({ length: 600 }, (_, index) => ({
+    月份: `2026-${String(index + 1).padStart(3, "0")}`,
+    销售额: index + 1
+  }));
+  const transform = executeTransformPlan({
+    version: "v1",
+    rationale: "保留完整结果用于摘要",
+    steps: [],
+    expectedColumns: ["月份", "销售额"]
+  }, rows);
+
+  const summary = summarizeTransformResult({ sourceRowCount: rows.length, transform, previewLimit: 500 });
+
+  assert.equal(summary.sourceRowCount, 600);
+  assert.equal(summary.transformedRowCount, 600);
+  assert.equal(summary.previewRowCount, 500);
+  assert.deepEqual(summary.numericSummaries, [
+    { field: "销售额", count: 600, sum: 180300, min: 1, max: 600 }
+  ]);
+  assert.deepEqual(summary.topGroups, [
+    { field: "销售额", value: 600, dimensions: { 月份: "2026-600" } }
+  ]);
 });

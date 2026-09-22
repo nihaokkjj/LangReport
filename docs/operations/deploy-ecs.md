@@ -59,7 +59,32 @@ docker compose --env-file .env.production -f infra/docker-compose.prod.yml run -
 
 只读预览可将确认变量替换为 `PROVISION_DRY_RUN=true`。只有迁移或修复历史数据时才额外设置 `PROVISION_WORKSPACE_ID`；普通用户初始化不要复用已有 Workspace，脚本不会因为重复执行而提升已有成员权限。
 
-## 4. Phase 5 生产 Smoke 验收
+## 4. 第一阶段发布前真实百炼门禁
+
+正式发布不能使用 `.env.production.example` 的 deterministic 默认值。发布环境必须先在应用仓库目录设置以下变量，并让它们与即将启动的 Generation Worker 使用同一套路由配置：
+
+```text
+GENERATION_MODE=llm
+BAILIAN_BASE_URL=https://<bailian-endpoint>/compatible-mode/v1
+BAILIAN_MODEL_ID=<model-id>
+BAILIAN_STRUCTURED_OUTPUT=json_schema
+BAILIAN_API_KEY=<worker-only-secret>
+```
+
+在 `docker compose up` 之前执行一次真实结构化调用：
+
+```sh
+set -a
+. ./.env.production
+set +a
+pnpm phase1:release-gate
+```
+
+门禁必须输出 `{"status":"passed","gate":"phase1-release-gate",...}` 才允许继续启动或切换生产服务。它会验证百炼认证、端点、模型 ID、结构化输出合同和成功的 Model Invocation；输出只包含脱敏 request ID、耗时和 finish reason，不打印 API Key、提示词或模型原文。门禁失败时停止发布，不得用 deterministic 结果替代。`BAILIAN_API_KEY` 只注入 Generation Worker，不能注入 Web 或 API。
+
+该命令会产生一次真实模型调用费用，应使用合成上下文和发布预算执行。业务质量、模型延迟和配额由运维另行监控，但认证和结构化响应门禁不能跳过。
+
+## 5. Phase 5 生产 Smoke 验收
 
 完成登录网关配置和数据库初始化后，在可访问 API 的环境执行一次：
 
@@ -86,7 +111,7 @@ pnpm phase5:e2e
 
 脚本会验证精确插件上下文、插件 Theme、Generation Worker → Render Worker → Revision、SVG 导出以及撤销后的历史快照保留；认证凭据不会打印。
 
-## 5. Vercel 环境变量
+## 6. Vercel 环境变量
 
 在 Vercel 的 Production 环境设置：
 
@@ -100,6 +125,7 @@ NEXT_PUBLIC_API_URL=/api
 ## 注意事项
 
 - API 生产边界自动校验签名 JWT 并拒绝可伪造的 `x-user-id`；部署前必须完成外部登录网关的签发、密钥配置和真实登录回归，未完成前不要正式公网开放。
+- 第一阶段正式发布必须先通过 `pnpm phase1:release-gate`；当前仓库的 deterministic 配置只适用于离线和回归测试。
 - 当前上传接口会将文件读入内存，2 核 4 GiB 服务器不适合高并发大文件上传。
 - 2 核 4 GiB ECS 建议 Generation Worker 和 Render Worker 各运行一个实例；增加实例前先观察内存和任务耗时。
 - `db:push` 只适合开发阶段；正式生产发布必须执行版本化 `db:migrate`，并在备份/staging 环境完成 `db:verify`。

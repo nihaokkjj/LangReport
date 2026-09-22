@@ -19,7 +19,7 @@ Consulting Project
   → Review / Export
 ```
 
-第一阶段的硬边界是：单 Project、单 Data Snapshot、单 Analysis Brief、每次 Cycle 一个主图表证据模块。目标支持有限的表格变换、Line/Bar/Area 主图表、项目 Visual Template、浏览器交互预览、PNG/SVG/HTML 固定 Revision 输出和异步审核；当前代码已实现 Vega-Lite JSON、PNG 和 SVG，HTML 仍是未完成项。数据库/实时数据、跨文件 Join、Dashboard、实时协作、公开分享、任意服务器端代码和完整 PPT 排版暂不进入第一阶段。
+第一阶段的硬边界是：单 Project、单 Data Snapshot、单 Analysis Brief、每次 Cycle 一个主图表证据模块。目标支持有限的表格变换、Line/Bar/Area 主图表、项目 Visual Template、浏览器交互预览、PNG/SVG/静态 HTML/Vega-Lite JSON 固定 Revision 输出和异步审核。HTML 首版由 Render Worker 生成自包含的静态 SVG 包装页，用户文本会转义，不加载外部资源，也不执行用户脚本。数据库/实时数据、跨文件 Join、Dashboard、实时协作、公开分享、任意服务器端代码和完整 PPT 排版暂不进入第一阶段。
 
 ## 文档
 
@@ -39,4 +39,5 @@ Consulting Project
 - [Phase 4 设计与实施](./docs/history/phase4-design.md)
 - [Phase 5 设计与实施](./docs/history/phase5-design.md)
 - [开发环境](./docs/operations/development-setup.md)
+- [ECS 发布与真实百炼门禁](./docs/operations/deploy-ecs.md)
 - [架构决策记录](./docs/adr/)

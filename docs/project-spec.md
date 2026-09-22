@@ -34,7 +34,7 @@ LangReport 第一阶段服务“咨询项目报告”这一条垂直闭环：用
 | `packages/data-engine` | CSV/XLSX/JSON 解析、字段画像和预览 | 不改写 Data Snapshot |
 | `packages/generation` | Generation Cycle、计划生成、TransformPlan、Flint Spec 和校验 | 受限变换和有限自动修复 |
 | `packages/chart` | Chart Artifact/Chart Revision 领域写入规则 | Revision append-only，Approved 不可变 |
-| `packages/flint-adapter` | Flint 编译及 SVG/PNG 输出边界 | `flint-chart` 只在此包和 Render Worker 使用 |
+| `packages/flint-adapter` | Flint 编译及 Vega-Lite/SVG/PNG/静态 HTML 输出边界 | `flint-chart` 只在此包和 Render Worker 使用；HTML 不执行用户脚本 |
 | `packages/harness` | 结构化模型输出 seam 和依赖边界 | 不依赖 LangReport 应用包 |
 | `packages/model-gateway` | 模型路由和供应商调用边界 | 不把密钥写入 Generation Job 或审计正文 |
 | `packages/memory` | Conversation/Project/Workspace Memory 规则 | Memory Candidate 未确认不进入长期检索 |
@@ -55,7 +55,7 @@ Web
       → needs_clarification / failed / drafted
   → Chart Revision + Evidence Block
   → Render Worker
-      → Vega-Lite / SVG / PNG
+  → Vega-Lite / SVG / PNG / 静态 HTML
   → Web review and fixed-Revision export
 ```
 
@@ -77,9 +77,9 @@ Generation Job 状态同步由 `statusVersion/statusChangedAt` 表示用户可�
 
 ## 当前实现事实与已知缺口
 
-- 已实现的数据上传/解析、字段画像、Generation Cycle 的确定性 seam、Flint 编译以及 Vega-Lite JSON、PNG、SVG 输出边界。
+- 已实现的数据上传/解析、字段画像、Generation Cycle 的确定性 seam、Flint 编译以及 Vega-Lite JSON、PNG、SVG、静态 HTML 输出边界。
 - 现有生产配置、Workspace 私有化和插件页面等工作树修改属于本次治理初始化前已经存在的用户修改，本次不覆盖、不重构。
-- HTML 导出仍是第一阶段产品规格中明确的未完成项；不要在治理文档中把它标记为已验收。
+- HTML 首版由 Render Worker 从已验证 SVG 生成自包含静态包装页；输出对象绑定固定 Revision，用户文本经过转义且不加载外部资源。
 - 现有 `docs/` 以 `docs/README.md` 为根导航；项目基线和变更记录分别位于本文件与 `docs/changes/`。
 
 ## 开发与验证入口
@@ -96,6 +96,8 @@ Generation Job 状态同步由 `statusVersion/statusChangedAt` 表示用户可�
 | 集成测试 | `pnpm test:integration` |
 | Web E2E | `pnpm test:e2e` |
 | 数据库迁移验证 | `pnpm db:verify` |
+| 第一阶段真实 HTTP 闭环 | `pnpm phase1:smoke` |
+| 发布前真实百炼门禁 | `pnpm phase1:release-gate` |
 
 数据库、Docker、环境变量和本地服务的操作说明见 [开发环境](./operations/development-setup.md)。涉及 UI 变更时，还必须遵守根目录 [DESIGN.md](../DESIGN.md) 和 `apps/web/AGENTS.md`。
 
@@ -110,4 +112,3 @@ Generation Job 状态同步由 `statusVersion/statusChangedAt` 表示用户可�
 | 为什么采用某个架构取舍？ | [docs/adr/](./adr/) |
 | 如何接收和执行一次中大型变更？ | [docs/changes/README.md](./changes/README.md) |
 | 这次变更改了什么、如何验收？ | 对应 `docs/changes/<change-id>/` |
-

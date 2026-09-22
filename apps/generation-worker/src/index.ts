@@ -4,7 +4,7 @@ import { GenerationCycle, validateCanonicalTextContextProjection, validateGenera
 import { GenerationJobLeaseLostError, assertGenerationJobLease, claimGenerationJobLease, db, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, generationJobs, memoryExtractionJobs, projects, recoverExpiredGenerationJobLeases, startGenerationJobLeaseHeartbeat, updateGenerationJobUnderLease, workspaceModelCredentials, type GenerationJobLease, type GenerationJobStatus } from "@langreport/db";
 import { getObject } from "@langreport/storage";
 import { applyRevisionPatch } from "@langreport/chart";
-import { executeTransformPlan } from "@langreport/data-engine";
+import { executeTransformPlan, summarizeTransformResult } from "@langreport/data-engine";
 import { chartEditPatchSchema, flintSpecSchema, generationDecisionSchema, memoryContextSchema, modelRouteSnapshotSchema, pluginUsageSchema, themePresetSchema, transformPlanSchema, type ModelRouteSnapshot, type TransformPlan, type ValidationRecord, type ValidationReport } from "@langreport/contracts";
 import { getMemoryContextForGeneration, processMemoryExtractionJob } from "@langreport/memory";
 import { createBailianQwenGateway, decryptWorkspaceModelCredential, ModelCredentialEncryptionError, ModelGatewayConfigurationError, resolveModelRouteSnapshot } from "@langreport/model-gateway";
@@ -125,7 +125,15 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
     }
     if (cycleResult.status === "failed") { await failJob(jobId, lease, cycleResult.error.code, cycleResult.error.message, undefined, cycleResult.audit); return; }
     const artifacts = cycleResult.artifacts;
-    await setStatus(jobId, lease, "transforming", { generationAudit: cycleResult.audit, ...validationFieldsFromAudit(cycleResult.audit), intent: artifacts.intent, transformPlan: artifacts.plan, fieldLineage: artifacts.transform.lineage, validation: artifacts.validation, pluginUsage: artifacts.pluginUsage, repairCount: artifacts.repairCount, previewData: { columns: artifacts.transform.columns, rows: artifacts.transform.rows.slice(0, 500), steps: artifacts.transform.steps } });
+    const resultSummary = summarizeTransformResult({
+      sourceRowCount: frozenSnapshot.rows.length,
+      transform: artifacts.transform,
+      previewLimit: 500,
+      qualityWarnings: artifacts.validation.issues
+        .filter((issue) => issue.severity === "warning")
+        .map((issue) => `${issue.code}: ${issue.message}`)
+    });
+    await setStatus(jobId, lease, "transforming", { generationAudit: cycleResult.audit, ...validationFieldsFromAudit(cycleResult.audit), intent: artifacts.intent, transformPlan: artifacts.plan, fieldLineage: artifacts.transform.lineage, validation: artifacts.validation, pluginUsage: artifacts.pluginUsage, repairCount: artifacts.repairCount, previewData: { columns: artifacts.transform.columns, rows: artifacts.transform.rows.slice(0, 500), steps: artifacts.transform.steps }, resultSummary });
     await setStatus(jobId, lease, "compiling", { flintSpec: artifacts.flintSpec });
     if (!artifacts.validation.valid) { await failJob(jobId, lease, "VALIDATION_FAILED", "Flint Spec 未通过必要校验", artifacts.validation, cycleResult.audit); return; }
     await setStatus(jobId, lease, "rendering", {}, true);
@@ -324,6 +332,14 @@ async function processEditJob(jobId: string, record: GenerationJobRecord, lease:
     editedSpec.data.values = transform.rows;
     editedSpec.semanticTypes = semanticTypesForEditedSpec(spec.semanticTypes, transform.columns, transform.lineage);
     const validation = validateGenerationRevision(editedSpec);
+    const resultSummary = summarizeTransformResult({
+      sourceRowCount: frozenSnapshot.rows.length,
+      transform,
+      previewLimit: 500,
+      qualityWarnings: validation.issues
+        .filter((issue) => issue.severity === "warning")
+        .map((issue) => `${issue.code}: ${issue.message}`)
+    });
     const planValidation = planValidationFromReport(validation);
     const renderValidation = pendingRenderValidation();
     await setStatus(jobId, lease, "transforming", {
@@ -337,7 +353,8 @@ async function processEditJob(jobId: string, record: GenerationJobRecord, lease:
         columns: transform.columns,
         rows: transform.rows.slice(0, 500),
         steps: transform.steps
-      }
+      },
+      resultSummary
     });
     await setStatus(jobId, lease, "compiling", { flintSpec: editedSpec, validation, planValidation, renderValidation });
     if (!validation.valid) {

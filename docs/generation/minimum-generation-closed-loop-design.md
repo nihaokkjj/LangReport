@@ -40,7 +40,7 @@
 - 真实百炼账户验收和多供应商模型；
 - 多指标同时生成和复杂指标语义层；
 - 完整 Visual Template 编辑器；
-- HTML 导出；
+- 更丰富的 HTML 交互导出（第一阶段只提供静态 SVG 包装页）；
 - 全部第一阶段 TransformPlan 语义操作；
 - 实时协作、公开分享和用户代码执行。
 
@@ -304,8 +304,7 @@ TransformPlan 执行完成后，必须基于完整 `TransformResult` 计算 `res
       "dimensions": { "月份": "2026-06", "区域": "华东" }
     }
   ],
-  "qualityWarnings": [],
-  "calculatedAt": "2026-09-11T00:00:00.000Z"
+  "qualityWarnings": []
 }
 ```
 
@@ -418,7 +417,7 @@ TransformPlan 执行完成后，必须基于完整 `TransformResult` 计算 `res
 - Web 明确区分完整统计与 500 行预览；
 - 增加超过 500 行数据的测试。
 
-完成标志：最高值、数据点数量和完整结果行数不受预览截断影响。
+完成标志：已实现。超过 500 行的回归证明最高值、数据点数量和完整结果行数不受预览截断影响；Job、Revision、Evidence 保存同一摘要，finding 只读取该摘要。
 
 ### 第三期：本地五服务联调
 
@@ -510,7 +509,7 @@ TransformPlan 执行完成后，必须基于完整 `TransformResult` 计算 `res
 以下内容不影响本设计的最小闭环，但不能标记为第一阶段全部完成：
 
 - 真实百炼模型和供应商账户验收；
-- HTML 固定 Revision 导出；
+- HTML 交互固定 Revision 导出；第一阶段静态 SVG 包装页已覆盖基础下载需求；
 - 完整 Visual Template 复制、编辑和对比度校验；
 - 完整 Review 评论创建、查看和解决；
 - 全部显式 TransformPlan 语义操作；

@@ -238,6 +238,7 @@ export const generationJobs = pgTable("generation_jobs", {
   renderValidation: jsonb("render_validation"),
   vegaLiteSpec: jsonb("vega_lite_spec"),
   previewData: jsonb("preview_data"),
+  resultSummary: jsonb("result_summary"),
   memoryContext: jsonb("memory_context"),
   conversationProjection: jsonb("conversation_projection").notNull().default({}),
   modelRoute: jsonb("model_route").notNull().default({}),
@@ -308,6 +309,7 @@ export const chartRevisions = pgTable("chart_revisions", {
   memorySnapshot: jsonb("memory_snapshot").notNull().default([]),
   pluginSnapshot: jsonb("plugin_snapshot").notNull().default({}),
   executionAssembly: jsonb("execution_assembly"),
+  resultSummary: jsonb("result_summary"),
   outputObjects: jsonb("output_objects").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => [
@@ -329,6 +331,7 @@ export const evidenceBlocks = pgTable("evidence_blocks", {
   snapshotId: uuid("snapshot_id").notNull().references(() => dataSnapshots.id, { onDelete: "restrict" }),
   title: text("title").notNull(),
   finding: text("finding").notNull(),
+  resultSummary: jsonb("result_summary"),
   analysisBriefSnapshot: jsonb("analysis_brief_snapshot").notNull().default({}),
   metricDefinitionSnapshot: jsonb("metric_definition_snapshot").notNull().default({}),
   qualityWarnings: jsonb("quality_warnings").notNull().default([]),

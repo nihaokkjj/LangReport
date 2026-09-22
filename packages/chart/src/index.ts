@@ -19,10 +19,12 @@ import {
   chartRevisionStatusSchema,
   pluginThemeRefSchema,
   projectThemeSchema,
+  resultSummarySchema,
   type ChartEditPatch,
   type ChartRevisionStatus,
   type FlintSpec,
   type ProjectThemeInput,
+  type ResultSummary,
   type ValidationReport
 } from "@langreport/contracts";
 import {
@@ -165,6 +167,7 @@ export async function createInitialRevision(input: {
   memorySnapshot?: unknown;
   pluginSnapshot?: unknown;
   executionAssembly?: unknown;
+  resultSummary?: ResultSummary | null;
   outputObjects: unknown;
 }) {
   const existing = await findRevisionByJob(input.jobId);
@@ -200,6 +203,7 @@ export async function createInitialRevision(input: {
       memorySnapshot: input.memorySnapshot ?? [],
       pluginSnapshot: input.pluginSnapshot ?? {},
       executionAssembly: input.executionAssembly ?? null,
+      resultSummary: input.resultSummary ?? null,
       outputObjects: input.outputObjects
     }).returning();
     await tx.update(chartArtifacts).set({
@@ -238,6 +242,7 @@ export async function createDerivedRevision(input: {
   memorySnapshot?: unknown;
   pluginSnapshot?: unknown;
   executionAssembly?: unknown;
+  resultSummary?: ResultSummary | null;
   idempotencyKey?: string;
 }) {
   await assertChartAction(input.projectId, input.createdBy, "create_revision");
@@ -286,6 +291,7 @@ export async function createDerivedRevision(input: {
     memorySnapshot: input.memorySnapshot ?? source.memorySnapshot,
     pluginSnapshot: input.pluginSnapshot ?? source.pluginSnapshot,
     executionAssembly: input.executionAssembly ?? source.executionAssembly,
+    resultSummary: input.resultSummary === undefined ? source.resultSummary : input.resultSummary,
     outputObjects: input.outputObjects ?? source.outputObjects
   }).returning();
   await db.update(chartArtifacts).set({ headRevisionId: revision.id, updatedAt: new Date() })
@@ -350,6 +356,7 @@ export async function copyRevisionToArtifact(input: {
     validation: source.revision.validation,
     memorySnapshot: source.revision.memorySnapshot,
     pluginSnapshot: source.revision.pluginSnapshot,
+    resultSummary: source.revision.resultSummary,
     outputObjects: source.revision.outputObjects
   }).returning();
   await db.update(chartArtifacts).set({ headRevisionId: revision.id, updatedAt: new Date() })
@@ -639,6 +646,25 @@ export function applyRevisionPatch(spec: FlintSpec, patch: ChartEditPatch): Flin
   return applyChartEditPatch(spec, patch);
 }
 
+export function buildEvidenceFinding(spec: FlintSpec, summaryInput: ResultSummary | null | undefined): string {
+  const summary = resultSummarySchema.safeParse(summaryInput);
+  const yField = spec.chartSpec.encodings.y?.field;
+  const xField = spec.chartSpec.encodings.x?.field;
+  if (summary.success && yField) {
+    const numericSummary = summary.data.numericSummaries.find((item) => item.field === yField);
+    const topGroup = summary.data.topGroups.find((item) => item.field === yField);
+    const dimension = xField ? topGroup?.dimensions[xField] : undefined;
+    if (numericSummary && topGroup && dimension !== undefined && dimension !== null) {
+      return `当前快照产生 ${summary.data.transformedRowCount} 个完整变换结果行，${String(dimension)} 的 ${yField} 数值最高（${formatFindingNumber(numericSummary.max)}）。该候选发现不解释因果，也不替代人工审核。`;
+    }
+  }
+  return "当前图表已基于冻结快照生成；完整结果摘要不可用，因此未自动陈述具体极值。该候选发现不解释因果，也不替代人工审核。";
+}
+
+function formatFindingNumber(value: number): string {
+  return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 6 }).format(value);
+}
+
 async function findRevision(revisionId: string) {
   const [revision] = await db.select().from(chartRevisions).where(eq(chartRevisions.id, revisionId)).limit(1);
   return revision ?? null;
@@ -670,6 +696,7 @@ function toComparable(revision: typeof chartRevisions.$inferSelect): RevisionCom
     flintSpec: revision.flintSpec,
     themeSnapshot: revision.themeSnapshot,
     vegaLiteSpec: revision.vegaLiteSpec,
+    resultSummary: revision.resultSummary,
     outputObjects: revision.outputObjects
   };
 }

@@ -88,6 +88,7 @@ export type RevisionComparable = {
   flintSpec: unknown;
   themeSnapshot: unknown;
   vegaLiteSpec: unknown;
+  resultSummary: unknown;
   outputObjects: unknown;
 };
 
@@ -110,6 +111,7 @@ export function compareRevisions(
     "flintSpec",
     "themeSnapshot",
     "vegaLiteSpec",
+    "resultSummary",
     "outputObjects"
   ];
   const sections = Object.fromEntries(fields.map((field) => [field, {

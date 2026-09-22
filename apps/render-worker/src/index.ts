@@ -1,11 +1,11 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { GenerationJobLeaseLostError, assertGenerationJobLease, chartRevisions, claimGenerationJobLease, conversationMessages, conversations, db, dataAssets, evidenceBlocks, generationJobs, projects, recoverExpiredGenerationJobLeases, startGenerationJobLeaseHeartbeat, updateGenerationJobUnderLease, withAdvisoryLock, type GenerationJobLease } from "@langreport/db";
-import { flintSpecSchema, memoryContextSchema, pluginContextSchema, pluginUsageSchema, validationRecordSchema, validationReportSchema, type FlintSpec, type ValidationRecord, type ValidationReport } from "@langreport/contracts";
-import { createDerivedRevision, createInitialRevision } from "@langreport/chart";
-import { resolveRendererAdapter, FLINT_VERSION, RENDERER_VERSION } from "@langreport/flint-adapter";
+import { flintSpecSchema, memoryContextSchema, pluginContextSchema, pluginUsageSchema, resultSummarySchema, validationRecordSchema, validationReportSchema, type FlintSpec, type ResultSummary, type ValidationRecord, type ValidationReport } from "@langreport/contracts";
+import { buildEvidenceFinding, createDerivedRevision, createInitialRevision } from "@langreport/chart";
+import { createStaticSvgHtml, resolveRendererAdapter, FLINT_VERSION, RENDERER_VERSION, validateStaticSvgHtml } from "@langreport/flint-adapter";
 import { buildPluginSnapshot, PluginServiceError } from "@langreport/plugins";
-import { renderOutputObjectKey } from "@langreport/storage";
+import { getObject, putObject, renderOutputObjectKey } from "@langreport/storage";
 
 const workerName = "render-worker";
 const pollIntervalMs = Number(process.env.RENDER_POLL_INTERVAL_MS ?? 1000);
@@ -72,14 +72,23 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
         ? storedPlanValidation
         : readPlanValidation(undefined, validation);
       const storedRenderValidation = readRenderValidation(record.job.renderValidation);
-      const renderValidation = storedRenderValidation?.status === "passed"
+      const baseRenderValidation = storedRenderValidation?.status === "passed"
         ? storedRenderValidation
         : legacyRenderValidation();
+      const ensured = await ensureStaticHtmlOutput({ job: record.job, revision: existingRevision, spec, workspaceId: record.workspaceId });
+      const renderValidation = mergeRenderValidation(baseRenderValidation, ensured.htmlValidation);
+      if (renderValidation.status !== "passed") {
+        await failRenderJob(jobId, lease, "RENDER_VALIDATION_FAILED", "固定 Revision 导出产物未通过必要校验", {
+          renderValidation,
+          generationAudit: withValidationAudit(record.job.generationAudit, { renderValidation })
+        });
+        return;
+      }
       await assertGenerationJobLease(lease);
-      await persistEvidenceBlock({ job: record.job, revision: existingRevision, spec, validation });
+      await persistEvidenceBlock({ job: record.job, revision: ensured.revision, spec, validation });
       await setStatus(jobId, lease, "succeeded", {
-        outputs: existingRevision.outputObjects,
-        vegaLiteSpec: existingRevision.vegaLiteSpec,
+        outputs: ensured.revision.outputObjects,
+        vegaLiteSpec: ensured.revision.vegaLiteSpec,
         ...(planValidation ? { planValidation } : {}),
         renderValidation,
         generationAudit: withValidationAudit(record.job.generationAudit, { planValidation, renderValidation }),
@@ -101,6 +110,17 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
       return;
     }
     const spec = flintSpecSchema.parse(record.job.flintSpec);
+    const parsedResultSummary = resultSummarySchema.safeParse(record.job.resultSummary);
+    if (!parsedResultSummary.success) {
+      const renderValidation = failedRenderValidation("RESULT_SUMMARY_INVALID", "完整变换结果摘要缺失或不符合合同");
+      await failRenderJob(jobId, lease, "RESULT_SUMMARY_INVALID", "完整变换结果摘要缺失或不符合合同", {
+        planValidation,
+        renderValidation,
+        generationAudit: withValidationAudit(record.job.generationAudit, { planValidation, renderValidation })
+      });
+      return;
+    }
+    const resultSummary = parsedResultSummary.data;
     const parsedPluginContext = pluginContextSchema.safeParse(record.job.pluginContext);
     if (hasPluginContext(record.job.pluginContext) && !parsedPluginContext.success) {
       const renderValidation = failedRenderValidation("PLUGIN_CONTEXT_INVALID", "插件上下文不符合已固化的 Schema");
@@ -122,19 +142,29 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
       : sourceRevision?.pluginSnapshot ?? {};
     const renderer = resolveRendererAdapter(record.job.renderer);
     const rendered = await renderer.render(spec);
-    const renderValidation = renderer.validate(rendered);
-    const generationAudit = withValidationAudit(record.job.generationAudit, { planValidation, renderValidation });
+    const baseRenderValidation = renderer.validate(rendered);
+    const generationAudit = withValidationAudit(record.job.generationAudit, { planValidation, renderValidation: baseRenderValidation });
     await setStatus(jobId, lease, "validating", {
       vegaLiteSpec: rendered.vegaLiteSpec,
       planValidation,
-      renderValidation,
+      renderValidation: baseRenderValidation,
       generationAudit
     });
-    if (renderValidation.status !== "passed") {
+    if (baseRenderValidation.status !== "passed") {
       await failRenderJob(jobId, lease, "RENDER_VALIDATION_FAILED", "渲染产物未通过必要校验", {
         planValidation,
-        renderValidation,
+        renderValidation: baseRenderValidation,
         generationAudit
+      });
+      return;
+    }
+    const htmlPreflight = validateStaticHtmlCandidate({ job: record.job, spec, svg: rendered.svg, resultSummary });
+    if (htmlPreflight.status !== "passed") {
+      const renderValidation = mergeRenderValidation(baseRenderValidation, htmlPreflight);
+      await failRenderJob(jobId, lease, "RENDER_VALIDATION_FAILED", "固定 Revision HTML 产物未通过必要校验", {
+        planValidation,
+        renderValidation,
+        generationAudit: withValidationAudit(record.job.generationAudit, { planValidation, renderValidation })
       });
       return;
     }
@@ -146,7 +176,7 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
     const vegaLiteKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.vega-lite.json` });
     const svgKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.svg` });
     const pngKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.png` });
-    const { putObject } = await import("@langreport/storage");
+    const htmlKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.html` });
     await putObject({ key: vegaLiteKey, body: JSON.stringify(rendered.vegaLiteSpec), contentType: "application/json" });
     await putObject({ key: svgKey, body: rendered.svg, contentType: "image/svg+xml" });
     await putObject({ key: pngKey, body: rendered.png, contentType: "image/png" });
@@ -155,6 +185,7 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
       vegaLite: vegaLiteKey,
       svg: svgKey,
       png: pngKey,
+      html: htmlKey,
       flintVersion: FLINT_VERSION,
       rendererVersion: RENDERER_VERSION
     };
@@ -185,6 +216,7 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
         memorySnapshot: memorySnapshotForRevision(record.job.memoryContext),
         pluginSnapshot,
         executionAssembly: record.job.executionAssembly,
+        resultSummary,
         outputObjects
       })
       : await createInitialRevision({
@@ -211,19 +243,31 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
         memorySnapshot: memorySnapshotForRevision(record.job.memoryContext),
         pluginSnapshot,
         executionAssembly: record.job.executionAssembly,
+        resultSummary,
         outputObjects
       });
+    const ensured = await ensureStaticHtmlOutput({ job: record.job, revision, spec, svg: rendered.svg, htmlKey, workspaceId: record.workspaceId });
+    const renderValidation = mergeRenderValidation(baseRenderValidation, ensured.htmlValidation);
+    if (renderValidation.status !== "passed") {
+      await failRenderJob(jobId, lease, "RENDER_VALIDATION_FAILED", "固定 Revision 导出产物未通过必要校验", {
+        planValidation,
+        renderValidation,
+        generationAudit: withValidationAudit(record.job.generationAudit, { planValidation, renderValidation })
+      });
+      return;
+    }
     await assertGenerationJobLease(lease);
-    await persistEvidenceBlock({ job: record.job, revision, spec, validation: validation.data });
+    await persistEvidenceBlock({ job: record.job, revision: ensured.revision, spec, validation: validation.data });
     await appendAssistantMessage(record.job.conversationId, record.job.operation === "edit"
       ? `已创建新的 Draft Chart Revision R${revision.revision}。它保留原始 Data Snapshot 和历史版本，可从结果卡片继续编辑或提交审核。`
       : `已生成一个 Draft Evidence Block（Revision R${revision.revision}）。图表、发现、指标口径、数据来源和校验记录已绑定到同一个 Data Snapshot。`);
+    const finalGenerationAudit = withValidationAudit(record.job.generationAudit, { planValidation, renderValidation });
     await setStatus(jobId, lease, "succeeded", {
-      outputs: { vegaLite: vegaLiteKey, svg: svgKey, png: pngKey },
+      outputs: ensured.revision.outputObjects,
       vegaLiteSpec: rendered.vegaLiteSpec,
       planValidation,
       renderValidation,
-      generationAudit,
+      generationAudit: finalGenerationAudit,
       errorCode: null,
       errorMessage: null
     }, true);
@@ -246,6 +290,90 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
   }
 }
 
+async function ensureStaticHtmlOutput(input: {
+  job: typeof generationJobs.$inferSelect;
+  revision: typeof chartRevisions.$inferSelect;
+  spec: FlintSpec;
+  workspaceId: string;
+  svg?: string;
+  htmlKey?: string;
+}): Promise<{ revision: typeof chartRevisions.$inferSelect; htmlValidation: ValidationRecord }> {
+  const outputObjects = isRecord(input.revision.outputObjects) ? { ...input.revision.outputObjects } : {};
+  const svgKey = typeof outputObjects.svg === "string" ? outputObjects.svg : undefined;
+  const svg = input.svg ?? (svgKey ? (await getObject(svgKey)).toString("utf8") : "");
+  const htmlKey = typeof outputObjects.html === "string"
+    ? outputObjects.html
+    : input.htmlKey ?? renderOutputObjectKey({
+      workspaceId: input.workspaceId,
+      projectId: input.job.projectId,
+      assetId: input.job.dataAssetId,
+      filename: `${input.job.id}.html`
+    });
+  let html: string;
+  try {
+    html = createStaticSvgHtml({
+      svg,
+      revisionId: input.revision.id,
+      revision: input.revision.revision,
+      title: input.spec.chartSpec.title,
+      finding: buildEvidenceFinding(input.spec, readResultSummary(input.revision.resultSummary ?? input.job.resultSummary)),
+      snapshotId: input.revision.snapshotId,
+      metricDefinition: input.job.metricDefinitionSnapshot ?? input.revision.metricDefinitionSnapshot,
+      theme: input.spec.theme,
+      themeVersion: input.spec.themeVersion
+    });
+  } catch (error) {
+    return {
+      revision: input.revision,
+      htmlValidation: failedRenderValidation("RENDER_HTML_INVALID", error instanceof Error ? error.message : "静态 HTML 生成失败")
+    };
+  }
+  const htmlValidation = validateStaticSvgHtml(html);
+  if (htmlValidation.status !== "passed") return { revision: input.revision, htmlValidation };
+  await putObject({ key: htmlKey, body: html, contentType: "text/html; charset=utf-8" });
+  const nextOutputObjects = { ...outputObjects, html: htmlKey };
+  const [revision] = await db.update(chartRevisions)
+    .set({ outputObjects: nextOutputObjects })
+    .where(eq(chartRevisions.id, input.revision.id))
+    .returning();
+  if (!revision) throw new Error("固定 Revision 不存在，无法保存 HTML 输出");
+  return { revision, htmlValidation };
+}
+
+function mergeRenderValidation(base: ValidationRecord, html: ValidationRecord): ValidationRecord {
+  const errors = [...base.errors, ...html.errors];
+  return {
+    status: errors.some((error) => error.severity === "error") ? "failed" : "passed",
+    errors,
+    validatorVersion: `${base.validatorVersion}+${html.validatorVersion}`,
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function validateStaticHtmlCandidate(input: {
+  job: typeof generationJobs.$inferSelect;
+  spec: FlintSpec;
+  svg: string;
+  resultSummary: ResultSummary;
+}): ValidationRecord {
+  try {
+    const html = createStaticSvgHtml({
+      svg: input.svg,
+      revisionId: "pending-revision",
+      revision: 0,
+      title: input.spec.chartSpec.title,
+      finding: buildEvidenceFinding(input.spec, input.resultSummary),
+      snapshotId: input.job.snapshotId,
+      metricDefinition: input.job.metricDefinitionSnapshot,
+      theme: input.spec.theme,
+      themeVersion: input.spec.themeVersion
+    });
+    return validateStaticSvgHtml(html);
+  } catch (error) {
+    return failedRenderValidation("RENDER_HTML_INVALID", error instanceof Error ? error.message : "静态 HTML 生成失败");
+  }
+}
+
 async function persistEvidenceBlock(input: {
   job: typeof generationJobs.$inferSelect;
   revision: typeof chartRevisions.$inferSelect;
@@ -253,7 +381,8 @@ async function persistEvidenceBlock(input: {
   validation: ValidationReport;
 }): Promise<void> {
   const warnings = input.validation.issues.filter((issue) => issue.severity === "warning");
-  const finding = buildFinding(input.spec, input.job.previewData);
+  const resultSummary = readResultSummary(input.revision.resultSummary ?? input.job.resultSummary);
+  const finding = buildEvidenceFinding(input.spec, resultSummary);
   const [existingForJob] = await db.select({ id: evidenceBlocks.id }).from(evidenceBlocks)
     .where(eq(evidenceBlocks.generationJobId, input.job.id)).limit(1);
   const [existingForArtifact] = input.job.artifactId
@@ -271,6 +400,7 @@ async function persistEvidenceBlock(input: {
     snapshotId: input.revision.snapshotId,
     title: input.spec.chartSpec.title,
     finding,
+    resultSummary,
     analysisBriefSnapshot: input.job.analysisBriefSnapshot ?? input.revision.analysisBriefSnapshot ?? {},
     metricDefinitionSnapshot: input.job.metricDefinitionSnapshot ?? input.revision.metricDefinitionSnapshot ?? {},
     qualityWarnings: warnings,
@@ -285,21 +415,9 @@ async function persistEvidenceBlock(input: {
   await db.insert(evidenceBlocks).values(values);
 }
 
-function buildFinding(spec: FlintSpec, previewData: unknown): string {
-  const rows = previewRowsOf(previewData);
-  const yField = spec.chartSpec.encodings.y?.field;
-  const xField = spec.chartSpec.encodings.x?.field;
-  const numericRows = yField ? rows.filter((row) => typeof row[yField] === "number") : [];
-  if (!xField || !yField || numericRows.length === 0) {
-    return "已完成图表生成。该发现仅描述当前快照中的可视化结果，仍需 Reviewer 结合指标口径和数据质量提示确认。";
-  }
-  const highest = numericRows.reduce((best, row) => Number(row[yField]) > Number(best[yField]) ? row : best, numericRows[0]);
-  return `当前快照按 ${xField} 聚合得到 ${numericRows.length} 个可视化数据点，${String(highest[xField] ?? "当前分组")} 的 ${yField} 数值最高。该候选发现不解释因果，也不替代人工审核。`;
-}
-
-function previewRowsOf(value: unknown): Array<Record<string, unknown>> {
-  if (typeof value !== "object" || value === null || !("rows" in value) || !Array.isArray((value as { rows?: unknown }).rows)) return [];
-  return (value as { rows: unknown[] }).rows.filter((row): row is Record<string, unknown> => typeof row === "object" && row !== null && !Array.isArray(row));
+function readResultSummary(value: unknown): ResultSummary | null {
+  const parsed = resultSummarySchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 async function appendAssistantMessage(conversationId: string, content: string): Promise<void> {

@@ -181,7 +181,7 @@ function PluginTrace({ state, revision }: { state: PluginTraceState; revision?: 
 
 function RevisionExport({ revisionId, revision, status }: { revisionId?: string; revision?: number; status?: Revision["status"] }) {
   if (!revisionId || revision === undefined || status !== "approved") return null;
-  return <a className="secondary-button" href={`/api/v1/chart-revisions/${revisionId}/outputs/svg`} download={`langreport-revision-r${revision}.svg`} aria-label="导出 SVG">导出 SVG ↗</a>;
+  return <><a className="secondary-button" href={`/api/v1/chart-revisions/${revisionId}/outputs/png`} download={`langreport-revision-r${revision}.png`} aria-label="导出 PNG">PNG ↗</a><a className="secondary-button" href={`/api/v1/chart-revisions/${revisionId}/outputs/svg`} download={`langreport-revision-r${revision}.svg`} aria-label="导出 SVG">SVG ↗</a><a className="secondary-button" href={`/api/v1/chart-revisions/${revisionId}/outputs/html`} download={`langreport-revision-r${revision}.html`} aria-label="导出 HTML">HTML ↗</a><a className="secondary-button" href={`/api/v1/chart-revisions/${revisionId}/outputs/vegaLite`} download={`langreport-revision-r${revision}.json`} aria-label="导出 Vega-Lite JSON">JSON ↗</a></>;
 }
 
 function SnapshotPreviewTable({ snapshot }: { snapshot: Snapshot }) {

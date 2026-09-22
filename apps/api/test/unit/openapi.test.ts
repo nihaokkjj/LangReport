@@ -102,6 +102,7 @@ test("documents the Generation Job async state and failure trace contract", asyn
     assert.ok(getJobProperties?.properties?.generationDecision);
     assert.ok(getJobProperties?.properties?.planValidation);
     assert.ok(getJobProperties?.properties?.renderValidation);
+    assert.ok(getJobProperties?.properties?.resultSummary);
     assert.ok(statusJobProperties?.properties?.statusVersion);
     assert.equal(statusOperation.responses?.["204"]?.content, undefined);
   } finally {

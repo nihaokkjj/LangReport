@@ -57,7 +57,7 @@ packages/storage         S3/MinIO 对象存储适配
 infra                    PostgreSQL、MinIO 等本地依赖
 ```
 
-Generation Worker 和 Render Worker 通过 PostgreSQL-backed Generation Job 状态轮询协作：前者只组装固化输入并消费 `GenerationCycle` 的 `drafted / needs_clarification / failed` 结果，Cycle 内部负责意图、TransformPlan、变换、血缘和计划校验，后者负责固定版本 Flint 编译以及 SVG/PNG 输出。
+Generation Worker 和 Render Worker 通过 PostgreSQL-backed Generation Job 状态轮询协作：前者只组装固化输入并消费 `GenerationCycle` 的 `drafted / needs_clarification / failed` 结果，Cycle 内部负责意图、TransformPlan、变换、血缘和计划校验，后者负责固定版本 Flint 编译、Vega-Lite/SVG/PNG 输出以及静态 SVG 包装 HTML。
 
 ## 4. 数据输入 API
 
@@ -92,7 +92,7 @@ POST /api/v1/generation-jobs/:jobId/retry
     重新入队可恢复的生成/渲染失败任务；确定性失败和超过三次尝试会被拒绝
 
 GET  /api/v1/generation-jobs/:jobId/outputs/:format
-    下载 png、svg 或 vegaLite 输出
+    下载 png、svg、html 或 vegaLite 输出
 ```
 
 ## 5. 常用命令
@@ -118,7 +118,12 @@ pnpm db:studio
 
 # 停止本地数据库和对象存储
 pnpm infra:down
+
+# 运行隔离的第一阶段真实 HTTP 闭环（会自行启动并清理测试服务）
+pnpm phase1:smoke
 ```
+
+`pnpm phase1:smoke` 使用 deterministic Model Route，验证 Project → Snapshot → Brief/Metric → Generation/Render Worker → Evidence → 编辑/审核 → 四种固定 Revision 导出；它不访问真实百炼。正式发布前必须在发布环境执行 `pnpm phase1:release-gate`，具体变量和顺序见 [ECS 部署说明](./deploy-ecs.md)。
 
 ## 6. 数据库工作流
 
@@ -144,7 +149,7 @@ pnpm db:verify
 1. Conversation 保存用户自然语言意图，按 Project 固定 Data Snapshot。
 2. Generation Cycle 通过确定性 adapter 生成并执行受限 TransformPlan，保存每一步的行数和字段血缘。
 3. Generation Cycle 生成 Flint Spec，执行 Schema、语义、数据字段和视觉校验，最多自动修复两轮。
-4. Render Worker 使用固定版本的 `flint-chart`，写入 Vega-Lite、SVG 和 PNG 私有对象。
+4. Render Worker 使用固定版本的 `flint-chart`，写入 Vega-Lite、SVG、PNG 和静态 HTML 私有对象；HTML 只包装服务端已验证的 SVG。
 5. 通过 Chart Revision 保存 Snapshot、计划、规范、主题快照、校验结果和输出地址。
 
 ## 8. 开发环境原则

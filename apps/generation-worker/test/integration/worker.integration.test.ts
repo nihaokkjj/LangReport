@@ -20,7 +20,7 @@ import {
   updateGenerationJobUnderLease,
   workspaces
 } from "@langreport/db";
-import { executionAssemblySchema, flintSpecSchema, pluginSnapshotSchema, pluginUsageSchema, validationRecordSchema } from "@langreport/contracts";
+import { executionAssemblySchema, flintSpecSchema, pluginSnapshotSchema, pluginUsageSchema, resultSummarySchema, validationRecordSchema } from "@langreport/contracts";
 import {
   installPlugin,
   listBuiltinPluginCatalog,
@@ -172,6 +172,9 @@ test("real generation and render workers persist plugin usage and historical sna
     assert.equal(generatedJob.status, "rendering");
     assert.equal(validationRecordSchema.parse(generatedJob.planValidation).status, "passed");
     assert.equal(validationRecordSchema.parse(generatedJob.renderValidation).status, "pending");
+    const generatedResultSummary = resultSummarySchema.parse(generatedJob.resultSummary);
+    assert.equal(generatedResultSummary.sourceRowCount, rows.length);
+    assert.equal(generatedResultSummary.transformedRowCount > 0, true);
     const generatedSpec = flintSpecSchema.parse(generatedJob.flintSpec);
     assert.equal(generatedSpec.themeConfig.ink && typeof generatedSpec.themeConfig.ink === "object", true);
     assert.equal((generatedSpec.themeConfig.ink as { series?: { single?: string } }).series?.single, "#2563EB");
@@ -189,29 +192,39 @@ test("real generation and render workers persist plugin usage and historical sna
     assert.equal(renderedJob.leaseExpiresAt, null);
     assert.ok(renderedJob.leaseFencingToken >= 2);
     assert.equal(validationRecordSchema.parse(renderedJob.planValidation).status, "passed");
-    assert.equal(validationRecordSchema.parse(renderedJob.renderValidation).status, "passed");
-    const outputs = renderedJob.outputs as { svg?: string; png?: string; vegaLite?: string };
-    for (const key of [outputs.svg, outputs.png, outputs.vegaLite]) {
+    const finalRenderValidation = validationRecordSchema.parse(renderedJob.renderValidation);
+    assert.equal(finalRenderValidation.status, "passed");
+    assert.match(finalRenderValidation.validatorVersion, /static-svg-html/);
+    assert.deepEqual((renderedJob.generationAudit as { renderValidation?: unknown }).renderValidation, renderedJob.renderValidation);
+    const outputs = renderedJob.outputs as { svg?: string; png?: string; html?: string; vegaLite?: string };
+    for (const key of [outputs.svg, outputs.png, outputs.html, outputs.vegaLite]) {
       if (typeof key !== "string") throw new Error("render output key is missing");
       objectKeys.push(key);
     }
     const svg = await getObject(outputs.svg as string);
     assert.match(svg.toString("utf8"), /#2563EB/);
     assert.ok((await getObject(outputs.png as string)).byteLength > 100);
+    const html = (await getObject(outputs.html as string)).toString("utf8");
+    assert.match(html, /<!doctype html>/i);
+    assert.match(html, /<svg[\s>]/i);
+    assert.doesNotMatch(html, /<script\b|javascript:|\son\w+\s*=/i);
     const vegaLite = JSON.parse((await getObject(outputs.vegaLite as string)).toString("utf8")) as { _theme?: unknown };
     assert.equal(typeof vegaLite._theme, "object");
 
     const [revision] = await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, job.id)).limit(1);
     assert.ok(revision);
     assert.deepEqual(revision.executionAssembly, executionAssembly);
+    assert.deepEqual(resultSummarySchema.parse(revision.resultSummary), generatedResultSummary);
     const pluginSnapshot = pluginSnapshotSchema.parse(revision.pluginSnapshot);
     assert.equal(pluginSnapshot.plugins[0]?.pluginId, installation.pluginId);
     assert.equal(pluginSnapshot.plugins[0]?.contentHash, installation.contentHash);
     assert.equal(pluginSnapshot.resolvedTheme?.ref.source, "plugin");
     if (pluginSnapshot.resolvedTheme?.ref.source === "plugin") assert.equal(pluginSnapshot.resolvedTheme.ref.capabilityId, "sales-brand");
     assert.ok(pluginSnapshot.plugins[0]?.capabilities.templates?.some((template) => (template as { id?: string }).id === "monthly-regional-sales"));
-    const [evidence] = await db.select({ id: evidenceBlocks.id }).from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, job.id)).limit(1);
+    const [evidence] = await db.select({ id: evidenceBlocks.id, finding: evidenceBlocks.finding, resultSummary: evidenceBlocks.resultSummary }).from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, job.id)).limit(1);
     assert.ok(evidence);
+    assert.deepEqual(resultSummarySchema.parse(evidence.resultSummary), generatedResultSummary);
+    assert.match(evidence.finding, /完整变换结果行/);
 
     const editPlan = {
       version: "v1" as const,
@@ -264,12 +277,14 @@ test("real generation and render workers persist plugin usage and historical sna
       { 月份: "2026-02", 销售额_sum: 130 },
       { 月份: "2026-01", 销售额_sum: 100 }
     ]);
+    assert.equal(resultSummarySchema.parse(transformedEditJob.resultSummary).transformedRowCount, 2);
     assert.equal((transformedEditJob.flintSpec as { chartSpec: { showValues?: boolean } }).chartSpec.showValues, true);
     await processRenderJob(editJob.id);
     const [renderedEditJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, editJob.id)).limit(1);
     assert.equal(renderedEditJob.status, "succeeded");
     const [derivedRevision] = await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, editJob.id)).limit(1);
     assert.ok(derivedRevision);
+    assert.deepEqual(resultSummarySchema.parse(derivedRevision.resultSummary), resultSummarySchema.parse(transformedEditJob.resultSummary));
     assert.equal(derivedRevision.parentRevisionId, revision.id);
     assert.notDeepEqual(derivedRevision.transformPlan, revision.transformPlan);
     assert.equal(revision.revision, 1);

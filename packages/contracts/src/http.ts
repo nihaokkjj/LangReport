@@ -21,6 +21,7 @@ import {
   pluginSnapshotSchema,
   projectThemeSchema,
   rejectMemoryCandidateRequestSchema,
+  resultSummarySchema,
   reviewNoteSchema,
   updateAnalysisBriefRequestSchema,
   updateWorkspaceModelCredentialRequestSchema,
@@ -161,7 +162,7 @@ const pathParams = (path: string): JsonSchema => {
   const properties: Record<string, JsonSchema> = {};
   for (const name of names) {
     properties[name] = name === "format"
-      ? { type: "string", enum: ["png", "svg", "vegaLite"], description: "路径参数：format" }
+      ? { type: "string", enum: ["png", "svg", "html", "vegaLite"], description: "路径参数：format" }
       : { ...uuid(), description: `路径参数：${name}` };
   }
   return json(properties, names);
@@ -339,6 +340,7 @@ const metricDto = dto({
 
 const validationDto = zodJson(validationReportSchema);
 const validationRecordDto = zodJson(validationRecordSchema);
+const resultSummaryDto = zodJson(resultSummarySchema);
 
 const generationJobDto = dto({
   id: uuid(),
@@ -372,6 +374,7 @@ const generationJobDto = dto({
   renderValidation: nullable(validationRecordDto),
   vegaLiteSpec: nullable(anyJson),
   previewData: nullable(anyJson),
+  resultSummary: nullable(resultSummaryDto),
   modelRoute: anyJson,
   executionAssembly: nullable(zodJson(executionAssemblySchema)),
   generationAudit: nullable(anyJson),
@@ -403,6 +406,7 @@ const generationJobSummaryDto = dto({
   planValidation: nullable(validationRecordDto),
   renderValidation: nullable(validationRecordDto),
   previewData: nullable(anyJson),
+  resultSummary: nullable(resultSummaryDto),
   modelRoute: anyJson,
   executionAssembly: nullable(zodJson(executionAssemblySchema)),
   generationAudit: nullable(anyJson),
@@ -441,6 +445,7 @@ const revisionDto = dto({
   themeSnapshot: anyJson,
   pluginSnapshot: zodJson(pluginSnapshotSchema),
   executionAssembly: nullable(zodJson(executionAssemblySchema)),
+  resultSummary: nullable(resultSummaryDto),
   vegaLiteSpec: anyJson,
   validation: validationDto,
   outputObjects: anyJson,
@@ -478,6 +483,7 @@ const evidenceDto = dto({
   snapshotId: uuid(),
   title: string(),
   finding: string(),
+  resultSummary: nullable(resultSummaryDto),
   analysisBriefSnapshot: anyJson,
   metricDefinitionSnapshot: anyJson,
   qualityWarnings: array(anyJson),

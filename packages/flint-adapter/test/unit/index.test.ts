@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DESIGN_CHART_COLORS, DESIGN_FONT_FAMILIES, renderChart, resolveRendererAdapter, toFlintAssemblyInput, validateRenderedChart } from "../../src/index.js";
+import { createStaticSvgHtml, DESIGN_CHART_COLORS, DESIGN_FONT_FAMILIES, renderChart, resolveRendererAdapter, toFlintAssemblyInput, validateRenderedChart, validateStaticSvgHtml } from "../../src/index.js";
 import { validateFlintTemplatePayload, validateFlintThemePayload } from "../../src/validation.js";
 
 const spec = {
@@ -52,6 +52,29 @@ test("render validation records concrete Vega-Lite, SVG, and PNG artifacts indep
   const invalid = validateRenderedChart({ vegaLiteSpec: {}, svg: "<svg>", png: Buffer.from("not-a-png") });
   assert.equal(invalid.status, "failed");
   assert.deepEqual(invalid.errors.map((error) => error.code), ["RENDER_VEGA_LITE_EMPTY", "RENDER_SVG_INVALID", "RENDER_PNG_INVALID"]);
+});
+
+test("static HTML wraps trusted SVG and escapes evidence metadata without scripts", async () => {
+  const rendered = await renderChart(spec);
+  const html = createStaticSvgHtml({
+    svg: rendered.svg,
+    revisionId: "revision-001",
+    revision: 3,
+    title: "标题 <不执行>",
+    finding: "发现 & 结论",
+    snapshotId: "snapshot-001",
+    metricDefinition: { name: "销售额", formula: "sum(销售额)" },
+    theme: "economist",
+    themeVersion: "v1"
+  });
+
+  assert.match(html, /<!doctype html>/i);
+  assert.match(html, /&lt;不执行&gt;/);
+  assert.match(html, /发现 &amp; 结论/);
+  assert.doesNotMatch(html, /<script\b|javascript:/i);
+  assert.equal(validateStaticSvgHtml(html).status, "passed");
+  assert.equal(validateStaticSvgHtml(html.replace("</svg>", "<script>alert(1)</script></svg>")).status, "failed");
+  assert.equal(validateStaticSvgHtml(html.replace("</svg>", '<image href="https://example.com/pixel.png"></image></svg>')).status, "failed");
 });
 
 test("render validation explains every missing artifact before a Chart Revision can be drafted", () => {
