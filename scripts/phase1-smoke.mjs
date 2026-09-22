@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID, scryptSync } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createIsolatedIntegrationEnvironment } from "./integration-environment.mjs";
@@ -10,6 +10,10 @@ const isWindows = process.platform === "win32";
 const pnpmCommand = isWindows ? "pnpm.cmd" : "pnpm";
 const runId = randomUUID().replaceAll("-", "").toLowerCase();
 const userId = "phase1-live-" + runId;
+const loginUsername = "phase1-smoke-" + runId;
+const loginPassword = randomBytes(32).toString("base64url");
+const loginSalt = randomBytes(16);
+const loginPasswordHash = `scrypt$${loginSalt.toString("base64url")}$${scryptSync(loginPassword, loginSalt, 32, { N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }).toString("base64url")}`;
 const environment = createIsolatedIntegrationEnvironment(process.env, runId);
 Object.assign(environment, {
   API_PORT: "4100",
@@ -19,7 +23,12 @@ Object.assign(environment, {
   GENERATION_POLL_INTERVAL_MS: "100",
   RENDER_POLL_INTERVAL_MS: "100",
   GENERATION_STATUS_LONG_POLL: "true",
-  LANGREPORT_WORKER_TEST: "0"
+  LANGREPORT_WORKER_TEST: "0",
+  AUTH_JWT_SECRET: randomBytes(32).toString("base64url"),
+  AUTH_LOGIN_USERNAME: loginUsername,
+  AUTH_LOGIN_PASSWORD_HASH: loginPasswordHash,
+  AUTH_LOGIN_USER_ID: userId,
+  AUTH_SESSION_TTL_SECONDS: "300"
 });
 
 const apiOrigin = environment.API_URL;
@@ -29,6 +38,7 @@ let schemaPrepared = false;
 let bucketPrepared = false;
 let composeStarted = false;
 let cleanupFailure = false;
+let sessionCookie;
 
 function sleep(milliseconds) {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
@@ -77,11 +87,16 @@ function startService(label, args) {
 
 function redact(value) {
   let result = String(value);
-  for (const key of ["BAILIAN_API_KEY", "MODEL_CREDENTIAL_ENCRYPTION_KEY", "AUTH_JWT_SECRET", "S3_SECRET_KEY"]) {
-    const secret = process.env[key];
+  for (const key of ["BAILIAN_API_KEY", "MODEL_CREDENTIAL_ENCRYPTION_KEY", "AUTH_JWT_SECRET", "AUTH_LOGIN_PASSWORD_HASH", "S3_SECRET_KEY"]) {
+    const secret = environment[key];
     if (secret) result = result.replaceAll(secret, "[REDACTED]");
   }
-  return result.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [REDACTED]");
+  for (const secret of [loginPassword, sessionCookie]) {
+    if (secret) result = result.replaceAll(secret, "[REDACTED]");
+  }
+  return result
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [REDACTED]")
+    .replace(/langreport_session=[^;\s]+/gi, "langreport_session=[REDACTED]");
 }
 
 async function waitFor(label, check, timeoutMs = 60_000) {
@@ -102,7 +117,7 @@ async function waitFor(label, check, timeoutMs = 60_000) {
 async function request(path, init = {}) {
   const headers = {
     accept: "application/json",
-    "x-user-id": userId,
+    ...(sessionCookie ? { cookie: sessionCookie } : {}),
     ...(init.headers ?? {})
   };
   const response = await fetch(apiOrigin + path, { ...init, headers });
@@ -199,6 +214,22 @@ async function main() {
     return response.status === 200;
   });
   await expectStatus("API ready", "GET", "/ready", 200);
+
+  const login = await jsonRequest("POST", "/api/v1/auth/login", {
+    username: loginUsername,
+    password: loginPassword
+  });
+  assertCondition(login.response.status === 200, "登录网关失败：HTTP " + String(login.response.status));
+  const setCookie = login.response.headers.get("set-cookie") ?? "";
+  const cookieAttributes = setCookie.split(";").map((attribute) => attribute.trim());
+  assertCondition(cookieAttributes[0]?.startsWith("langreport_session=") && cookieAttributes.includes("HttpOnly") && cookieAttributes.includes("SameSite=Lax") && cookieAttributes.includes("Path=/"), "登录响应缺少安全 Session Cookie");
+  assertCondition(!cookieAttributes.includes("Secure"), "本地 HTTP smoke 不应签发 Secure Cookie");
+  sessionCookie = cookieAttributes[0];
+
+  const session = await expectStatus("恢复登录会话", "GET", "/api/v1/auth/session", 200);
+  assertCondition(session.body.userId === userId, "登录会话 userId 不匹配");
+  const bootstrap = await expectStatus("登录后开发 Bootstrap", "POST", "/api/v1/dev/bootstrap", 200, {});
+  assertCondition(typeof bootstrap.body.workspace?.id === "string" && typeof bootstrap.body.project?.id === "string", "开发 Bootstrap 响应不完整");
 
   const projectResponse = await expectStatus("创建 Project", "POST", "/api/v1/projects", 201, {
     name: "Phase 1 Live Sales",

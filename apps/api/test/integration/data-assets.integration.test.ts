@@ -39,7 +39,11 @@ test("data asset snapshot update appends immutable snapshots and isolates concur
   }).returning();
   let createdAssetId: string | undefined;
 
-  const app = await buildApp({ logger: false, environment: { ...process.env, NODE_ENV: "test", APP_ENV: "test" } });
+  const app = await buildApp({
+    logger: false,
+    environment: { ...process.env, NODE_ENV: "test", APP_ENV: "test" },
+    authProvider: (request) => typeof request.headers["x-user-id"] === "string" ? { id: request.headers["x-user-id"] } : null
+  });
   await app.ready();
 
   try {

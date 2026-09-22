@@ -129,7 +129,8 @@ test("plugin API completes install, binding, theme, revoke, restore and audit fl
 
   const app = await buildApp({
     logger: false,
-    environment: { ...process.env, NODE_ENV: "test", APP_ENV: "test" }
+    environment: { ...process.env, NODE_ENV: "test", APP_ENV: "test" },
+    authProvider: (request) => typeof request.headers["x-user-id"] === "string" ? { id: request.headers["x-user-id"] } : null
   });
   await app.ready();
   try {

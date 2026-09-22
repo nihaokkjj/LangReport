@@ -13,6 +13,9 @@ import { chartRevisionCommandSchema, createConversationMessageRequestSchema, cre
 const expectedRoutes = [
   "GET /health",
   "GET /ready",
+  "POST /api/v1/auth/login",
+  "GET /api/v1/auth/session",
+  "POST /api/v1/auth/logout",
   "POST /api/v1/dev/bootstrap",
   "GET /openapi.json",
   "GET /docs",
@@ -132,7 +135,7 @@ test("every route contract has metadata, response schemas, and complete path par
       headers?: { properties?: Record<string, unknown> };
     };
     assert.ok(schema.response);
-    assert.ok(schema.headers?.properties?.["x-user-id"]);
+    assert.equal(schema.headers?.properties?.["x-user-id"], undefined);
     for (const status of ["400", "403", "404", "409", "413", "422", "500", "503"]) {
       const errorSchema = schema.response?.[status] as { properties?: Record<string, unknown>; required?: string[] } | undefined;
       assert.deepEqual(errorSchema?.properties, errorResponseSchema.properties);
@@ -275,6 +278,9 @@ test("OpenAPI document is generated from the route contracts", () => {
   assert.equal(document.openapi, "3.0.3");
   assert.equal(document.servers[0]?.url, "http://localhost:4000");
   assert.ok(document.paths["/health"]?.get);
+  assert.ok(document.paths["/api/v1/auth/login"]?.post);
+  assert.ok(document.paths["/api/v1/auth/session"]?.get);
+  assert.ok(document.paths["/api/v1/auth/logout"]?.post);
   assert.ok(document.paths["/api/v1/projects/{projectId}/data-assets/paste"]?.post);
   assert.ok(document.paths["/api/v1/projects/{projectId}/data-assets/upload"]?.post);
   assert.ok(document.paths["/api/v1/dev/bootstrap"]?.post);
@@ -282,6 +288,12 @@ test("OpenAPI document is generated from the route contracts", () => {
   assert.equal(document.paths["/openapi.json"], undefined);
   assertSchemaIsOpenApiSafe(document);
   assert.doesNotMatch(JSON.stringify(document), /DATABASE_URL|POSTGRES_PASSWORD|S3_SECRET_KEY|AUTH_JWT_SECRET|API_KEY/i);
+
+  const loginOperation = document.paths["/api/v1/auth/login"]?.post as Record<string, any>;
+  assert.deepEqual(loginOperation.requestBody.content["application/json"].schema.required, ["username", "password"]);
+  assert.equal(loginOperation.requestBody.content["application/json"].schema.properties.password.format, "password");
+  assert.ok(loginOperation.responses["429"]);
+  assert.ok(loginOperation.responses["503"]);
 
   const pasteOperation = document.paths["/api/v1/projects/{projectId}/data-assets/paste"]?.post as Record<string, any>;
   assert.equal(pasteOperation.requestBody.content["application/json"].schema.type, "object");

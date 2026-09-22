@@ -56,6 +56,8 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 负责用户身份、内部 Workspace、Member、Workspace Role、Project Role 和所有租户边界检查。每个认证用户自动解析到自己的私有 Workspace，用户不选择、不切换 Workspace，也没有成员管理入口。任何 Project、Data Asset、Conversation、Memory、Plugin 或 Chart Artifact 查询仍必须携带 Workspace 作用域。
 
+第一阶段登录在开发与生产均由 API 内置的单账号网关完成：环境侧只保存 scrypt 密码哈希，登录成功后签发默认 7 天且最长 7 天的 HS256 JWT，并通过 `HttpOnly; SameSite=Lax; Path=/` 的 `langreport_session` Cookie 交给同源 Web；生产 HTTPS 额外强制 `Secure`。JWT 只携带 `sub` 和会话时效/标识 Claim；账号、角色、Workspace 与 Project 权限继续由现有授权数据解析。Bearer JWT 保留给受控 Smoke 和非浏览器客户端，任何运行环境都不接受 `x-user-id` 或隐式 `local-dev-user` 身份。
+
 ### Project
 
 负责 Project 的创建、列表、归档、主题继承、Project Member、Analysis Brief、Metric Definition、Visual Template 和项目级配置。用户直接管理自己的 Project；Project Member 授权结构暂时保留用于兼容和后续协作，但第一阶段不提供 Workspace 成员管理。

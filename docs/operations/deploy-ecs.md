@@ -11,7 +11,7 @@ cp .env.production.example .env.production
 chmod 600 .env.production
 ```
 
-填写强随机的 `POSTGRES_PASSWORD`、`S3_SECRET_KEY`、`AUTH_JWT_SECRET`，并将 `WEB_ORIGIN` 改为 Vercel 生产域名。外部登录网关必须签发 HS256 JWT：用户 ID 放在 `sub`，并通过 `Authorization: Bearer` 或 `langreport_session` HttpOnly Cookie 传递给 API。
+填写强随机的 `POSTGRES_PASSWORD`、`S3_SECRET_KEY`、`AUTH_JWT_SECRET`，并将 `WEB_ORIGIN` 改为 Vercel 生产域名。使用 `pnpm auth:hash-password` 离线生成密码哈希，将整段输出以单引号包裹后写入 `AUTH_LOGIN_PASSWORD_HASH`，同时配置 `AUTH_LOGIN_USERNAME` 和作为 JWT `sub` 的 `AUTH_LOGIN_USER_ID`。不要把明文密码写入 `.env.production`。内置登录网关签发 HS256 JWT，并只通过 HttpOnly `langreport_session` Cookie 返回浏览器；默认有效期为 7 天，部署侧只允许缩短。
 
 ## 2. 启动 API、基础服务和 Workers
 
@@ -47,12 +47,12 @@ docker compose --env-file .env.production -f infra/docker-compose.prod.yml run -
 
 `db:verify` 只在目标数据库创建并删除 `migration_verify_*` 临时 schema，重放完整迁移链并检查历史 Phase 2–4 Job/Revision/Theme；生产发布仍需由运维确认备份、回滚窗口和数据库权限。
 
-首次部署还需要把外部登录网关的管理员 `sub` 初始化为个人 Project 作用域。开发 Bootstrap 在生产环境不可用，使用下面的显式确认命令按用户创建内部私有 Workspace、Project 和授权记录；重复执行不会重复创建成员或 Project：
+首次部署还需要把 `AUTH_LOGIN_USER_ID` 初始化为个人 Project 作用域。开发 Bootstrap 在生产环境不可用，使用下面的显式确认命令按用户创建内部私有 Workspace、Project 和授权记录；重复执行不会重复创建成员或 Project：
 
 ```sh
 docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm \\
   -e PROVISION_CONFIRM=I_UNDERSTAND \\
-  -e PROVISION_USER_ID='<jwt-sub>' \\
+  -e PROVISION_USER_ID='<AUTH_LOGIN_USER_ID>' \\
   -e PROVISION_PROJECT_NAME='咨询项目 Demo' \\
   api pnpm --filter @langreport/api provision:production
 ```
@@ -90,14 +90,14 @@ pnpm phase1:release-gate
 
 ```sh
 PHASE5_API_ORIGIN=https://<public-api-origin> \\
-PHASE5_JWT='<short-lived-user-token>' \\
-PHASE5_SESSION_COOKIE='langreport_session=<short-lived-session-value>' \\
+PHASE5_LOGIN_USERNAME='<AUTH_LOGIN_USERNAME>' \\
+PHASE5_LOGIN_PASSWORD='<deployment-login-password>' \\
 PHASE5_WORKSPACE_ID='<workspace-id>' \\
 PHASE5_PROJECT_ID='<optional-project-id>' \\
 pnpm phase5:smoke
 ```
 
-该命令只输出每个检查的 HTTP 状态，不输出认证凭据；`PHASE5_JWT` 和 `PHASE5_SESSION_COOKIE` 至少提供一个，两个都提供时会分别回归 Bearer 和 HttpOnly Cookie。它会验证健康检查、数据库就绪、无认证拒绝、生产环境伪造 `x-user-id` 拒绝和插件管理接口。提供 `PHASE5_PROJECT_ID` 时还会检查 Project 插件 Binding 和能力目录。Smoke 通过后仍需由运维确认 HTTPS、Cookie 属性、网关密钥轮换和 ECS 安全组。
+该命令只输出每个检查的 HTTP 状态，不输出认证凭据。推荐提供 `PHASE5_LOGIN_USERNAME` 和 `PHASE5_LOGIN_PASSWORD`，脚本会真实登录并验证 `langreport_session` 的 `HttpOnly`、`Secure`、`SameSite=Lax`、`Path=/` 和 7 天 `Max-Age`，再用 Cookie 查询会话、访问业务接口并登出。`PHASE5_JWT` 或 `PHASE5_SESSION_COOKIE` 仍可用于兼容验证。脚本同时验证健康检查、数据库就绪、无认证拒绝、生产环境伪造 `x-user-id` 拒绝和插件管理接口。提供 `PHASE5_PROJECT_ID` 时还会检查 Project 插件 Binding 和能力目录。
 
 如需验证完整垂直链路，可在 Smoke 通过后执行下面的验收脚本。它会写入一条带随机后缀的数据快照、对话和 Generation Job，并默认执行“撤销插件 → 读取历史 Revision → 导出 → 恢复插件”；不要在需要保持生产数据完全不变的环境执行，或设置 `PHASE5_E2E_REVOCATION=false` 跳过撤销段：
 
@@ -124,7 +124,7 @@ NEXT_PUBLIC_API_URL=/api
 
 ## 注意事项
 
-- API 生产边界自动校验签名 JWT 并拒绝可伪造的 `x-user-id`；部署前必须完成外部登录网关的签发、密钥配置和真实登录回归，未完成前不要正式公网开放。
+- API 生产边界自动校验内置登录网关签发的 JWT 并拒绝可伪造的 `x-user-id`；部署前必须配置登录账号、scrypt 哈希与签名密钥，并完成真实 HTTPS 登录回归，未完成前不要正式公网开放。
 - 第一阶段正式发布必须先通过 `pnpm phase1:release-gate`；当前仓库的 deterministic 配置只适用于离线和回归测试。
 - 当前上传接口会将文件读入内存，2 核 4 GiB 服务器不适合高并发大文件上传。
 - 2 核 4 GiB ECS 建议 Generation Worker 和 Render Worker 各运行一个实例；增加实例前先观察内存和任务耗时。

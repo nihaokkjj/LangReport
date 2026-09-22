@@ -15,6 +15,7 @@ import { registerChartRoutes } from "./chart-routes.js";
 import { sendHttpError } from "./http-errors.js";
 import { isDevBootstrapAllowed } from "./http-contracts.js";
 import { AuthenticationError, userIdFromRequest } from "./auth.js";
+import { registerAuthRoutes } from "./auth-routes.js";
 
 const RENDERER_VERSION = "vega-lite-svg-v1";
 const MAX_GENERATION_ATTEMPTS = 3;
@@ -58,6 +59,7 @@ export async function registerRoutes(app: FastifyInstance, environment: NodeJS.P
   const generationJobStatusObserver = createGenerationJobStatusObserver(app.log);
   const generationStatusLongPollEnabled = !["0", "false", "off"].includes(String(environment.GENERATION_STATUS_LONG_POLL ?? "true").toLowerCase());
   app.addHook("onClose", async () => generationJobStatusObserver.close());
+  await registerAuthRoutes(app, environment);
   await registerChartRoutes(app);
 
   app.post("/api/v1/dev/bootstrap", async (request, reply) => {

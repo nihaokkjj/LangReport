@@ -123,7 +123,11 @@ test("message-triggered generation is single-write, idempotent and explains miss
   const noMetric = await fixture("no-metric", { snapshot: true, metricCount: 0 });
   const multipleMetrics = await fixture("multiple-metrics", { snapshot: true, metricCount: 2 });
   const noBrief = await fixture("no-brief", { snapshot: true, metricCount: 1, brief: false });
-  const app = await buildApp({ logger: false, environment: { ...process.env, NODE_ENV: "test", APP_ENV: "test" } });
+  const app = await buildApp({
+    logger: false,
+    environment: { ...process.env, NODE_ENV: "test", APP_ENV: "test" },
+    authProvider: (request) => typeof request.headers["x-user-id"] === "string" ? { id: request.headers["x-user-id"] } : null
+  });
   await app.ready();
 
   try {

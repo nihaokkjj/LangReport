@@ -456,7 +456,7 @@ function seedParameterValues(operation: OpenApiOperation): Record<string, string
   return Object.fromEntries((operation.parameters ?? []).map((parameter) => {
     const initialValue = parameter.schema?.default !== undefined
       ? parameter.schema.default
-      : parameter.name.toLowerCase() === "x-user-id" ? "local-dev-user" : "";
+      : "";
     return [parameterKey(parameter), inputValue(initialValue)];
   }));
 }
@@ -484,8 +484,8 @@ function sanitizeHistoryState(state: RequestState, operation: OpenApiOperation):
   return {
     parameterValues,
     contentType: state.contentType,
-    bodyText: state.bodyText,
-    bodyFields: state.bodyFields
+    bodyText: operation.operationId === "login" ? "" : state.bodyText,
+    bodyFields: operation.operationId === "login" ? {} : state.bodyFields
   };
 }
 
@@ -565,7 +565,12 @@ function buildRequest(
     }
     headers["content-type"] = contentType || "application/json";
     body = state.bodyText;
-    bodyPreview = state.bodyText;
+    if (entry.operation.operationId === "login") {
+      const parsed = JSON.parse(state.bodyText) as Record<string, unknown>;
+      bodyPreview = formatJson({ ...parsed, password: "[REDACTED]" });
+    } else {
+      bodyPreview = state.bodyText;
+    }
   }
 
   const partial = { url, method: entry.method, headers, body, bodyPreview, formEntries };
@@ -606,6 +611,7 @@ async function requestScenario(
     method: request.method,
     headers: request.headers,
     body: request.body,
+    credentials: "include",
     cache: "no-store"
   });
   const raw = await response.text();
@@ -1104,6 +1110,7 @@ export default function ApiConsolePage() {
         method: request.method,
         headers: request.headers,
         body: request.body,
+        credentials: "include",
         cache: "no-store"
       });
       const raw = await fetchResponse.text();

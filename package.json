@@ -20,6 +20,7 @@
     "phase1:release-gate": "pnpm --filter @langreport/model-gateway exec tsx ../../scripts/phase1-release-gate.ts",
     "phase5:smoke": "node scripts/phase5-production-smoke.mjs",
     "phase5:e2e": "node scripts/phase5-production-e2e.mjs",
+    "auth:hash-password": "pnpm --filter @langreport/api auth:hash-password",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down"
   },

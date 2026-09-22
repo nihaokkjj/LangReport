@@ -150,10 +150,10 @@ export async function listWorkspaceMemory(workspaceId: string, userId: string): 
 export async function getMemoryContextForGeneration(input: {
   projectId: string;
   conversationId?: string;
-  userId?: string;
+  userId: string;
   prompt?: string;
 }): Promise<MemoryContext> {
-  const access = await getProjectAccess(input.projectId, input.userId ?? "local-dev-user");
+  const access = await getProjectAccess(input.projectId, input.userId);
   const [projectRecords, workspaceRecords, conversation] = await Promise.all([
     db.select().from(memories).where(and(
       eq(memories.workspaceId, access.workspaceId),

@@ -4,9 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./plugins.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "/api";
-const devHeaders: Record<string, string> = process.env.NODE_ENV === "production"
-  ? {}
-  : { "x-user-id": process.env.NEXT_PUBLIC_DEV_USER_ID ?? "local-dev-user" };
+const devHeaders: Record<string, string> = {};
 const jsonHeaders = { ...devHeaders, "content-type": "application/json" };
 
 function apiEndpoint(path: string): string {
@@ -17,7 +15,12 @@ function apiEndpoint(path: string): string {
 async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(apiEndpoint(path), { ...init, credentials: "include", cache: "no-store" });
   const payload = await response.json().catch(() => ({})) as T & { error?: string; code?: string };
-  if (!response.ok) throw new Error(`${payload.error ?? "请求失败"}${payload.code ? ` · ${payload.code}` : ""}`);
+  if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.location.assign(`/login?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`);
+    }
+    throw new Error(`${payload.error ?? "请求失败"}${payload.code ? ` · ${payload.code}` : ""}`);
+  }
   return payload;
 }
 

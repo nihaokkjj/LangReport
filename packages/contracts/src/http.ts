@@ -137,16 +137,11 @@ const commonHeaders: JsonSchema = {
   properties: {
     authorization: {
       type: "string",
-      description: "生产环境可选的 Bearer HS256 JWT；用户身份以签名 Token 的 sub 为准"
+      description: "可选的 Bearer HS256 JWT；用户身份以签名 Token 的 sub 为准"
     },
     cookie: {
       type: "string",
-      description: "生产环境可选的 HttpOnly 会话 Cookie；名称由 AUTH_SESSION_COOKIE 配置"
-    },
-    "x-user-id": {
-      type: "string",
-      minLength: 1,
-      description: "开发环境用户标识；生产环境由认证上下文确定"
+      description: "可选的 HttpOnly 会话 Cookie；名称由 AUTH_SESSION_COOKIE 配置"
     },
     "x-request-id": {
       type: "string",
@@ -194,6 +189,7 @@ export const errorResponseSchema: JsonSchema = dto({
 
 const standardErrorResponses: Record<number, JsonSchema> = {
   400: responseWithDescription(errorResponseSchema, "请求参数或业务输入无效"),
+  401: responseWithDescription(errorResponseSchema, "当前请求没有有效登录身份"),
   403: responseWithDescription(errorResponseSchema, "当前用户没有执行该操作的权限"),
   404: responseWithDescription(errorResponseSchema, "资源不存在或当前用户不可见"),
   409: responseWithDescription(errorResponseSchema, "幂等键、版本或资源状态冲突"),
@@ -651,6 +647,11 @@ const binaryResponse = {
 const objectResponse = json({});
 const textResponse = string();
 const noContentResponse: JsonSchema = { type: "null" };
+const authSessionDto = dto({
+  authenticated: boolean(),
+  userId: string(),
+  expiresAt: nullable(dateTime())
+}, ["authenticated", "userId", "expiresAt"]);
 
 const route = (
   input: Omit<RouteContract, keyof RouteMetadata> & RouteMetadata
@@ -701,6 +702,9 @@ const pathRequest = (path: string, input: Omit<RouteRequest, "params" | "headers
 export const routeContracts: RouteContract[] = [
   contract("GET", "/health", "healthCheck", ["Health"], "检查 API 存活状态", { 200: dto({ status: string(), service: string() }, ["status", "service"]) }),
   contract("GET", "/ready", "readinessCheck", ["Health"], "检查数据库就绪状态", { 200: dto({ status: string(), database: string() }, ["status", "database"]), 503: errorResponseSchema }),
+  contract("POST", "/api/v1/auth/login", "login", ["Auth"], "验证部署账号并建立 HttpOnly Cookie 会话", { 200: authSessionDto }, { permission: "无需已有身份；需要部署侧登录配置", idempotency: "重复成功登录会签发新的短期会话", successDescription: "成功响应 200，并通过 Set-Cookie 写入 HttpOnly langreport_session", request: { body: json({ username: { type: "string", minLength: 1, maxLength: 128 }, password: { type: "string", minLength: 1, maxLength: 1024, format: "password" } }, ["username", "password"]) }, extraResponses: { 429: errorResponseSchema, 503: errorResponseSchema } }),
+  contract("GET", "/api/v1/auth/session", "getAuthSession", ["Auth"], "读取当前 Cookie 会话", { 200: authSessionDto }, { permission: "需要有效 Bearer 或 langreport_session Cookie", idempotency: "只读；不延长会话" }),
+  contract("POST", "/api/v1/auth/logout", "logout", ["Auth"], "清除当前 HttpOnly Cookie 会话", { 204: noContentResponse }, { permission: "无需有效身份；始终清除浏览器 Cookie", idempotency: "重复调用保持 Cookie 已清除" }),
   contract("POST", "/api/v1/dev/bootstrap", "devBootstrap", ["Internal"], "创建或读取本地开发 Workspace 和 Project", { 200: dto({ workspace: workspaceDto, project: projectDto }, ["workspace", "project"]) }, { internal: true }),
   contract("GET", "/openapi.json", "getOpenApiDocument", ["Internal"], "读取当前 API 的 OpenAPI 文档", { 200: objectResponse }, { internal: true, exposeInOpenApi: false }),
   contract("GET", "/docs", "getSwaggerUi", ["Internal"], "打开标准 Swagger UI 调试页面", { 200: textResponse }, { internal: true, exposeInOpenApi: false, responseContentTypes: { 200: "text/html" } }),

@@ -40,4 +40,5 @@ Consulting Project
 - [Phase 5 设计与实施](./docs/history/phase5-design.md)
 - [开发环境](./docs/operations/development-setup.md)
 - [ECS 发布与真实百炼门禁](./docs/operations/deploy-ecs.md)
+- [登录网关变更设计](./docs/changes/2026-09-22-login-gateway/proposal.md)
 - [架构决策记录](./docs/adr/)

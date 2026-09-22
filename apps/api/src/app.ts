@@ -25,6 +25,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   const app = Fastify({
     logger: options.logger ?? true,
     requestIdHeader: "x-request-id",
+    trustProxy: environment.TRUST_PROXY === "true",
     ajv: {
       customOptions: { useDefaults: false }
     }

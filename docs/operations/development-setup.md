@@ -24,10 +24,16 @@ docker compose version
 ```powershell
 Copy-Item .env.example .env
 pnpm install
+pnpm auth:hash-password
 pnpm infra:up
 pnpm db:push
 pnpm dev:all
 ```
+
+把哈希脚本输出写入本地 `.env` 的 `AUTH_LOGIN_PASSWORD_HASH`，并同时配置
+`AUTH_JWT_SECRET`、`AUTH_LOGIN_USERNAME` 和 `AUTH_LOGIN_USER_ID`。开发环境不会接受
+`x-user-id` 或隐式 `local-dev-user`；未配置登录网关时 `/login` 会明确提示服务不可用。
+本地 HTTP Cookie 仍为 `HttpOnly; SameSite=Lax; Path=/`，只有 `Secure` 留给 HTTPS 生产环境。
 
 启动后：
 
@@ -61,7 +67,8 @@ Generation Worker 和 Render Worker 通过 PostgreSQL-backed Generation Job 状�
 
 ## 4. 数据输入 API
 
-当前本地开发身份是 `local-dev-user`，通过 `x-user-id` 请求头传递；这只用于开发验证，不能作为生产认证方案。
+本地开发与生产共用账号密码、HS256 JWT 和 HttpOnly Cookie 身份边界。先访问 `/login`
+建立会话，再由工作台调用开发 Bootstrap；Bootstrap 只负责创建或读取本地 Demo 数据，不负责授予身份。
 
 ```text
 POST /api/v1/dev/bootstrap
