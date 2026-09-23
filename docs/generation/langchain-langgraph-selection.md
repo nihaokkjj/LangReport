@@ -138,7 +138,7 @@ M1-A 先采用 **项目自有 Model Gateway + 原生 HTTP + 现有有限 Worker 
 - 拟新增的 `packages/model-gateway`：将 LangChain 客户端、消息构造与结构化输出封装在内部。对外只暴露本地合同，负责脱敏、允许的目的地、模型能力、预算和调用记录。
 - [Generation](../../packages/generation/src/index.ts)：调用 Gateway 获得计划，先做独立的模型计划结构/业务校验，再使用现有受限执行器和校验器。校验后再组装真实数据与固定主题；渲染完成后执行独立的渲染产物校验。
 - [Generation Worker](../../apps/generation-worker/src/index.ts)：继续原子领取任务、检查权限与固定版本、推进数据库状态。选择 LangGraph 时由它调用编译后的工作流。
-- [API](../../apps/api/src/routes.ts)、[HTTP 契约](../../packages/contracts/src/http.ts)、[Web](../../apps/web/app/page.tsx)：继续面向 Generation Job、澄清问题和 Revision，不暴露模型厂商响应或 Graph 内部对象。`localStorage` 只能保存界面偏好，服务端负责校验 Profile、当前 run 和 Project 授权。
+- [API](../../apps/api/src/routes.ts)、[HTTP 契约](../../packages/contracts/src/http.ts)、[Web](../../apps/web/app/%28protected%29/page.tsx)：继续面向 Generation Job、澄清问题和 Revision，不暴露模型厂商响应或 Graph 内部对象。`localStorage` 只能保存界面偏好，服务端负责校验 Profile、当前 run 和 Project 授权。
 - [Memory](../../packages/memory/src/index.ts)：使用现有 Candidate 确认流程。Checkpoint 或聊天消息历史不会自动成为 Project Memory。
 - Render Worker：继续拥有渲染和业务 Revision 写入；执行图完成不代表 Evidence Block 已成功生成。
 

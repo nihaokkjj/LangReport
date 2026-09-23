@@ -66,7 +66,7 @@
 证据：
 
 - [apps/api/src/routes.ts](../../apps/api/src/routes.ts) 的 Project 查询、创建和 Workspace 权限代码。
-- [apps/web/app/page.tsx](../../apps/web/app/page.tsx) 的 Project 选择器和创建入口。
+- [apps/web/app/(protected)/page.tsx](../../apps/web/app/%28protected%29/page.tsx) 的 Project 选择器和创建入口。
 - [packages/domain/test/unit/index.test.ts](../../packages/domain/test/unit/index.test.ts) 通过了角色和 Revision 权限测试。
 
 未完成：
@@ -113,7 +113,7 @@
 
 证据：
 
-- [apps/web/app/page.tsx](../../apps/web/app/page.tsx)：`sendMessage` 与 `generateEvidence` 是两个独立动作。
+- [apps/web/app/(protected)/page.tsx](../../apps/web/app/%28protected%29/page.tsx)：`sendMessage` 与 `generateEvidence` 是两个独立动作。
 - [apps/api/src/routes.ts](../../apps/api/src/routes.ts)：创建 Job 时固化 Conversation projection。
 - [packages/generation/test/unit/context-projection.test.ts](../../packages/generation/test/unit/context-projection.test.ts) 已纳入 Generation 测试。
 

@@ -2,18 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import styles from "./login.module.css";
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "/api";
-
-function apiEndpoint(path: string): string {
-  const base = apiUrl.replace(/\/$/, "");
-  return base === "/api" && path.startsWith("/api/") ? `${base}${path.slice(4)}` : `${base}${path}`;
-}
-
-function safeReturnTo(): string {
-  const value = new URLSearchParams(window.location.search).get("returnTo");
-  return value?.startsWith("/") && !value.startsWith("//") && !/^\/login(?:[/?#]|$)/.test(value) ? value : "/";
-}
+import { authErrorMessage, getSession, login, returnToFromLocation } from "../../features/auth/auth-client";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -24,11 +13,11 @@ export default function LoginPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void fetch(apiEndpoint("/api/v1/auth/session"), { credentials: "include", cache: "no-store" })
-      .then((response) => {
-        if (!cancelled && response.ok) window.location.replace(safeReturnTo());
-      })
-      .finally(() => { if (!cancelled) setIsChecking(false); });
+    void getSession().then((session) => {
+      if (!cancelled && session.authenticated) window.location.replace(returnToFromLocation());
+    }).catch((sessionError: unknown) => {
+      if (!cancelled) setError(authErrorMessage(sessionError));
+    }).finally(() => { if (!cancelled) setIsChecking(false); });
     return () => { cancelled = true; };
   }, []);
 
@@ -38,28 +27,12 @@ export default function LoginPage() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const response = await fetch(apiEndpoint("/api/v1/auth/login"), {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password })
-      });
-      const payload = await response.json().catch(() => ({})) as { error?: string; code?: string };
+      await login({ username: username.trim(), password });
       setPassword("");
-      if (!response.ok) {
-        const message = response.status === 429
-          ? "登录尝试过于频繁，请稍后再试。"
-          : response.status === 503
-            ? "登录服务尚未配置，请联系部署维护者。"
-            : "账号或密码错误，请重新输入。";
-        setError(message);
-        return;
-      }
-      window.location.replace(safeReturnTo());
-    } catch {
+      window.location.replace(returnToFromLocation());
+    } catch (loginError: unknown) {
       setPassword("");
-      setError("暂时无法连接登录服务，请检查网络后重试。");
+      setError(authErrorMessage(loginError));
     } finally {
       setIsSubmitting(false);
     }

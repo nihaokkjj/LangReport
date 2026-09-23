@@ -20,6 +20,7 @@ function createFixture(options: { initialMessages?: Array<{ id: string; conversa
   let metric: Record<string, unknown> | null = null;
   let brief: Record<string, unknown> | null = null;
   let editRequest: Record<string, unknown> | null = null;
+  let reviewComments: Array<Record<string, unknown>> = [];
   let revisionStatus: "draft" | "in_review" | "approved" = "draft";
   const schema = [
     { name: "月份", inferredType: "date", nullCount: 0, distinctCount: 3, sampleValues: ["2026-01"] },
@@ -81,6 +82,7 @@ function createFixture(options: { initialMessages?: Array<{ id: string; conversa
       const url = new URL(request.url());
       const path = url.pathname;
       if (url.hostname !== "127.0.0.1" && url.hostname !== "localhost") throw new Error(`unexpected external request: ${request.url()}`);
+      if (path === "/api/v1/auth/session" && request.method() === "GET") return route.fulfill({ json: { authenticated: true, userId: "e2e-user", expiresAt: "2026-09-29T00:00:00.000Z" } });
       if (path === "/api/v1/dev/bootstrap" && request.method() === "POST") return route.fulfill({ json: { workspace: { id: "workspace-sales", name: "E2E Workspace", role: "owner" }, project: { id: projectId, name: "销售分析 Demo", clientName: "海岚消费", objective: "验证区域销售增长机会。", audience: "client_presentation", visualTemplate: "consulting-neutral" } } });
       if (path === "/api/v1/projects" && request.method() === "GET") return route.fulfill({ json: { workspace: { id: "workspace-sales", name: "E2E Workspace", role: "owner" }, projects: [{ id: projectId, name: "销售分析 Demo", clientName: "海岚消费", objective: "验证区域销售增长机会。", audience: "client_presentation", visualTemplate: "consulting-neutral" }] } });
       if (path === `/api/v1/projects/${projectId}/data-assets` && request.method() === "GET") return route.fulfill({ json: { assets: asset ? [asset] : [] } });
@@ -145,6 +147,13 @@ function createFixture(options: { initialMessages?: Array<{ id: string; conversa
       }
       if (path === `/api/v1/chart-revisions/${revisionId}/submit` && request.method() === "POST") { revisionStatus = "in_review"; return route.fulfill({ json: { revision: revision() } }); }
       if (path === `/api/v1/chart-revisions/${revisionId}/approve` && request.method() === "POST") { revisionStatus = "approved"; return route.fulfill({ json: { revision: revision() } }); }
+      if (path === `/api/v1/chart-revisions/${revisionId}/comments` && request.method() === "GET") return route.fulfill({ json: { comments: reviewComments } });
+      if (path === `/api/v1/chart-revisions/${revisionId}/comments` && request.method() === "POST") {
+        const body = JSON.parse(request.postData() ?? "{}") as { body?: string };
+        const created = { id: `comment-${reviewComments.length + 1}`, revisionId, authorId: "e2e-user", body: body.body ?? "", anchor: null, resolvedAt: null, createdAt: now };
+        reviewComments = [...reviewComments, created];
+        return route.fulfill({ status: 201, json: { comment: created } });
+      }
       if (path === `/api/v1/chart-revisions/${revisionId}/plugin-context` && request.method() === "GET") return route.fulfill({ json: { pluginSnapshot: {} } });
       if (path === `/api/v1/chart-revisions/${revisionId}/outputs/svg` && request.method() === "GET") return route.fulfill({ headers: { "content-type": "image/svg+xml", "content-disposition": 'attachment; filename="langreport-revision-sales-r1.svg"' }, body: "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>" });
       return route.fulfill({ status: 404, json: { error: `unhandled ${request.method()} ${path}` } });
@@ -281,6 +290,12 @@ test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => 
   await expect(evidenceCanvas.getByText("审核中", { exact: true })).toBeVisible();
   await expect(evidenceCanvas.getByRole("button", { name: "批准版本" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "批准此版本", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "刷新评论", exact: true }).click();
+  await expect(page.getByText("暂无评论。审核意见会保留在当前 Revision。", { exact: true })).toBeVisible();
+  await page.getByLabel("审核意见").fill("请补充来源。");
+  await page.getByRole("button", { name: "添加评论", exact: true }).click();
+  await expect(page.getByText("审核评论已添加到当前 Revision。", { exact: true })).toBeVisible();
+  await expect(page.locator(".review-comment")).toContainText("请补充来源。");
   await page.getByRole("button", { name: "批准此版本", exact: true }).click();
   await expect(evidenceCanvas.getByText("已批准", { exact: true })).toBeVisible();
 

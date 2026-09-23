@@ -12,7 +12,7 @@
 
 | 位置 | 已有行为 | 实施时需要补齐 |
 | --- | --- | --- |
-| [Web](../../apps/web/app/page.tsx) `generateEvidence` | 创建 Generation Job 并轮询 | 澄清状态、允许选择的模型配置、实际使用模型与失败原因 |
+| [Web](../../apps/web/app/%28protected%29/page.tsx) `generateEvidence` | 创建 Generation Job 并轮询 | 澄清状态、允许选择的模型配置、实际使用模型与失败原因 |
 | [API](../../apps/api/src/routes.ts) `createGenerationJob` | 固定 Snapshot、指标、Brief、主题等输入 | 模型路由快照、明确的指标选择与 Brief 确认；当前自动创建的 Brief 缺少时间信息却被标记 confirmed |
 | [Generation Worker](../../apps/generation-worker/src/index.ts) | 读取 Snapshot 并持久化 Cycle 结果 | 继续补齐真实网关调用、Worker 租约和调用记录 |
 | [Generation](../../packages/generation/src/index.ts) `GenerationCycle` | 通过确定性 adapter 包装关键词意图、规则计划、计算、Flint Spec、最多两轮规则修复 | 替换 adapter 为真实 Model Gateway，并保留明确的输出字段映射和统一修复预算 |

@@ -117,7 +117,7 @@ LangReport 采用受限 TransformPlan、独立 Worker、数据最小化和声明
 - [README.md](../../README.md)
 - [系统架构](../architecture/architecture.md)
 - [MVP 路线](../product/mvp-roadmap.md)
-- [Web 页面](../../apps/web/app/page.tsx)
+- [Web 页面](../../apps/web/app/%28protected%29/page.tsx)
 - [图表契约](../../packages/contracts/src/index.ts)
 - [Flint 适配器](../../packages/flint-adapter/src/index.ts)
 
@@ -161,4 +161,3 @@ LangReport 采用受限 TransformPlan、独立 Worker、数据最小化和声明
 - 每个图表能否完整展示数据、变换和版本来源；
 - 新数据快照到更新交付物的时间；
 - 用户是否愿意分享/审核/再次使用，而不只是生成一次后离开。
-

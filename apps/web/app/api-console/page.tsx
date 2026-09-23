@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./api-console.module.css";
+import { apiRequest, formatApiError } from "../../lib/http-client";
 
 const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? "/api").replace(/\/$/, "");
 const historyStorageKey = "langreport-api-console-history-v1";
@@ -607,25 +608,15 @@ async function requestScenario(
   body?: Record<string, unknown>
 ): Promise<ScenarioHttpResult> {
   const request = buildScenarioRequest(entries, operationId, pathValues, body);
-  const response = await fetch(request.url, {
+  const result = await apiRequest<Record<string, unknown>>(request.url, {
     method: request.method,
     headers: request.headers,
     body: request.body,
-    credentials: "include",
-    cache: "no-store"
-  });
-  const raw = await response.text();
-  let payload: Record<string, unknown> = {};
-  try {
-    const parsed = raw ? JSON.parse(raw) as unknown : {};
-    if (isRecord(parsed)) payload = parsed;
-    else payload = { raw };
-  } catch {
-    payload = { raw };
-  }
-  const requestId = response.headers.get("x-request-id") ?? (typeof payload.requestId === "string" ? payload.requestId : null);
-  if (!response.ok) throw new ScenarioRequestError(response.status, requestId, payload);
-  return { status: response.status, requestId, payload };
+  }, { unauthorized: "none", throwOnError: false });
+  const payload = Object.keys(result.payload).length > 0 ? result.payload : (result.raw ? { raw: result.raw } : {});
+  const requestId = result.requestId ?? (typeof payload.requestId === "string" ? payload.requestId : null);
+  if (!result.response.ok) throw new ScenarioRequestError(result.response.status, requestId, payload);
+  return { status: result.response.status, requestId, payload };
 }
 
 function scenarioJobFromPayload(payload: Record<string, unknown>): ScenarioJob {
@@ -641,7 +632,7 @@ function scenarioErrorMessage(error: unknown): string {
     const code = typeof error.payload.code === "string" ? ` · ${error.payload.code}` : "";
     return `HTTP ${error.status}${code}：${error.message}`;
   }
-  return error instanceof Error ? error.message : "Loop 4 场景执行失败";
+  return formatApiError(error, "Loop 4 场景执行失败");
 }
 
 function scenarioStepClass(status: ScenarioStepStatus): string {
@@ -1019,9 +1010,9 @@ export default function ApiConsolePage() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const result = await fetch(openApiEndpoint(), { cache: "no-store" });
-      const payload = await result.json() as unknown;
-      if (!result.ok) throw new Error(isRecord(payload) && typeof payload.error === "string" ? payload.error : "无法读取 OpenAPI 文档");
+      const result = await apiRequest<unknown>(openApiEndpoint(), {}, { unauthorized: "none", throwOnError: false });
+      const payload = result.payload;
+      if (!result.response.ok) throw new Error(isRecord(payload) && typeof payload.error === "string" ? payload.error : "无法读取 OpenAPI 文档");
       if (!isRecord(payload) || !isRecord(payload.paths)) throw new Error("OpenAPI 文档格式无效");
       const documentPayload = payload as unknown as OpenApiDocument;
       const nextEntries = buildEntries(documentPayload);
@@ -1029,7 +1020,7 @@ export default function ApiConsolePage() {
       setEntries(nextEntries);
       setSelectedKey((current) => current && nextEntries.some((entry) => entry.key === current) ? current : nextEntries[0]?.key ?? null);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "无法读取 OpenAPI 文档");
+      setLoadError(formatApiError(error, "无法读取 OpenAPI 文档"));
     } finally {
       setIsLoading(false);
     }
@@ -1106,15 +1097,12 @@ export default function ApiConsolePage() {
       const state = { parameterValues, contentType, bodyText, bodyFields };
       const request = buildRequest(selectedEntry, state, file);
       const startedAt = performance.now();
-      const fetchResponse = await fetch(request.url, {
+      const result = await apiRequest<Record<string, unknown>>(request.url, {
         method: request.method,
         headers: request.headers,
         body: request.body,
-        credentials: "include",
-        cache: "no-store"
-      });
-      const raw = await fetchResponse.text();
-      const nextResponse = responseFromFetch(fetchResponse, raw, Math.round(performance.now() - startedAt), request);
+      }, { unauthorized: "none", throwOnError: false });
+      const nextResponse = responseFromFetch(result.response, result.raw, Math.round(performance.now() - startedAt), request);
       setResponse(nextResponse);
       const historyItem: HistoryItem = {
         id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -1131,7 +1119,7 @@ export default function ApiConsolePage() {
       };
       setHistory((current) => [historyItem, ...current.filter((item) => item.key !== historyItem.key || item.at !== historyItem.at)].slice(0, 30));
     } catch (error) {
-      setRequestError(error instanceof Error ? error.message : "请求发送失败");
+      setRequestError(formatApiError(error, "请求发送失败"));
     } finally {
       setIsSending(false);
     }

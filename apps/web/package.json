@@ -6,12 +6,13 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node ../api/node_modules/tsx/dist/cli.mjs --test test/unit/generation-job-status-watcher.test.ts",
+    "test": "node ../api/node_modules/tsx/dist/cli.mjs --test test/unit/chart-editor-state.test.ts test/unit/generation-job-status-watcher.test.ts test/unit/generation-state.test.ts test/unit/project-context.test.ts test/unit/http-client.test.ts test/unit/revision-export.test.ts test/unit/project-queries.test.ts test/unit/project-server-queries.test.ts test/unit/snapshot-preview.test.ts test/unit/review-comments.test.ts",
     "test:e2e": "playwright test -c playwright.config.ts",
     "test:coverage": "node --experimental-test-coverage ../api/node_modules/tsx/dist/cli.mjs --test test/unit/generation-job-status-watcher.test.ts",
     "test:typecheck": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.103.2",
     "next": "16.3.3",
     "react": "19.2.8",
     "react-dom": "19.2.8"

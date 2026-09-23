@@ -2,27 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./plugins.module.css";
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "/api";
-const devHeaders: Record<string, string> = {};
-const jsonHeaders = { ...devHeaders, "content-type": "application/json" };
-
-function apiEndpoint(path: string): string {
-  const base = apiUrl.replace(/\/$/, "");
-  return base === "/api" && path.startsWith("/api/") ? `${base}${path.slice(4)}` : `${base}${path}`;
-}
-
-async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(apiEndpoint(path), { ...init, credentials: "include", cache: "no-store" });
-  const payload = await response.json().catch(() => ({})) as T & { error?: string; code?: string };
-  if (!response.ok) {
-    if (response.status === 401 && typeof window !== "undefined") {
-      window.location.assign(`/login?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`);
-    }
-    throw new Error(`${payload.error ?? "请求失败"}${payload.code ? ` · ${payload.code}` : ""}`);
-  }
-  return payload;
-}
+import { apiFetch, devHeaders, jsonHeaders, formatApiError } from "../../../lib/http-client";
 
 type Workspace = { id: string; name: string };
 type Project = { id: string; name: string };
@@ -116,7 +96,7 @@ export default function PluginsPage() {
         setProjectId(nextProjectId);
         if (payload.workspace) await load(nextProjectId, payload.workspace.id);
       } catch (bootError) {
-        if (!cancelled) setError(bootError instanceof Error ? bootError.message : "无法读取项目能力");
+        if (!cancelled) setError(formatApiError(bootError, "无法读取项目能力"));
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -143,7 +123,7 @@ export default function PluginsPage() {
       setNotice(result.reused ? "插件已经安装，未重复创建。" : "插件已加入当前账号的可用能力。");
       await refresh();
     } catch (installError) {
-      setError(installError instanceof Error ? installError.message : "插件安装失败");
+      setError(formatApiError(installError, "插件安装失败"));
     } finally {
       setIsBusy(null);
     }
@@ -164,7 +144,7 @@ export default function PluginsPage() {
       setValidationReport(result.validationReport);
       if (result.validationReport.valid) setNotice("Manifest 校验通过，可以安装。");
     } catch (validationError) {
-      setError(validationError instanceof Error ? validationError.message : "Manifest 校验失败");
+      setError(formatApiError(validationError, "Manifest 校验失败"));
     } finally {
       setIsBusy(null);
     }
@@ -175,7 +155,7 @@ export default function PluginsPage() {
     try {
       await installManifest(JSON.parse(manifestText) as Manifest, "uploaded", "install-uploaded");
     } catch (parseError) {
-      setError(parseError instanceof Error ? parseError.message : "Manifest JSON 无效");
+      setError(formatApiError(parseError, "Manifest JSON 无效"));
     }
   }
 
@@ -194,7 +174,7 @@ export default function PluginsPage() {
       setNotice(enabled ? `${installation.pluginId} 已为当前项目启用。` : `${installation.pluginId} 已停用。`);
       await refresh();
     } catch (toggleError) {
-      setError(toggleError instanceof Error ? toggleError.message : "项目插件状态更新失败");
+      setError(formatApiError(toggleError, "项目插件状态更新失败"));
     } finally {
       setIsBusy(null);
     }
@@ -218,7 +198,7 @@ export default function PluginsPage() {
       setNotice(`主题已切换为 ${theme.id}，下一次生成会固化该主题快照。`);
       await refresh();
     } catch (themeError) {
-      setError(themeError instanceof Error ? themeError.message : "主题更新失败");
+      setError(formatApiError(themeError, "主题更新失败"));
     } finally {
       setIsBusy(null);
     }
@@ -233,7 +213,7 @@ export default function PluginsPage() {
       setNotice("插件安装已撤销，相关 Project Binding 会自动停用。");
       await refresh();
     } catch (revokeError) {
-      setError(revokeError instanceof Error ? revokeError.message : "插件撤销失败");
+      setError(formatApiError(revokeError, "插件撤销失败"));
     } finally {
       setIsBusy(null);
     }
@@ -248,7 +228,7 @@ export default function PluginsPage() {
       setNotice("插件安装已恢复。");
       await refresh();
     } catch (restoreError) {
-      setError(restoreError instanceof Error ? restoreError.message : "插件恢复失败");
+      setError(formatApiError(restoreError, "插件恢复失败"));
     } finally {
       setIsBusy(null);
     }
