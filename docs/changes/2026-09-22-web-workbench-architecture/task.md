@@ -28,7 +28,7 @@
 | T6 | 提取 Chart Editor reducer 和 Generation coordinator | T5 | 否 | 已完成（本轮） | chart editor unit、Web typecheck、build、图表编辑 E2E | Generation coordinator 保持已接入；Chart Editor reducer 接管编辑器本地状态与 TransformPlan 纯逻辑，不改变 API/视觉行为 |
 | T7 | 迁移 Evidence、Review、Export、Plugin 和 API Console 的共享错误/请求策略 | T5–T6 | 可并行 | 已完成（本轮） | Web unit、Web E2E、API Console smoke | Plugin/Evidence/Review/Export/API Console 均通过共享 HTTP/Auth seam；API Console 401 不跳转，固定 Revision 导出失败可解释 |
 | T8 | 页面组合层收敛与公共组件审计 | T5–T7 | 否 | 已完成（本阶段） | Snapshot/Review/Plugin controller、Evidence canvas、Review composition、AlertBanner、Web typecheck、Web unit、工作台 E2E | 保留当前大页面；服务端状态和领域专属 UI 留在原 feature 边界，稳定的跨 feature 反馈条已提取为公共组件；不将领域组件强行上移 |
-| T9 | 独立验证、验收、交接和清理旧实现 | T8 | 否 | 部分完成（本阶段） | test-plan、全仓检查、只读独立复核 | 本地可执行验证和只读独立复核已通过；真实 logout/cache 浏览器场景、隔离 worktree 复核和登录网关 HTTPS smoke 仍待补 |
+| T9 | 独立验证、验收、交接和清理旧实现 | T8 | 否 | 部分完成（本阶段） | test-plan、全仓检查、只读独立复核、logout/cache E2E | 本地可执行验证、浏览器登出契约和只读独立复核已通过；真实同源部署 Cookie、隔离 worktree 复核和登录网关 HTTPS smoke 仍待补 |
 
 ## 执行顺序
 
@@ -132,7 +132,15 @@ T8.14–T8.15 已完成本阶段切片：公共反馈条完成最小提取，领
 - `pnpm docs:check`、`git diff --check`
 - `pnpm typecheck`、`pnpm test`、`pnpm build`
 
-复核覆盖 Auth/HTTP seam、受保护路由、URL/Query 作用域、Generation、Chart Editor、Snapshot/Review/Plugin controller、Evidence/Review 组合、AlertBanner、API Console 401 和桌面/移动主路径。当前验证仍为与主 Agent 共享工作区的只读快照，不是隔离 worktree；不能将其描述为隔离环境验证。真实 Cookie Jar 的 logout/cache 清理场景和登录网关真实 HTTPS smoke 继续作为外部验收条件。
+复核覆盖 Auth/HTTP seam、受保护路由、URL/Query 作用域、Generation、Chart Editor、Snapshot/Review/Plugin controller、Evidence/Review 组合、AlertBanner、API Console 401 和桌面/移动主路径。当前验证仍为与主 Agent 共享工作区的只读快照，不是隔离 worktree；不能将其描述为隔离环境验证。真实同源部署 Cookie 的 logout/cache 场景和登录网关真实 HTTPS smoke 继续作为外部验收条件。
+
+### T9.1 浏览器 logout/cache 验收场景
+
+- `apps/web/test/e2e/login.spec.ts` 新增浏览器 Cookie Jar 场景：验证 logout 请求携带会话 Cookie、响应清除 Cookie、Project/Conversation localStorage 选择被清理、`langreport:generation-abort` 广播触发、登录页不显示旧工作台 DOM，并在重新登录后恢复工作台。
+- `apps/web/test/e2e/auth-live.spec.ts` 提供真实同源部署验收入口；设置 `LANGREPORT_E2E_BASE_URL`、`LANGREPORT_E2E_USERNAME` 和 `LANGREPORT_E2E_PASSWORD` 后，使用真实 API/Cookie 验证登录、Project 读取、登出和保护页回跳。未提供部署凭据时测试显式跳过，不把 route mock 当成真实部署证据。
+- `playwright.config.ts` 在提供 `LANGREPORT_E2E_BASE_URL` 时不启动本地 Web server，允许直接针对 HTTPS 同源部署运行 live test；默认本地 E2E 行为保持不变。
+
+本地新增登出场景在桌面和 390px 移动端均通过；完整 Web E2E 当前为 20 passed、2 skipped（live-auth 缺少部署凭据）。
 
 ### T3 实施子任务
 

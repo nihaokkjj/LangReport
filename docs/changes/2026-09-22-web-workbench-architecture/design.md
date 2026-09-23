@@ -364,10 +364,10 @@ Job status、Revision status、Evidence status仍以 API 返回的服务端事�
 | 需求 | 设计 | 任务 | 测试 | commit |
 | --- | --- | --- | --- | --- |
 | R1 统一登录/session/401 seam | Auth module、HTTP client、权限处理 | T1、T2 | Auth/HTTP unit、login E2E | 待实现 |
-| R2 受保护路由与登出清理 | Protected route、状态流 | T2 | Web E2E、cache clear test | 待实现 |
+| R2 受保护路由与登出清理 | Protected route、状态流 | T2、T9 | Web E2E、cache clear test | 本地浏览器 logout/cache 契约通过；真实同源 `auth-live` 部署验收待执行 |
 | R3 服务端状态按身份缓存 | Query keys、invalidation | T3 | Query unit、workspace E2E | 待实现 |
 | R4 Project/Conversation/Revision URL 恢复 | URL context、数据流 5 | T4 | URL/E2E | 待实现 |
 | R5 feature 模块化 | 模块边界、共享组件 | T5、T8 | typecheck、E2E 回归 | T5 展示边界、T8 Snapshot、Review comments、Plugin trace controller、EvidenceCanvas、ReviewComposition 与 AlertBanner 已实现；领域专属 UI 保留在 feature 内 |
 | R6 Generation 状态可独立测试 | reducer、watcher seam | T6 | watcher/reducer unit、live smoke | Generation coordinator 与 Chart Editor reducer 已实现；live smoke/独立验收待完成 |
 | R7 业务合同和 API Console 不漂移 | API/外部契约 | T7 | contracts/docs/E2E | `apiRequest`/`apiDownload` seam、API Console 401 smoke 与固定 Revision 导出回归已通过；无 API 合同变更 |
-| R8 迁移可回滚且无用户行为变化 | 迁移兼容与回滚 | T9 | 全量验证、diff check | 本地全量检查与只读共享快照复核通过；真实 logout/cache 浏览器场景、隔离 worktree 复核和登录网关 HTTPS 验收待补 |
+| R8 迁移可回滚且无用户行为变化 | 迁移兼容与回滚 | T9 | 全量验证、diff check | 本地全量检查、浏览器 logout/cache 契约和只读共享快照复核通过；真实同源部署 live-auth、隔离 worktree 复核和登录网关 HTTPS 验收待补 |

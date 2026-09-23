@@ -40,6 +40,7 @@ pnpm --filter @langreport/web typecheck
 pnpm --filter @langreport/web test:typecheck
 pnpm --filter @langreport/web test
 pnpm --filter @langreport/web test:e2e
+pnpm --filter @langreport/web test:e2e:auth-live
 pnpm docs:check
 pnpm typecheck
 pnpm test
@@ -53,7 +54,7 @@ git diff --check
 - `pnpm --filter @langreport/web test:typecheck`
 - `pnpm --filter @langreport/web test`（24 个单测：Chart Editor reducer/Revision 投影/TransformPlan、HTTP/Auth/Export seam、Project/Server Query key 与 fetcher、Snapshot controller fetcher/排序、Review comments controller fetcher/竞态、Plugin trace parser/fetcher、watcher、generation reducer、URL context）
 - `pnpm --filter @langreport/web build`
-- Playwright 桌面与 390px 移动端全量回归（18 passed，含 API Console 401 smoke）
+- Playwright 桌面与 390px 移动端全量回归（20 passed、2 skipped；含 API Console 401 smoke 和浏览器 logout/cache 场景）
 - T5 feature slice 回归：Project/Conversation/Data Asset/Analysis Brief/Metric 受控组件通过同一套 typecheck、unit、build 和 16 条桌面/移动 E2E；未新增 API 或 CSS 规则。
 - T6 Chart Editor 回归：reducer reset/field update、Revision 投影、筛选值类型归一化、derive 保留和排序回退单测通过；编辑器桌面/移动 E2E 通过。
 - T7 请求/错误 seam 回归：`apiRequest`/`apiDownload` 的 Cookie、`no-store`、401 策略、结构化错误、非 JSON 错误和二进制失败；API Console 使用 `unauthorized: "none"` 时不触发登录跳转；固定 Approved Revision 导出仍绑定原路径且失败可解释。
@@ -64,7 +65,7 @@ git diff --check
 - T8 Review composition 组合回归：`ReviewComposition` 只负责 `in_review` 显示门禁和 controller props forwarding；非审核 Revision 不渲染 Review 面板，审核中仍可刷新/新增评论、提交修改请求和批准，桌面与 390px 移动端行为保持一致。
 - T8 公共反馈组件回归：`AlertBanner` 在工作台和插件页复用全局 alert class，error/notice 的 role、文案、关闭动作和移动布局保持一致；领域专属组件不被错误上移。
 
-全仓 `typecheck/test/build` 与 `docs:check` 已通过；API Console 401 smoke、Snapshot 预览、Review comments、Plugin trace、Evidence canvas 和 Review composition 桌面/移动回归已通过，AlertBanner 的复用契约通过类型检查、生产构建和现有页面回归验证；T8 页面组合层与公共组件审计完成，独立验证角色和真实 logout/cache 场景仍属于 T9/登录网关后续验收。
+全仓 `typecheck/test/build` 与 `docs:check` 已通过；API Console 401 smoke、Snapshot 预览、Review comments、Plugin trace、Evidence canvas、Review composition 和浏览器 logout/cache 契约场景桌面/移动回归已通过，AlertBanner 的复用契约通过类型检查、生产构建和现有页面回归验证。`test:e2e:auth-live` 已提供真实同源部署入口，但本地未配置部署域名和账号，因此 live-auth 仍待部署环境执行。
 
 新增或迁移的测试建议：
 
@@ -81,6 +82,7 @@ git diff --check
 - `apps/web/test/unit/http-client.test.ts`（扩展 apiRequest/apiDownload/formatApiError）
 - `apps/web/test/unit/revision-export.test.ts`（新增固定 Revision 导出与错误路径）
 - `apps/web/test/e2e/login.spec.ts`（保留并扩展）
+- `apps/web/test/e2e/auth-live.spec.ts`（新增真实同源 Cookie logout/cache 验收入口，缺少 live 环境变量时显式跳过）
 - `apps/web/test/e2e/consulting-report.spec.ts`（保留现有选择器和主路径）
 
 ## 人工验收步骤
@@ -90,7 +92,7 @@ git diff --check
 3. 登录后刷新并复制带 Project/Conversation/Revision 的 URL，确认上下文可恢复。
 4. 在工作台发起 Generation Job，切换 Conversation 或 Project，确认旧 Job watcher 不会覆盖新上下文。
 5. 在 Evidence 中打开 Editor，分别执行视觉修改和逻辑修改，确认 Revision/TransformPlan 规则不变。
-6. 登出后确认旧 Evidence/Project 不短暂显示；重新登录后只看到当前身份可访问的数据。
+6. 本地 route fixture 之外，设置真实同源部署环境变量运行 `pnpm --filter @langreport/web test:e2e:auth-live`，确认登出后旧 Evidence/Project 不短暂显示、Cookie 和本地选择被清理；重新登录后只看到当前身份可访问的数据。
 7. 访问 API Console，验证 Auth 操作可以调试，未登录业务请求展示 401 且页面不跳转。
 8. 在桌面和 390px 宽度检查登录、加载、空态、错误、Approved 只读和移动 Inspector。
 

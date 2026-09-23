@@ -18,8 +18,8 @@
 | 标准 | 证据 | 命令或文件 | 结果 |
 | --- | --- | --- | --- |
 | Auth module 和 HTTP client 统一处理 session/401 | `apps/web/lib/http-client.ts`、`features/auth/*` | Web typecheck、登录 E2E | 通过（本阶段） |
-| `/` 与 `/plugins` 受保护访问和 login 回跳 | `(protected)/layout.tsx`、`login.spec.ts` | Playwright 18 条回归 | 通过（桌面/移动） |
-| logout 清理 Cookie、Query cache 和 watcher | `features/auth/use-auth-actions.ts` | 代码审计；真实 logout smoke 待补 | 部分通过 |
+| `/` 与 `/plugins` 受保护访问和 login 回跳 | `(protected)/layout.tsx`、`login.spec.ts` | Playwright 20 条本地回归 | 通过（桌面/移动） |
+| logout 清理 Cookie、Query cache 和 watcher | `features/auth/use-auth-actions.ts`、`login.spec.ts` | 代码审计；本地浏览器契约 6/6；真实同源 live-auth 待补 | 部分通过 |
 | Project/Conversation/Revision URL 可恢复 | `hooks/use-project-context.ts`、`project-context.test.ts` | URL unit、build、工作台回归 | 通过（首阶段路径） |
 | T5 Project/Conversation/Data Asset/Analysis Brief/Metric feature slice 边界 | `features/project/project-panel.tsx`、`features/conversation/conversation-panel.tsx`、`features/data-snapshot/data-asset-panel.tsx`、`features/analysis-brief/*` | Web typecheck、unit、build、Playwright 18/18 | 通过（本轮） |
 | Chart Editor reducer 接管本地字段与 TransformPlan 纯逻辑 | `features/chart-editor/chart-editor-state.ts`、`chart-editor-state.test.ts` | 24 个 Web unit、Web build、Playwright 18/18 | 通过（本轮） |
@@ -30,8 +30,10 @@
 | T8 Evidence canvas 受控展示边界保持现有行为 | `features/evidence/evidence-canvas.tsx`、`(protected)/page.tsx` | Web typecheck、24 个 Web unit、18 条桌面/移动 E2E | 通过（本轮切片） |
 | T8 Review composition 收敛审核门禁与受控 props | `features/review/review-composition.tsx`、`review-panel.tsx`、`(protected)/page.tsx` | Web typecheck、24 个 Web unit、18 条桌面/移动 E2E | 通过（本轮切片） |
 | T8 跨 feature 公共组件审计与 AlertBanner 复用 | `components/feedback/alert-banner.tsx`、`(protected)/page.tsx`、`(protected)/plugins/page.tsx` | Web typecheck、test:typecheck、Web build、24 个 Web unit、现有 18 条桌面/移动 E2E | 通过（T8 完成） |
-| T9 本地全量检查与只读独立复核 | `test-report.md`、`task.md` | Web/全仓 typecheck、test、build、18 条桌面/移动 E2E、docs:check、diff check | 通过（共享快照；非隔离 worktree） |
-| Generation、Evidence、Review 行为不变 | `features/generation/*`、Evidence/Review controlled slices、watcher tests | 24 个 Web unit、18 条 E2E | 通过（服务端 Query 所有权保持既有边界） |
+| T9 本地全量检查与只读独立复核 | `test-report.md`、`task.md` | Web/全仓 typecheck、test、build、20 条桌面/移动 E2E、docs:check、diff check | 通过（共享快照；非隔离 worktree） |
+| T9 浏览器 logout/cache 契约场景 | `login.spec.ts`、`use-auth-actions.ts` | Playwright 桌面/移动 6/6 | 通过（route fixture；真实部署 live-auth 待执行） |
+| T9 真实同源 Cookie logout/cache 场景 | `auth-live.spec.ts`、`playwright.config.ts` | `test:e2e:auth-live` + HTTPS 部署账号 | 待部署环境执行 |
+| Generation、Evidence、Review 行为不变 | `features/generation/*`、Evidence/Review controlled slices、watcher tests | 24 个 Web unit、20 条本地 E2E | 通过（服务端 Query 所有权保持既有边界） |
 | API Console Auth 调试不发生 401 循环 | `api-console/page.tsx`、`api-console.spec.ts` | API Console 401 smoke（桌面/移动） | 通过（本轮） |
 | 桌面/移动加载、空、错、Approved 只读状态可用 | 现有 globals.css、Playwright 配置 | Playwright desktop/mobile | 通过（现有主路径） |
 | 全量检查通过 | `test-report.md` | 全仓 typecheck/test/build/docs:check | 通过 |
@@ -39,7 +41,8 @@
 ## 失败项与遗留问题
 
 - 当前遗留：登录网关自身仍在 `VERIFYING`，真实 HTTPS smoke 和用户验收属于其独立变更。
-- 当前遗留：真实 Cookie Jar 的 logout/cache 清理浏览器场景尚未完成；Web E2E 仍以 route mock 为主，不能替代真实同源 Cookie 刷新恢复与登出后拒绝访问。
+- 当前遗留：真实同源部署的 Cookie Jar logout/cache 清理浏览器场景尚未执行；本地 route fixture 已通过，但不能替代真实 API/Cookie 刷新恢复与登出后拒绝访问。
+- `auth-live.spec.ts` 已提供执行入口，缺少 HTTPS 域名、测试账号或 Project 时显式跳过，不记为通过。
 - T9 只读独立角色已完成本地可执行复核，但因共用工作区而不是隔离 worktree，不能把该结果描述为隔离环境验证。
 - 登录网关真实 HTTPS smoke 和用户最终验收仍属于独立变更 `CHG-2026-09-22-login-gateway`。
 
