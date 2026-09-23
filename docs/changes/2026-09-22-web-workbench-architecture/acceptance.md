@@ -9,9 +9,9 @@
 
 - 结论：`PARTIAL`
 - 验收时间：2026-09-23（本阶段）
-- 验证 commit：本轮 Evidence canvas 组合切片提交
+- 验证 commit：本轮 Review composition 组合切片提交
 
-本阶段完成 Auth/HTTP seam、受保护路由、Query 基础设施、URL context、Generation coordinator、T5 feature slices、T6 Chart Editor reducer、T7 请求/错误 seam 和 T8 Snapshot/Review comments/Plugin trace controller/Evidence canvas 切片；真实 logout/cache 清理、T8 剩余 Review 页面组合层审计和 T9 独立验收仍未完成，因此不标记为 COMPLETE。
+本阶段完成 Auth/HTTP seam、受保护路由、Query 基础设施、URL context、Generation coordinator、T5 feature slices、T6 Chart Editor reducer、T7 请求/错误 seam 和 T8 Snapshot/Review comments/Plugin trace controller/Evidence canvas/Review composition 切片；真实 logout/cache 清理、T8 跨 feature 公共组件审计和 T9 独立验收仍未完成，因此不标记为 COMPLETE。
 
 ## 验收证据
 
@@ -28,7 +28,8 @@
 | T8 Review comments controller 收敛评论请求与审核草稿 | `features/review/use-review-comments.ts`、`review-comments.test.ts` | 24 个 Web unit、全仓检查、Review 桌面/移动 E2E | 通过（本轮切片） |
 | T8 Plugin trace controller 收敛插件上下文请求与快照校验 | `features/evidence/use-plugin-trace.ts`、`plugin-trace.test.ts` | 24 个 Web unit、Web build、Plugin Context 桌面/移动 E2E | 通过（本轮切片） |
 | T8 Evidence canvas 受控展示边界保持现有行为 | `features/evidence/evidence-canvas.tsx`、`(protected)/page.tsx` | Web typecheck、24 个 Web unit、18 条桌面/移动 E2E | 通过（本轮切片） |
-| Generation、Evidence、Review 行为不变 | `features/generation/*`、Evidence/Review controlled slices、watcher tests | 24 个 Web unit、18 条 E2E | 通过（服务端 Query 所有权和 T8 剩余 Review 组合层审计仍待后续） |
+| T8 Review composition 收敛审核门禁与受控 props | `features/review/review-composition.tsx`、`review-panel.tsx`、`(protected)/page.tsx` | Web typecheck、24 个 Web unit、18 条桌面/移动 E2E | 通过（本轮切片） |
+| Generation、Evidence、Review 行为不变 | `features/generation/*`、Evidence/Review controlled slices、watcher tests | 24 个 Web unit、18 条 E2E | 通过（服务端 Query 所有权和 T8 跨 feature 公共组件审计仍待后续） |
 | API Console Auth 调试不发生 401 循环 | `api-console/page.tsx`、`api-console.spec.ts` | API Console 401 smoke（桌面/移动） | 通过（本轮） |
 | 桌面/移动加载、空、错、Approved 只读状态可用 | 现有 globals.css、Playwright 配置 | Playwright desktop/mobile | 通过（现有主路径） |
 | 全量检查通过 | `test-report.md` | 全仓 typecheck/test/build/docs:check | 通过 |
@@ -36,7 +37,7 @@
 ## 失败项与遗留问题
 
 - 当前遗留：登录网关自身仍在 `VERIFYING`，真实 HTTPS smoke 和用户验收属于其独立变更。
-- 当前遗留：T8 的剩余 Review 页面组合层与跨 feature 公共组件审计、Evidence/Review 服务端 Query 所有权、独立验证角色和真实 logout/cache 清理场景尚未完成；Snapshot、Review comments、Plugin trace controller 与 Evidence canvas 本轮已完成。
+- 当前遗留：T8 的跨 feature 公共组件审计、Evidence/Review 服务端 Query 所有权、独立验证角色和真实 logout/cache 清理场景尚未完成；Snapshot、Review comments、Plugin trace controller、Evidence canvas 与 Review composition 本轮已完成。
 
 ## 文档同步确认
 

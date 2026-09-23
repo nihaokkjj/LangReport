@@ -27,7 +27,7 @@
 | T5 | 提取 Project、Conversation、Data Snapshot、Analysis Brief/Metric feature | T3–T4 | 可与 T6 前半并行 | 已完成（本轮） | Web typecheck、unit、build、工作台 E2E | 受控展示组件接管四个 feature slice；页面保留 Query/mutation/Job 编排，不改变行为和 API |
 | T6 | 提取 Chart Editor reducer 和 Generation coordinator | T5 | 否 | 已完成（本轮） | chart editor unit、Web typecheck、build、图表编辑 E2E | Generation coordinator 保持已接入；Chart Editor reducer 接管编辑器本地状态与 TransformPlan 纯逻辑，不改变 API/视觉行为 |
 | T7 | 迁移 Evidence、Review、Export、Plugin 和 API Console 的共享错误/请求策略 | T5–T6 | 可并行 | 已完成（本轮） | Web unit、Web E2E、API Console smoke | Plugin/Evidence/Review/Export/API Console 均通过共享 HTTP/Auth seam；API Console 401 不跳转，固定 Revision 导出失败可解释 |
-| T8 | 页面组合层收敛与公共组件审计 | T5–T7 | 否 | 部分完成（本轮） | Snapshot/Review/Plugin controller、Evidence canvas、Web typecheck、Web unit、工作台 E2E | 保留当前大页面；Snapshot、Review comments、Plugin trace controller 与 Evidence canvas 已下沉，Review 剩余组合层与公共组件审计仍待后续切片 |
+| T8 | 页面组合层收敛与公共组件审计 | T5–T7 | 否 | 部分完成（本轮） | Snapshot/Review/Plugin controller、Evidence canvas、Review composition、Web typecheck、Web unit、工作台 E2E | 保留当前大页面；Snapshot、Review comments、Plugin trace controller、Evidence canvas 与 Review composition 已下沉，跨 feature 公共组件审计仍待后续切片 |
 | T9 | 独立验证、验收、交接和清理旧实现 | T8 | 否 | 部分完成（本阶段） | test-plan 已运行命令 | 本阶段回归证据已记录；全仓验证和独立验收仍待完成 |
 
 ## 执行顺序
@@ -105,6 +105,13 @@ T8.7–T8.9 已完成本轮切片：Plugin trace controller 已接管 Plugin Con
 - T8.11 页面只组装 Evidence record 的窄 props，`InteractiveChart` 仍由页面提供为 React node；保留现有 DOM class、按钮文案、Approved/archived 编辑门禁、Approved 导出门禁和 `showTrace` 行为。不把 EvidenceCanvas 提升到 `components/*`，因为它仍是 Evidence feature 的领域展示合同。
 
 T8.10–T8.11 已完成本轮切片：页面 Evidence JSX 已替换为 `EvidenceCanvas` 受控调用，API、Query ownership、Revision transition、Chart Editor 和 CSS 均未迁移。Web typecheck、24 个 Web unit、18 条桌面/移动 Playwright E2E 和 `git diff --check` 已通过；Review 剩余组合层与跨 feature 公共组件审计仍未标记完成。
+
+### T8 Review composition 组合切片（本轮）
+
+- T8.12 新增 `features/review/review-composition.tsx`，收敛 `in_review` 状态门禁和 `useReviewComments` → `ReviewPanel` 的受控 props 投影；非审核状态在 feature 边界返回空，页面不再重复 Review 显示条件。
+- T8.13 页面继续拥有 `transitionRevision`、Evidence Query 写回、错误/通知和 URL/Revision 选择；ReviewPanel 的 DOM/CSS、评论 controller、审核意见草稿和 Approved/Changes Requested 业务语义保持不变。
+
+T8.12–T8.13 已完成本轮切片：Review 组合边界已下沉，不新增 API、Query key、共享组件或 Revision 状态机。Web typecheck、24 个 Web unit、18 条桌面/移动 Playwright E2E 和 `git diff --check` 通过；跨 feature 公共组件审计、真实 logout/cache 与 T9 仍未标记完成。
 
 ### T3 实施子任务
 

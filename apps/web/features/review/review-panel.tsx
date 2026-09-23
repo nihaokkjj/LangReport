@@ -1,7 +1,8 @@
 "use client";
 
-type ReviewComment = { id: string; authorId: string; body: string; resolvedAt: string | null; createdAt: string };
-type ReviewRevision = { revision: number; validation: { valid: boolean } };
+export type ReviewComment = { id: string; authorId: string; body: string; resolvedAt: string | null; createdAt: string };
+export type ReviewRevisionStatus = "draft" | "in_review" | "approved" | "changes_requested" | "archived";
+export type ReviewRevision = { revision: number; status: ReviewRevisionStatus; validation: { valid: boolean } };
 
 function formatDate(value?: string | null): string {
   if (!value) return "—";

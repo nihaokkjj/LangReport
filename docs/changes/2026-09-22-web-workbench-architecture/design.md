@@ -193,6 +193,16 @@ T8 先处理页面组合层中仍然自持请求生命周期的 Snapshot 预览�
 
 本轮不新增 API、不改变 Query ownership、Revision API、CSS 或共享组件目录；验证重点是受控 props 类型、Evidence DOM 选择器与桌面/390px 证据链路回归。
 
+#### T8 Review composition 组合切片（2026-09-23）
+
+本轮把 Review 的“何时出现以及如何把 controller 投影给面板”收敛到 `features/review`，但不移动审核领域命令。页面仍拥有 Revision transition mutation、Evidence Query 回填和全局错误/通知投影；Review comments controller 仍拥有评论读取、新增和审核意见草稿。
+
+- `features/review/review-composition.tsx` 提供 `ReviewComposition` 受控边界，接收当前 Revision 的最小状态、`useReviewComments` 返回值和审核回调；当 Revision 不是 `in_review` 时由 feature 边界返回空，不在页面重复实现状态门禁。
+- `ReviewPanel` 保持现有 DOM、CSS、评论文案、刷新/新增操作和批准/要求修改按钮；组合组件只负责 status gate 与 props forwarding，不复制 HTTP、Query 或 Revision API。
+- `page.tsx` 只传入 `activeRevision`、评论 controller 状态以及 `transitionRevision` 回调；不将 Review 状态写入共享 `components/*`，因为审核面板和 Revision 状态门禁仍属于 Review feature 的领域合同。
+
+本轮不新增 API、不修改评论合同、Query key、Revision 状态机或视觉规则；验证重点是 `in_review` 显示、非审核状态隐藏和既有评论/批准链路回归。
+
 ### URL context module
 
 当前选择由 `hooks/use-project-context.ts` 的 `useProjectContext()` 读取：
@@ -347,7 +357,7 @@ Job status、Revision status、Evidence status仍以 API 返回的服务端事�
 | R2 受保护路由与登出清理 | Protected route、状态流 | T2 | Web E2E、cache clear test | 待实现 |
 | R3 服务端状态按身份缓存 | Query keys、invalidation | T3 | Query unit、workspace E2E | 待实现 |
 | R4 Project/Conversation/Revision URL 恢复 | URL context、数据流 5 | T4 | URL/E2E | 待实现 |
-| R5 feature 模块化 | 模块边界、共享组件 | T5、T8 | typecheck、E2E 回归 | T5 展示边界、T8 Snapshot、Review comments、Plugin trace controller 与 EvidenceCanvas 已实现；Review 剩余组合层及跨 feature 公共组件审计仍待后续切片 |
+| R5 feature 模块化 | 模块边界、共享组件 | T5、T8 | typecheck、E2E 回归 | T5 展示边界、T8 Snapshot、Review comments、Plugin trace controller、EvidenceCanvas 与 ReviewComposition 已实现；跨 feature 公共组件审计仍待后续切片 |
 | R6 Generation 状态可独立测试 | reducer、watcher seam | T6 | watcher/reducer unit、live smoke | Generation coordinator 与 Chart Editor reducer 已实现；live smoke/独立验收待完成 |
 | R7 业务合同和 API Console 不漂移 | API/外部契约 | T7 | contracts/docs/E2E | `apiRequest`/`apiDownload` seam、API Console 401 smoke 与固定 Revision 导出回归已通过；无 API 合同变更 |
 | R8 迁移可回滚且无用户行为变化 | 迁移兼容与回滚 | T9 | 全量验证、diff check | 待实现 |
