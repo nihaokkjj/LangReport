@@ -370,4 +370,4 @@ Job status、Revision status、Evidence status仍以 API 返回的服务端事�
 | R5 feature 模块化 | 模块边界、共享组件 | T5、T8 | typecheck、E2E 回归 | T5 展示边界、T8 Snapshot、Review comments、Plugin trace controller、EvidenceCanvas、ReviewComposition 与 AlertBanner 已实现；领域专属 UI 保留在 feature 内 |
 | R6 Generation 状态可独立测试 | reducer、watcher seam | T6 | watcher/reducer unit、live smoke | Generation coordinator 与 Chart Editor reducer 已实现；live smoke/独立验收待完成 |
 | R7 业务合同和 API Console 不漂移 | API/外部契约 | T7 | contracts/docs/E2E | `apiRequest`/`apiDownload` seam、API Console 401 smoke 与固定 Revision 导出回归已通过；无 API 合同变更 |
-| R8 迁移可回滚且无用户行为变化 | 迁移兼容与回滚 | T9 | 全量验证、diff check | 待实现 |
+| R8 迁移可回滚且无用户行为变化 | 迁移兼容与回滚 | T9 | 全量验证、diff check | 本地全量检查与只读共享快照复核通过；真实 logout/cache 浏览器场景、隔离 worktree 复核和登录网关 HTTPS 验收待补 |

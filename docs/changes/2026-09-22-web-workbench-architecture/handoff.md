@@ -7,7 +7,7 @@
 
 ## 当前状态
 
-本变更已根据 2026-09-22 工作区代码快照进入实现；当前为 `VERIFYING / PARTIAL`，保留后续 feature slices。
+本变更已根据 2026-09-22 工作区代码快照进入实现；当前为 `VERIFYING / PARTIAL`。T8 页面组合与公共组件审计、T9 本地全量检查和只读角色复核已完成，保留真实 logout/cache 与登录网关部署验收。
 
 ## 已完成
 
@@ -33,18 +33,19 @@
 - 完成 T8 Review composition 组合切片：新增 `features/review/review-composition.tsx`，把 `in_review` 显示门禁和评论 controller 到 `ReviewPanel` 的 props 投影收敛到 Review feature；页面继续拥有 Revision transition、Evidence Query 回填和错误/通知投影。
 - 完成 T8 跨 feature 公共组件审计：确认只有工作台与插件页的全局 error/notice banner 具备稳定无领域状态契约，新增 `components/feedback/alert-banner.tsx` 并迁移两处；InteractiveChart、Snapshot、Evidence、Review、Plugin 和 Editor 保持各自 feature/page 所有权。
 - 新增 24 个 Web unit 测试覆盖 Chart Editor、T7 HTTP/Export seam、Project/Server Query key 与 fetcher、Snapshot controller fetcher/排序、Review comments controller fetcher/竞态、Plugin trace parser/fetcher、watcher、Generation reducer、URL context；桌面/移动 Playwright 18/18 通过。
+- 完成 T9 本地可执行验证与只读独立角色复核：Web/全仓 typecheck、test、build，24 个 Web unit，桌面/390px Playwright 18/18，docs:check 和 `git diff --check` 全部通过。复核角色未修改文件，工作区保持干净；由于共享工作区，结果不等同于隔离 worktree 验证。
 
 ## 进行中
 
 - API Console 采用公开诊断入口，Project 使用 query `project`、Conversation/Revision 使用 `conversation`/`revision`；API Console 401 不跳转策略已接入共享 seam 并通过桌面/移动 smoke。
 - 登录网关独立复测仍作为外部发布条件，不修改其服务端实现。
-- T5 首轮 feature slices、T6 Chart Editor reducer、T7 请求/错误 seam 与 T8 Snapshot/Review comments/Plugin trace controller/Evidence canvas/Review composition/AlertBanner 切片已完成；T8 页面组合层与公共组件审计已完成，Evidence/Review 服务端 Query ownership 按设计保持既有边界，独立验证仍未完成；T3 Query 迁移已完成本轮闭环。
+- T5 首轮 feature slices、T6 Chart Editor reducer、T7 请求/错误 seam 与 T8 Snapshot/Review comments/Plugin trace controller/Evidence canvas/Review composition/AlertBanner 切片已完成；T9 本地可执行检查和只读角色复核已完成。Evidence/Review 服务端 Query ownership 按设计保持既有边界；真实 logout/cache 浏览器场景、隔离环境复核和登录网关部署验收仍未完成；T3 Query 迁移已完成本轮闭环。
 
 ## 下一步
 
-1. 进入 T9 独立验证与验收，基于完整实现快照复跑 test-plan，并检查旧实现清理范围。
-2. 补真实 logout/cache 清理 E2E；登录网关继续等待真实 HTTPS smoke 和用户验收。
-3. 根据独立验证结果更新最终 acceptance/handoff，不提前将本变更标为 COMPLETE。
+1. 补真实 Cookie Jar 的 logout/cache 浏览器场景，确认旧 DOM、Query cache、local selection 和 watcher 均清理，并验证重新登录后的身份隔离。
+2. 登录网关完成真实同源 HTTPS `Secure` Cookie smoke 和用户最终验收；该项继续由 `CHG-2026-09-22-login-gateway` 负责。
+3. 若后续提供隔离 worktree，再复跑 T9 作为隔离环境补充证据；完成上述条件后更新 acceptance/handoff，才可将本变更标为 COMPLETE。
 
 ## 当前 commit 与修改范围
 
@@ -54,8 +55,8 @@
 
 ## 已运行验证
 
-- Web typecheck、test:typecheck、24 个 unit、Next build、全仓 typecheck/test/build、docs:check 和 Playwright 18/18 已通过；证据详见 `test-report.md`。
-- API Console 401 smoke、Snapshot 预览、Review comments、Plugin trace、Evidence canvas 和 Review composition 桌面/移动回归已通过；AlertBanner 的 class/role/关闭契约已由类型检查、生产构建和现有页面回归覆盖。T8 已完成，真实 logout cache 清理、独立验证、T9 和登录网关 HTTPS 验收仍未完成，不能将本变更标为 COMPLETE。
+- Web typecheck、test:typecheck、24 个 unit、Next build、全仓 typecheck/test/build、docs:check、`git diff --check` 和 Playwright 18/18 已通过；只读验证角色已在同一干净快照复核，证据详见 `test-report.md`。
+- API Console 401 smoke、Snapshot 预览、Review comments、Plugin trace、Evidence canvas、Review composition 和 AlertBanner 桌面/移动回归已通过。真实 Cookie Jar logout/cache 清理、隔离 worktree 验证补充和登录网关 HTTPS 验收仍未完成，不能将本变更标为 COMPLETE。
 
 ## 已确认决策
 

@@ -9,9 +9,9 @@
 
 - 结论：`PARTIAL`
 - 验收时间：2026-09-23（本阶段）
-- 验证 commit：本轮跨 feature 公共组件审计提交
+- 验证 commit：`e800fe7`（T9 只读复核基线）
 
-本阶段完成 Auth/HTTP seam、受保护路由、Query 基础设施、URL context、Generation coordinator、T5 feature slices、T6 Chart Editor reducer、T7 请求/错误 seam 和 T8 Snapshot/Review comments/Plugin trace controller/Evidence canvas/Review composition/AlertBanner 切片；真实 logout/cache 清理和 T9 独立验收仍未完成，因此不标记为 COMPLETE。
+本阶段完成 Auth/HTTP seam、受保护路由、Query 基础设施、URL context、Generation coordinator、T5 feature slices、T6 Chart Editor reducer、T7 请求/错误 seam、T8 Snapshot/Review comments/Plugin trace controller/Evidence canvas/Review composition/AlertBanner 切片，以及 T9 本地全量检查和只读角色复核；真实 logout/cache 清理、隔离 worktree 补充验证和登录网关 HTTPS smoke 仍未完成，因此不标记为 COMPLETE。
 
 ## 验收证据
 
@@ -30,6 +30,7 @@
 | T8 Evidence canvas 受控展示边界保持现有行为 | `features/evidence/evidence-canvas.tsx`、`(protected)/page.tsx` | Web typecheck、24 个 Web unit、18 条桌面/移动 E2E | 通过（本轮切片） |
 | T8 Review composition 收敛审核门禁与受控 props | `features/review/review-composition.tsx`、`review-panel.tsx`、`(protected)/page.tsx` | Web typecheck、24 个 Web unit、18 条桌面/移动 E2E | 通过（本轮切片） |
 | T8 跨 feature 公共组件审计与 AlertBanner 复用 | `components/feedback/alert-banner.tsx`、`(protected)/page.tsx`、`(protected)/plugins/page.tsx` | Web typecheck、test:typecheck、Web build、24 个 Web unit、现有 18 条桌面/移动 E2E | 通过（T8 完成） |
+| T9 本地全量检查与只读独立复核 | `test-report.md`、`task.md` | Web/全仓 typecheck、test、build、18 条桌面/移动 E2E、docs:check、diff check | 通过（共享快照；非隔离 worktree） |
 | Generation、Evidence、Review 行为不变 | `features/generation/*`、Evidence/Review controlled slices、watcher tests | 24 个 Web unit、18 条 E2E | 通过（服务端 Query 所有权保持既有边界） |
 | API Console Auth 调试不发生 401 循环 | `api-console/page.tsx`、`api-console.spec.ts` | API Console 401 smoke（桌面/移动） | 通过（本轮） |
 | 桌面/移动加载、空、错、Approved 只读状态可用 | 现有 globals.css、Playwright 配置 | Playwright desktop/mobile | 通过（现有主路径） |
@@ -38,11 +39,13 @@
 ## 失败项与遗留问题
 
 - 当前遗留：登录网关自身仍在 `VERIFYING`，真实 HTTPS smoke 和用户验收属于其独立变更。
-- 当前遗留：独立验证角色、真实 logout/cache 清理和登录网关真实 HTTPS smoke 尚未完成；Evidence/Review 服务端 Query ownership 按本变更设计保持既有边界，不作为 T8 公共组件审计的阻塞项。
+- 当前遗留：真实 Cookie Jar 的 logout/cache 清理浏览器场景尚未完成；Web E2E 仍以 route mock 为主，不能替代真实同源 Cookie 刷新恢复与登出后拒绝访问。
+- T9 只读独立角色已完成本地可执行复核，但因共用工作区而不是隔离 worktree，不能把该结果描述为隔离环境验证。
+- 登录网关真实 HTTPS smoke 和用户最终验收仍属于独立变更 `CHG-2026-09-22-login-gateway`。
 
 ## 文档同步确认
 
 - [x] 登录网关变更未被本变更覆盖。
 - [x] 本变更范围限定为 Web 架构和行为保持型迁移。
 - [x] 本阶段已同步 task、acceptance、handoff 和测试证据。
-- [ ] 完成 T5–T9 后再将结论提升为 COMPLETE。
+- [ ] 补齐真实 logout/cache 浏览器场景、登录网关 HTTPS smoke 和用户最终验收后，再将结论提升为 COMPLETE。
