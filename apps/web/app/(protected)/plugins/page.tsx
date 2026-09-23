@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./plugins.module.css";
 import { apiFetch, devHeaders, jsonHeaders, formatApiError } from "../../../lib/http-client";
+import { AlertBanner } from "../../../components/feedback/alert-banner";
 
 type Workspace = { id: string; name: string };
 type Project = { id: string; name: string };
@@ -238,8 +239,8 @@ export default function PluginsPage() {
     <header className={styles.topbar}><a className={styles.brand} href="/">L/ <span>LangReport</span></a><div className={styles.topbarMeta}><span>项目能力</span><span className={styles.dot} /> <span>插件管理</span></div><a className="secondary-button" href="/">返回工作台 ↗</a></header>
     <main className={styles.main}>
       <div className={styles.pageHead}><div><div className="eyebrow">PROJECT / EXTENSIONS</div><h1>插件</h1><p>管理当前账号可用的声明式图表能力，并为每个项目固定启用版本。</p></div><div className={styles.scope}><span className="eyebrow">当前项目</span><select value={projectId ?? ""} onChange={(event) => { setProjectId(event.target.value || null); if (event.target.value) window.localStorage.setItem("langreport-project-id", event.target.value); if (workspace) void load(event.target.value || null, workspace.id); }}><option value="">选择项目</option>{projects.map((project) => <option value={project.id} key={project.id}>{project.name}</option>)}</select></div></div>
-      {error && <div className="alert error-alert" role="alert"><strong>错误</strong><span>{error}</span><button type="button" onClick={() => setError(null)}>×</button></div>}
-      {notice && <div className="alert notice-alert" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice(null)}>×</button></div>}
+      {error && <AlertBanner tone="error" title="错误" message={error} onDismiss={() => setError(null)} />}
+      {notice && <AlertBanner tone="notice" message={notice} onDismiss={() => setNotice(null)} />}
       {isLoading ? <div className={styles.loading}><span className={styles.loadingMark} />读取插件目录…</div> : <>
         <section className={styles.summaryGrid}><div><span className="eyebrow">已安装</span><strong>{installed.filter((record) => record.installation.status === "installed").length.toString().padStart(2, "0")}</strong><small>当前账号可用</small></div><div><span className="eyebrow">当前启用</span><strong>{enabledInstallationIds.size.toString().padStart(2, "0")}</strong><small>{selectedProject?.name ?? "尚未选择项目"}</small></div><div><span className="eyebrow">能力</span><strong>{(capabilities?.context ? capabilities.manifests.reduce((count, manifest) => count + manifest.capabilities.length, 0) : 0).toString().padStart(2, "0")}</strong><small>可追溯的模板 / 主题 / 校验</small></div></section>
         <div className={styles.columns}>

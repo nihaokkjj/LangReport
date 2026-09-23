@@ -203,6 +203,16 @@ T8 先处理页面组合层中仍然自持请求生命周期的 Snapshot 预览�
 
 本轮不新增 API、不修改评论合同、Query key、Revision 状态机或视觉规则；验证重点是 `in_review` 显示、非审核状态隐藏和既有评论/批准链路回归。
 
+#### T8 跨 feature 公共组件审计（2026-09-23）
+
+审计工作台与插件页后，只发现一组具有稳定、领域无关契约的重复反馈条：工作台和插件页都使用同一组全局 `.alert`、`.error-alert`、`.notice-alert` 样式，渲染消息、语义 role 和关闭动作。其余候选仍带有明确领域所有权，因此不强行上移。
+
+- `components/feedback/alert-banner.tsx` 提供 `AlertBanner`，接收 `tone`、`message`、可选 `title` 和 `onDismiss`；组件不拥有远程状态，只复用现有全局 CSS class 和 44px 关闭按钮语义。
+- 工作台与插件页改用 `AlertBanner`，保持错误/通知文案、`role`、关闭回调和 DOM class 不变；登录页、API Console 使用各自 CSS module 和错误上下文，保留原实现。
+- `InteractiveChart`、`SnapshotPreviewModal`、`EvidenceCanvas`、`ReviewComposition` 和插件/编辑器面板均不迁移到 `components/*`：它们依赖 Chart/Evidence/Review/Plugin 的领域数据与交互合同，不满足稳定跨 feature 复用条件。
+
+本轮不新增 API、不改变 Query ownership 或视觉 token；公共组件目录只新增反馈条，作为可回滚的最小审计结果。
+
 ### URL context module
 
 当前选择由 `hooks/use-project-context.ts` 的 `useProjectContext()` 读取：
@@ -233,7 +243,7 @@ Feature module的外部接口只接收已选择的 ID、Query data 和少量命�
 
 ### Shared components
 
-`components/chart`、`components/layout` 和 `components/feedback` 只放跨 feature 复用且不拥有领域远端状态的模块。`SnapshotPreviewModal`、`ReviewPanel` 等如果仍只服务一个 feature，应先留在 feature 内。
+`components/chart`、`components/layout` 和 `components/feedback` 只放跨 feature 复用且不拥有领域远端状态的模块；当前审计新增 `components/feedback/alert-banner.tsx`。`SnapshotPreviewModal`、`ReviewPanel`、`EvidenceCanvas` 等如果仍只服务一个 feature，应先留在 feature 内。
 
 ## 数据模型与状态流转
 
@@ -357,7 +367,7 @@ Job status、Revision status、Evidence status仍以 API 返回的服务端事�
 | R2 受保护路由与登出清理 | Protected route、状态流 | T2 | Web E2E、cache clear test | 待实现 |
 | R3 服务端状态按身份缓存 | Query keys、invalidation | T3 | Query unit、workspace E2E | 待实现 |
 | R4 Project/Conversation/Revision URL 恢复 | URL context、数据流 5 | T4 | URL/E2E | 待实现 |
-| R5 feature 模块化 | 模块边界、共享组件 | T5、T8 | typecheck、E2E 回归 | T5 展示边界、T8 Snapshot、Review comments、Plugin trace controller、EvidenceCanvas 与 ReviewComposition 已实现；跨 feature 公共组件审计仍待后续切片 |
+| R5 feature 模块化 | 模块边界、共享组件 | T5、T8 | typecheck、E2E 回归 | T5 展示边界、T8 Snapshot、Review comments、Plugin trace controller、EvidenceCanvas、ReviewComposition 与 AlertBanner 已实现；领域专属 UI 保留在 feature 内 |
 | R6 Generation 状态可独立测试 | reducer、watcher seam | T6 | watcher/reducer unit、live smoke | Generation coordinator 与 Chart Editor reducer 已实现；live smoke/独立验收待完成 |
 | R7 业务合同和 API Console 不漂移 | API/外部契约 | T7 | contracts/docs/E2E | `apiRequest`/`apiDownload` seam、API Console 401 smoke 与固定 Revision 导出回归已通过；无 API 合同变更 |
 | R8 迁移可回滚且无用户行为变化 | 迁移兼容与回滚 | T9 | 全量验证、diff check | 待实现 |

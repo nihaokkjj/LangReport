@@ -31,19 +31,20 @@
 - 完成 T8 Plugin trace controller 切片：新增 `features/evidence/use-plugin-trace.ts`，统一 Plugin Context fetcher、快照结构校验、Revision 切换清理和 Abort/stale-response 防护；页面只保留 `PluginTrace` 展示映射。
 - 完成 T8 Evidence canvas 组合切片：新增 `features/evidence/evidence-canvas.tsx`，统一 Evidence 标题、Revision 状态、图表 slot、发现、证据摘要、质量提示、依据、导出和审核入口的受控展示；页面只负责组装窄 props，保留现有 DOM、CSS、门禁和回调语义。
 - 完成 T8 Review composition 组合切片：新增 `features/review/review-composition.tsx`，把 `in_review` 显示门禁和评论 controller 到 `ReviewPanel` 的 props 投影收敛到 Review feature；页面继续拥有 Revision transition、Evidence Query 回填和错误/通知投影。
+- 完成 T8 跨 feature 公共组件审计：确认只有工作台与插件页的全局 error/notice banner 具备稳定无领域状态契约，新增 `components/feedback/alert-banner.tsx` 并迁移两处；InteractiveChart、Snapshot、Evidence、Review、Plugin 和 Editor 保持各自 feature/page 所有权。
 - 新增 24 个 Web unit 测试覆盖 Chart Editor、T7 HTTP/Export seam、Project/Server Query key 与 fetcher、Snapshot controller fetcher/排序、Review comments controller fetcher/竞态、Plugin trace parser/fetcher、watcher、Generation reducer、URL context；桌面/移动 Playwright 18/18 通过。
 
 ## 进行中
 
 - API Console 采用公开诊断入口，Project 使用 query `project`、Conversation/Revision 使用 `conversation`/`revision`；API Console 401 不跳转策略已接入共享 seam 并通过桌面/移动 smoke。
 - 登录网关独立复测仍作为外部发布条件，不修改其服务端实现。
-- T5 首轮 feature slices、T6 Chart Editor reducer、T7 请求/错误 seam 与 T8 Snapshot/Review comments/Plugin trace controller/Evidence canvas/Review composition 切片已完成；Evidence/Review 服务端 Query 所有权、T8 跨 feature 公共组件审计和独立验证仍未完成；T3 Query 迁移已完成本轮闭环。
+- T5 首轮 feature slices、T6 Chart Editor reducer、T7 请求/错误 seam 与 T8 Snapshot/Review comments/Plugin trace controller/Evidence canvas/Review composition/AlertBanner 切片已完成；T8 页面组合层与公共组件审计已完成，Evidence/Review 服务端 Query ownership 按设计保持既有边界，独立验证仍未完成；T3 Query 迁移已完成本轮闭环。
 
 ## 下一步
 
-1. 继续 T8 的跨 feature 公共组件审计，保持本轮 EvidenceCanvas、ReviewComposition 受控边界、T5–T7 边界和 Snapshot/Review comments/Plugin trace controller 不变。
-2. 补真实 logout/cache 清理 E2E，并执行独立验证角色。
-3. 完成后再进入 T9 独立验收、旧实现清理和最终结论。
+1. 进入 T9 独立验证与验收，基于完整实现快照复跑 test-plan，并检查旧实现清理范围。
+2. 补真实 logout/cache 清理 E2E；登录网关继续等待真实 HTTPS smoke 和用户验收。
+3. 根据独立验证结果更新最终 acceptance/handoff，不提前将本变更标为 COMPLETE。
 
 ## 当前 commit 与修改范围
 
@@ -54,7 +55,7 @@
 ## 已运行验证
 
 - Web typecheck、test:typecheck、24 个 unit、Next build、全仓 typecheck/test/build、docs:check 和 Playwright 18/18 已通过；证据详见 `test-report.md`。
-- API Console 401 smoke、Snapshot 预览、Review comments、Plugin trace、Evidence canvas 和 Review composition 桌面/移动回归已通过；真实 logout cache 清理、T8 跨 feature 公共组件审计、独立验证和 T9 仍未完成，不能将本变更标为 COMPLETE。
+- API Console 401 smoke、Snapshot 预览、Review comments、Plugin trace、Evidence canvas 和 Review composition 桌面/移动回归已通过；AlertBanner 的 class/role/关闭契约已由类型检查、生产构建和现有页面回归覆盖。T8 已完成，真实 logout cache 清理、独立验证、T9 和登录网关 HTTPS 验收仍未完成，不能将本变更标为 COMPLETE。
 
 ## 已确认决策
 

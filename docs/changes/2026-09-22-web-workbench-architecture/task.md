@@ -27,7 +27,7 @@
 | T5 | 提取 Project、Conversation、Data Snapshot、Analysis Brief/Metric feature | T3–T4 | 可与 T6 前半并行 | 已完成（本轮） | Web typecheck、unit、build、工作台 E2E | 受控展示组件接管四个 feature slice；页面保留 Query/mutation/Job 编排，不改变行为和 API |
 | T6 | 提取 Chart Editor reducer 和 Generation coordinator | T5 | 否 | 已完成（本轮） | chart editor unit、Web typecheck、build、图表编辑 E2E | Generation coordinator 保持已接入；Chart Editor reducer 接管编辑器本地状态与 TransformPlan 纯逻辑，不改变 API/视觉行为 |
 | T7 | 迁移 Evidence、Review、Export、Plugin 和 API Console 的共享错误/请求策略 | T5–T6 | 可并行 | 已完成（本轮） | Web unit、Web E2E、API Console smoke | Plugin/Evidence/Review/Export/API Console 均通过共享 HTTP/Auth seam；API Console 401 不跳转，固定 Revision 导出失败可解释 |
-| T8 | 页面组合层收敛与公共组件审计 | T5–T7 | 否 | 部分完成（本轮） | Snapshot/Review/Plugin controller、Evidence canvas、Review composition、Web typecheck、Web unit、工作台 E2E | 保留当前大页面；Snapshot、Review comments、Plugin trace controller、Evidence canvas 与 Review composition 已下沉，跨 feature 公共组件审计仍待后续切片 |
+| T8 | 页面组合层收敛与公共组件审计 | T5–T7 | 否 | 已完成（本阶段） | Snapshot/Review/Plugin controller、Evidence canvas、Review composition、AlertBanner、Web typecheck、Web unit、工作台 E2E | 保留当前大页面；服务端状态和领域专属 UI 留在原 feature 边界，稳定的跨 feature 反馈条已提取为公共组件；不将领域组件强行上移 |
 | T9 | 独立验证、验收、交接和清理旧实现 | T8 | 否 | 部分完成（本阶段） | test-plan 已运行命令 | 本阶段回归证据已记录；全仓验证和独立验收仍待完成 |
 
 ## 执行顺序
@@ -111,7 +111,14 @@ T8.10–T8.11 已完成本轮切片：页面 Evidence JSX 已替换为 `Evidence
 - T8.12 新增 `features/review/review-composition.tsx`，收敛 `in_review` 状态门禁和 `useReviewComments` → `ReviewPanel` 的受控 props 投影；非审核状态在 feature 边界返回空，页面不再重复 Review 显示条件。
 - T8.13 页面继续拥有 `transitionRevision`、Evidence Query 写回、错误/通知和 URL/Revision 选择；ReviewPanel 的 DOM/CSS、评论 controller、审核意见草稿和 Approved/Changes Requested 业务语义保持不变。
 
-T8.12–T8.13 已完成本轮切片：Review 组合边界已下沉，不新增 API、Query key、共享组件或 Revision 状态机。Web typecheck、24 个 Web unit、18 条桌面/移动 Playwright E2E 和 `git diff --check` 通过；跨 feature 公共组件审计、真实 logout/cache 与 T9 仍未标记完成。
+T8.12–T8.13 已完成本轮切片：Review 组合边界已下沉，不新增 API、Query key、共享组件或 Revision 状态机。Web typecheck、24 个 Web unit、18 条桌面/移动 Playwright E2E 和 `git diff --check` 通过；跨 feature 公共组件审计已在后续 T8.14–T8.15 完成，真实 logout/cache 与 T9 仍未标记完成。
+
+### T8 跨 feature 公共组件审计切片（本轮）
+
+- T8.14 审计工作台、插件、登录、API Console 与 feature 展示组件的复用关系；确认只有工作台/插件的全局错误与通知条具备稳定、无领域状态的共享契约。
+- T8.15 新增 `components/feedback/alert-banner.tsx`，迁移工作台和插件页的 error/notice banner；保留现有 `.alert`、`.error-alert`、`.notice-alert` class、role、文案和关闭回调。`InteractiveChart`、Snapshot、Evidence、Review、Plugin 和 Editor 保持 feature/page 所有权。
+
+T8.14–T8.15 已完成本阶段切片：公共反馈条完成最小提取，领域专属组件未被过度抽象。Web typecheck、test:typecheck、24 个 Web unit、Web build、18 条桌面/移动 E2E、docs:check 和 `git diff --check` 通过；下一步进入 T9 独立验证与验收。
 
 ### T3 实施子任务
 
