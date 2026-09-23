@@ -173,6 +173,15 @@ T8 先处理页面组合层中仍然自持请求生命周期的 Snapshot 预览�
 - `page.tsx` 只保留 `transitionRevision` 的状态 mutation、Evidence Query 回填、全局 notice/error 投影和 `ReviewPanel` 组合；ReviewPanel 的 DOM、CSS、审核按钮和既有文案保持不变。
 - 本轮不自动加载评论、不引入评论 Query key、不改变 Review/Revision API，不处理 T9 的真实登出和独立验收。
 
+#### T8 Plugin trace controller 切片（2026-09-23）
+
+本轮继续收敛 Evidence 组合层中仍由页面持有的远端请求生命周期：只迁移当前 Revision 的 Plugin Context 读取、快照结构校验和竞态清理，不改变 `PluginTrace` 的展示合同。
+
+- `features/evidence/use-plugin-trace.ts` 提供 `usePluginTrace(revisionId)`、`fetchPluginSnapshot()` 和 `parsePluginSnapshot()`；读取既有 `/api/v1/chart-revisions/:revisionId/plugin-context`，继续通过共享 `apiFetch`、Cookie 和 `no-store` seam。
+- Controller 在 Revision 切换、卸载时中止旧请求；写入前检查 Revision/Abort 代次，避免旧 Plugin Snapshot 污染当前 Evidence。空快照、非法版本/Renderer/能力结构和网络错误继续投影为现有 `idle/empty/invalid/error` 状态。
+- `page.tsx` 删除 Plugin Snapshot 解析函数、状态和 effect，只把 `activeRevision.id` 交给 controller，并继续将状态传给 `PluginTrace`；不把插件状态写入 Query，也不改变全局错误 banner、Revision transition 或 Evidence Query 回填。
+- 本轮不新增 API、不修改 API Console、不改 CSS/DOM；只补充 parser/fetcher 的 unit 覆盖和插件上下文桌面/移动回归，不进入真实登出缓存和 T9。
+
 ### URL context module
 
 当前选择由 `hooks/use-project-context.ts` 的 `useProjectContext()` 读取：
@@ -327,7 +336,7 @@ Job status、Revision status、Evidence status仍以 API 返回的服务端事�
 | R2 受保护路由与登出清理 | Protected route、状态流 | T2 | Web E2E、cache clear test | 待实现 |
 | R3 服务端状态按身份缓存 | Query keys、invalidation | T3 | Query unit、workspace E2E | 待实现 |
 | R4 Project/Conversation/Revision URL 恢复 | URL context、数据流 5 | T4 | URL/E2E | 待实现 |
-| R5 feature 模块化 | 模块边界、共享组件 | T5、T8 | typecheck、E2E 回归 | T5 展示边界、T8 Snapshot controller 与 Review comments controller 已实现；Evidence/Review 剩余组合层及公共组件审计仍待后续切片 |
+| R5 feature 模块化 | 模块边界、共享组件 | T5、T8 | typecheck、E2E 回归 | T5 展示边界、T8 Snapshot、Review comments 与 Plugin trace controller 已实现；Evidence/Review 剩余组合层及公共组件审计仍待后续切片 |
 | R6 Generation 状态可独立测试 | reducer、watcher seam | T6 | watcher/reducer unit、live smoke | Generation coordinator 与 Chart Editor reducer 已实现；live smoke/独立验收待完成 |
 | R7 业务合同和 API Console 不漂移 | API/外部契约 | T7 | contracts/docs/E2E | `apiRequest`/`apiDownload` seam、API Console 401 smoke 与固定 Revision 导出回归已通过；无 API 合同变更 |
 | R8 迁移可回滚且无用户行为变化 | 迁移兼容与回滚 | T9 | 全量验证、diff check | 待实现 |

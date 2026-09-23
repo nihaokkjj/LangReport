@@ -22,7 +22,8 @@ import { AnalysisBriefForm } from "../../features/analysis-brief/analysis-brief-
 import { MetricForm } from "../../features/analysis-brief/metric-form";
 import { aggregateOperationLabels, aggregateOperations, buildEditorTransformPlan, chartEditorReducer, editorStateFromRevision, filterOperatorLabels, filterOperators, initialChartEditorState } from "../../features/chart-editor/chart-editor-state";
 import type { AggregateOperation, Cell, FilterOperator, TransformPlan } from "../../features/chart-editor/chart-editor-state";
-import { PluginTrace, type PluginSnapshot, type PluginTraceState } from "../../features/evidence/plugin-trace";
+import { PluginTrace } from "../../features/evidence/plugin-trace";
+import { usePluginTrace } from "../../features/evidence/use-plugin-trace";
 import { RevisionExport } from "../../features/evidence/revision-export";
 import { ReviewPanel } from "../../features/review/review-panel";
 import { useReviewComments } from "../../features/review/use-review-comments";
@@ -89,22 +90,6 @@ function snapshotSourceTypeLabel(value?: string | null): string { return value =
 function snapshotAssetStatusLabel(value?: string): string { return value === "processing" ? "处理中" : value === "failed" ? "处理失败" : value === "archived" ? "已归档" : value === "deleted" ? "已删除" : value ?? "不可用"; }
 function chartTypeName(type: FlintSpec["chartSpec"]["chartType"]): string { return type === "Bar Chart" ? "柱状图" : type === "Area Chart" ? "面积图" : "折线图"; }
 function rowsForEvidence(evidence: EvidenceRecord | null): Array<Record<string, Cell>> { if (evidence?.job?.previewData?.rows) return evidence.job.previewData.rows; return evidence?.revision.flintSpec.data.values ?? []; }
-function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
-function parsePluginSnapshot(value: unknown): PluginTraceState {
-  if (value === null || value === undefined || !isRecord(value) || Object.keys(value).length === 0) return { status: "empty" };
-  const renderer = value.renderer;
-  const plugins = value.plugins;
-  if (value.version !== "v1" || typeof value.flintAdapterVersion !== "string" || !isRecord(renderer) || typeof renderer.id !== "string" || typeof renderer.version !== "string" || !Array.isArray(plugins)) {
-    return { status: "invalid", message: "插件快照缺少可验证的版本、Renderer 或插件列表。" };
-  }
-  for (const plugin of plugins) {
-    if (!isRecord(plugin) || typeof plugin.pluginId !== "string" || typeof plugin.version !== "string" || typeof plugin.contentHash !== "string" || !/^sha256:[a-f0-9]{64}$/.test(plugin.contentHash) || !isRecord(plugin.capabilities) || Object.values(plugin.capabilities).some((items) => !Array.isArray(items))) {
-      return { status: "invalid", message: "插件快照中的来源哈希或能力结构无法验证。" };
-    }
-  }
-  return { status: "ready", snapshot: value as unknown as PluginSnapshot };
-}
-
 function InteractiveChart({ rows, spec }: { rows: Array<Record<string, Cell>>; spec: FlintSpec }) {
   const [activePoint, setActivePoint] = useState<{ key: string; readout: string } | null>(null);
   const xField = spec.chartSpec.encodings.x?.field;
@@ -192,7 +177,6 @@ export default function Home() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
-  const [pluginTraceState, setPluginTraceState] = useState<PluginTraceState>({ status: "idle" });
   const [job, setJob] = useState<GenerationJob | null>(null);
   const [composer, setComposer] = useState("");
   const [projectForm, setProjectForm] = useState({ name: "", clientName: "", objective: "", audience: "client_presentation" as ProjectAudience, visualTemplate: "consulting-neutral" as VisualTemplate });
@@ -237,6 +221,7 @@ export default function Home() {
   const isLoadingProject = Boolean(projectId && projectServerState.isPending);
 const project = useMemo(() => projects.find((item) => item.id === projectId) ?? null, [projects, projectId]); const selectedAsset = useMemo(() => assets.find((item) => item.id === selectedAssetId) ?? assets[0] ?? null, [assets, selectedAssetId]); const selectedConversation = useMemo(() => conversations.find((item) => item.id === conversationId) ?? null, [conversations, conversationId]); const [hideActiveEvidence, setHideActiveEvidence] = useState(false); const activeEvidence = useMemo(() => { if (hideActiveEvidence) return null; const scoped = evidence.filter((item) => item.block.conversationId === conversationId); if (projectRoute.revisionId) return scoped.find((item) => item.revision.id === projectRoute.revisionId) ?? scoped[0] ?? null; return scoped[0] ?? null; }, [evidence, conversationId, hideActiveEvidence, projectRoute.revisionId]); const activeRevision = activeEvidence?.revision ?? null; const activeSpec = activeEvidence?.revision.flintSpec ?? job?.flintSpec ?? null; const activeRows = rowsForEvidence(activeEvidence); const qualityWarnings = useMemo(() => selectedAsset?.latestSnapshot?.schema.filter((column) => column.nullCount > 0).map((column) => ({ code: "NULL_VALUES", message: `${column.name} 有 ${column.nullCount.toLocaleString()} 个缺失值，生成未将缺失月份静默补为 0。`, severity: "warning" as const, field: column.name })) ?? [], [selectedAsset]); const isJobActive = Boolean(job && !["succeeded", "failed", "needs_clarification", "cancelled"].includes(job.status)); const hasSnapshot = Boolean(selectedAsset?.latestSnapshot && selectedAsset.status === "ready"); const hasMetric = metric?.status === "confirmed"; const hasBrief = Boolean(brief?.status === "confirmed" && brief.businessQuestion && brief.audience && brief.timeRange && brief.timeGrain && brief.outputFormat); const canGenerate = Boolean(projectId && hasSnapshot && hasMetric && hasBrief && conversationId && !isJobActive); const canManageModelCredential = workspace?.role === "owner" || workspace?.role === "admin"; const availableFields = activeSpec ? Object.keys(activeSpec.data.values[0] ?? {}) : []; const sourceFields = selectedAsset?.latestSnapshot?.schema.map((column) => column.name) ?? availableFields;
   const reviewComments = useReviewComments(activeRevision?.id ?? null, { onClearError: () => setError(null), onError: setError, onNotice: setNotice });
+  const pluginTraceState = usePluginTrace(activeRevision?.id ?? null);
   useEffect(() => {
     if (!projectRoute.ready || !activeRevision?.id || projectRoute.revisionId === activeRevision.id) return;
     projectRoute.setRevisionId(activeRevision.id);
@@ -299,7 +284,6 @@ const project = useMemo(() => projects.find((item) => item.id === projectId) ?? 
   useEffect(() => {
     if (projectServerState.error) setError(formatApiError(projectServerState.error, "无法读取项目数据"));
   }, [projectServerState.error]);
-  useEffect(() => { if (!activeRevision?.id) { setPluginTraceState({ status: "idle" }); return; } let cancelled = false; setPluginTraceState({ status: "loading" }); void apiFetch<{ pluginSnapshot: unknown }>(`/api/v1/chart-revisions/${activeRevision.id}/plugin-context`, { headers: devHeaders }).then((payload) => { if (!cancelled) setPluginTraceState(parsePluginSnapshot(payload.pluginSnapshot)); }).catch((traceError) => { if (!cancelled) setPluginTraceState({ status: "error", message: formatApiError(traceError, "无法读取插件快照。") }); }); return () => { cancelled = true; }; }, [activeRevision?.id]);
   const handleGenerationTerminal = useCallback(async (snapshot: GenerationJobStatusSnapshot, isCurrent: () => boolean, signal: AbortSignal) => {
     const payload = await apiFetch<{ job: GenerationJob; revision: GenerationJob["revision"] }>(`/api/v1/generation-jobs/${snapshot.job.id}`, { headers: devHeaders, signal });
     if (!isCurrent()) return;

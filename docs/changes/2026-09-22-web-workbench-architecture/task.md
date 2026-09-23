@@ -27,7 +27,7 @@
 | T5 | 提取 Project、Conversation、Data Snapshot、Analysis Brief/Metric feature | T3–T4 | 可与 T6 前半并行 | 已完成（本轮） | Web typecheck、unit、build、工作台 E2E | 受控展示组件接管四个 feature slice；页面保留 Query/mutation/Job 编排，不改变行为和 API |
 | T6 | 提取 Chart Editor reducer 和 Generation coordinator | T5 | 否 | 已完成（本轮） | chart editor unit、Web typecheck、build、图表编辑 E2E | Generation coordinator 保持已接入；Chart Editor reducer 接管编辑器本地状态与 TransformPlan 纯逻辑，不改变 API/视觉行为 |
 | T7 | 迁移 Evidence、Review、Export、Plugin 和 API Console 的共享错误/请求策略 | T5–T6 | 可并行 | 已完成（本轮） | Web unit、Web E2E、API Console smoke | Plugin/Evidence/Review/Export/API Console 均通过共享 HTTP/Auth seam；API Console 401 不跳转，固定 Revision 导出失败可解释 |
-| T8 | 页面组合层收敛与公共组件审计 | T5–T7 | 否 | 部分完成（本轮） | Snapshot/Review controller unit、Web typecheck、Web unit、工作台 E2E | 保留当前大页面；Snapshot 预览与 Review comments controller 已下沉，Evidence/Review 剩余组合层与公共组件审计仍待后续切片 |
+| T8 | 页面组合层收敛与公共组件审计 | T5–T7 | 否 | 部分完成（本轮） | Snapshot/Review/Plugin controller unit、Web typecheck、Web unit、工作台 E2E | 保留当前大页面；Snapshot、Review comments 与 Plugin trace controller 已下沉，Evidence/Review 剩余组合层与公共组件审计仍待后续切片 |
 | T9 | 独立验证、验收、交接和清理旧实现 | T8 | 否 | 部分完成（本阶段） | test-plan 已运行命令 | 本阶段回归证据已记录；全仓验证和独立验收仍待完成 |
 
 ## 执行顺序
@@ -90,6 +90,14 @@ T8.1–T8.3 已完成本轮切片：Snapshot controller 已接管列表/详情�
 - T8.6 增加 Review controller fetcher/竞态边界单测，并在现有桌面/移动审核链路验证刷新评论、添加评论、批准门禁；不进入 T9。
 
 T8.4–T8.6 已完成本轮切片：Review comments controller 已接管评论读取/新增、审核意见草稿和请求竞态清理；页面仍保留 Revision 状态转换与 Evidence Query 回填。22 个 Web unit、Web/全仓 typecheck、Web/全仓 build、Web/全仓 test、18 条桌面/移动 E2E（含刷新评论、添加评论和批准门禁）、docs:check 和 `git diff --check` 已通过。T8 剩余 Evidence/Review 组合层与公共组件审计仍未标记完成。
+
+### T8 Plugin trace controller 子任务（本轮）
+
+- T8.7 新增 `features/evidence/use-plugin-trace.ts`，接管 Plugin Context fetcher、快照结构校验、`loading/empty/invalid/error/ready` 投影和 Abort/stale-response 防护；保留既有 API 路径与 `PluginTrace` 展示组件。
+- T8.8 页面删除 `parsePluginSnapshot`、Plugin Trace 本地 state/effect，只传入当前 Revision ID；全局错误 banner、Evidence Query、Revision transition 和插件展示语义保持不变。
+- T8.9 增加 parser/fetcher 单测并验证桌面/移动插件追溯状态；不迁移 Plugin Query、不修改 API Console、不进入 T9。
+
+T8.7–T8.9 已完成本轮切片：Plugin trace controller 已接管 Plugin Context 读取、快照结构校验和 Revision 切换 Abort/stale-response 防护；页面只保留 `PluginTrace` 展示映射。24 个 Web unit、Web/全仓 typecheck、Web build、Web unit、18 条桌面/移动 E2E（含空插件快照、审核、导出链路）、docs:check 和 `git diff --check` 已通过。T8 剩余 Evidence/Review 组合层与公共组件审计仍未标记完成。
 
 ### T3 实施子任务
 
