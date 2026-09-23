@@ -182,6 +182,17 @@ T8 先处理页面组合层中仍然自持请求生命周期的 Snapshot 预览�
 - `page.tsx` 删除 Plugin Snapshot 解析函数、状态和 effect，只把 `activeRevision.id` 交给 controller，并继续将状态传给 `PluginTrace`；不把插件状态写入 Query，也不改变全局错误 banner、Revision transition 或 Evidence Query 回填。
 - 本轮不新增 API、不修改 API Console、不改 CSS/DOM；只补充 parser/fetcher 的 unit 覆盖和插件上下文桌面/移动回归，不进入真实登出缓存和 T9。
 
+#### T8 Evidence canvas 组合切片（2026-09-23）
+
+本轮继续收敛 Evidence 的页面组合边界，但只移动受控展示，不移动服务端状态或领域命令。目标是让 `page.tsx` 负责选择上下文和组装 props，Evidence feature 负责自己的 DOM 合同。
+
+- `features/evidence/evidence-canvas.tsx` 提供 `EvidenceCanvas` 与 `EvidenceTrace` 受控接口，渲染现有 Evidence 标题、Revision 状态、图表 slot、发现、数据快照/指标/版本摘要、质量提示、编辑/依据/导出/提交审核动作和 trace cards。
+- `EvidenceCanvas` 只接收字符串、数值、React node 和窄回调；`RevisionExport` 仍在 Evidence feature 内部处理固定 Revision 下载，`InteractiveChart` 仍由页面提供，不把图表编辑器本地状态、Evidence Query、Revision transition、Plugin Context 或 Review comments 请求带入组件。
+- `page.tsx` 仅把 `activeEvidence`、`activeRows`、`metric` 和既有回调投影为 props。Approved/archived 编辑门禁、Approved 导出门禁、draft 提交审核和 `showTrace` 开关语义保持不变。
+- 组件不提升到 `components/*`：它依赖 Evidence 专属的状态文案、证据摘要和审核动作，因此当前仍是 feature-specific public boundary。跨 feature 的公共组件审计留给后续 Review 组合切片。
+
+本轮不新增 API、不改变 Query ownership、Revision API、CSS 或共享组件目录；验证重点是受控 props 类型、Evidence DOM 选择器与桌面/390px 证据链路回归。
+
 ### URL context module
 
 当前选择由 `hooks/use-project-context.ts` 的 `useProjectContext()` 读取：
@@ -336,7 +347,7 @@ Job status、Revision status、Evidence status仍以 API 返回的服务端事�
 | R2 受保护路由与登出清理 | Protected route、状态流 | T2 | Web E2E、cache clear test | 待实现 |
 | R3 服务端状态按身份缓存 | Query keys、invalidation | T3 | Query unit、workspace E2E | 待实现 |
 | R4 Project/Conversation/Revision URL 恢复 | URL context、数据流 5 | T4 | URL/E2E | 待实现 |
-| R5 feature 模块化 | 模块边界、共享组件 | T5、T8 | typecheck、E2E 回归 | T5 展示边界、T8 Snapshot、Review comments 与 Plugin trace controller 已实现；Evidence/Review 剩余组合层及公共组件审计仍待后续切片 |
+| R5 feature 模块化 | 模块边界、共享组件 | T5、T8 | typecheck、E2E 回归 | T5 展示边界、T8 Snapshot、Review comments、Plugin trace controller 与 EvidenceCanvas 已实现；Review 剩余组合层及跨 feature 公共组件审计仍待后续切片 |
 | R6 Generation 状态可独立测试 | reducer、watcher seam | T6 | watcher/reducer unit、live smoke | Generation coordinator 与 Chart Editor reducer 已实现；live smoke/独立验收待完成 |
 | R7 业务合同和 API Console 不漂移 | API/外部契约 | T7 | contracts/docs/E2E | `apiRequest`/`apiDownload` seam、API Console 401 smoke 与固定 Revision 导出回归已通过；无 API 合同变更 |
 | R8 迁移可回滚且无用户行为变化 | 迁移兼容与回滚 | T9 | 全量验证、diff check | 待实现 |

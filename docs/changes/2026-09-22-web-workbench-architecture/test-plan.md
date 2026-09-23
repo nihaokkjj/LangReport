@@ -60,8 +60,9 @@ git diff --check
 - T8 Snapshot controller 回归：列表按版本降序排序；列表/详情 fetcher 透传 `AbortSignal` 并保留共享 HTTP seam；控制器关闭或切换版本时旧请求不能回填，错误状态继续映射到 Modal 可读文案。
 - T8 Review comments controller 回归：评论列表/新增 fetcher 透传 `AbortSignal`、使用共享 credentials/cache；切换 Revision 或新请求开始时旧响应不能回填；审核意见草稿、刷新评论、添加评论和批准门禁在桌面/移动链路保持可用。
 - T8 Plugin trace controller 回归：Plugin Context fetcher 透传 `AbortSignal` 并使用共享 credentials/cache；空快照、合法快照、非法 Renderer/能力结构和网络错误映射保持稳定；Revision 切换时旧响应不能覆盖当前插件追溯，桌面/移动 Evidence 链路保持可用。
+- T8 Evidence canvas 组合回归：`EvidenceCanvas` 只接收受控 props，Evidence 图表、发现、快照/指标/版本摘要、质量提示、依据、导出和提交审核入口保持现有 DOM/门禁语义；桌面与 390px 移动端固定 Revision、审核和图表编辑链路通过。
 
-全仓 `typecheck/test/build` 与 `docs:check` 已通过；API Console 401 smoke、Snapshot 预览、Review comments 和 Plugin trace 桌面/移动回归已通过；T8 剩余 Evidence/Review 组合层与公共组件审计、独立验证角色和真实 logout/cache 场景仍属于后续验收。
+全仓 `typecheck/test/build` 与 `docs:check` 已通过；API Console 401 smoke、Snapshot 预览、Review comments、Plugin trace 和 Evidence canvas 桌面/移动回归已通过；T8 剩余 Review 组合层与跨 feature 公共组件审计、独立验证角色和真实 logout/cache 场景仍属于后续验收。
 
 新增或迁移的测试建议：
 
