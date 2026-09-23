@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronDownIcon } from "../../components/icons/chevron-down";
+
 type ProjectAudience = "internal_analysis" | "client_presentation" | "management";
 type VisualTemplate = "consulting-neutral" | "consulting-insight" | "consulting-research";
 
@@ -41,7 +43,7 @@ const templateOptions: Array<{ value: VisualTemplate; label: string; description
 ];
 
 export function ProjectSelector({ project, projects, projectId, isBooting, menuOpen, onToggleMenu, onSelect, onOpenCreate }: ProjectSelectorProps) {
-  return <div className="selector project-selector"><button type="button" className="selector-button" aria-expanded={menuOpen} onClick={onToggleMenu}><span className="selector-icon">P</span><span className="selector-copy"><strong>{project?.name ?? (isBooting ? "连接中" : "选择项目")}</strong><small>{project?.clientName || "我的项目"}</small></span><span className="selector-chevron">⌄</span></button>{menuOpen && <div className="selector-menu"><span className="menu-kicker">项目列表</span>{projects.map((item) => <button type="button" key={item.id} className={`menu-item ${item.id === projectId ? "current" : ""}`} onClick={() => onSelect(item.id)}><strong>{item.name}</strong><small>{item.id === projectId ? "当前项目" : item.clientName || "项目"}</small></button>)}<button type="button" className="menu-create" onClick={onOpenCreate}>＋ 新建项目</button></div>}</div>;
+  return <div className="selector project-selector"><button type="button" className="selector-button" aria-expanded={menuOpen} onClick={onToggleMenu}><span className="selector-icon">P</span><span className="selector-copy"><strong>{project?.name ?? (isBooting ? "连接中" : "选择项目")}</strong><small>{project?.clientName || "我的项目"}</small></span><span className="selector-chevron"><ChevronDownIcon /></span></button>{menuOpen && <div className="selector-menu"><span className="menu-kicker">项目列表</span>{projects.map((item) => <button type="button" key={item.id} className={`menu-item ${item.id === projectId ? "current" : ""}`} onClick={() => onSelect(item.id)}><strong>{item.name}</strong><small>{item.id === projectId ? "当前项目" : item.clientName || "项目"}</small></button>)}<button type="button" className="menu-create" onClick={onOpenCreate}>＋ 新建项目</button></div>}</div>;
 }
 
 type ProjectCreateDialogProps = {

@@ -28,6 +28,7 @@
 | T6 | 提取 Chart Editor reducer 和 Generation coordinator | T5 | 否 | 已完成（本轮） | chart editor unit、Web typecheck、build、图表编辑 E2E | Generation coordinator 保持已接入；Chart Editor reducer 接管编辑器本地状态与 TransformPlan 纯逻辑，不改变 API/视觉行为 |
 | T7 | 迁移 Evidence、Review、Export、Plugin 和 API Console 的共享错误/请求策略 | T5–T6 | 可并行 | 已完成（本轮） | Web unit、Web E2E、API Console smoke | Plugin/Evidence/Review/Export/API Console 均通过共享 HTTP/Auth seam；API Console 401 不跳转，固定 Revision 导出失败可解释 |
 | T8 | 页面组合层收敛与公共组件审计 | T5–T7 | 否 | 已完成（本阶段） | Snapshot/Review/Plugin controller、Evidence canvas、Review composition、AlertBanner、Web typecheck、Web unit、工作台 E2E | 保留当前大页面；服务端状态和领域专属 UI 留在原 feature 边界，稳定的跨 feature 反馈条已提取为公共组件；不将领域组件强行上移 |
+| T8.16 | Evidence 中心画布与并行抽屉视觉细化 | T8 | 否 | 已完成（本轮） | Web typecheck、UI unit/E2E、桌面/390px 人工检查、`git diff --check` | 默认中心画布；历史/依据可并行打开；依据 300–560px 可拖拽；Snapshot 预览覆盖依据位置且关闭时关闭依据抽屉；API/领域行为不变 |
 | T9 | 独立验证、验收、交接和清理旧实现 | T8 | 否 | 部分完成（本阶段） | test-plan、全仓检查、只读独立复核、logout/cache E2E | 本地可执行验证、浏览器登出契约和只读独立复核已通过；真实同源部署 Cookie、隔离 worktree 复核和登录网关 HTTPS smoke 仍待补 |
 
 ## 执行顺序
@@ -42,6 +43,7 @@ login-gateway VERIFYING/ACCEPTED
   → T5/T6
   → T7
   → T8
+  → T8.16
   → T9
 ```
 
@@ -120,6 +122,14 @@ T8.12–T8.13 已完成本轮切片：Review 组合边界已下沉，不新增 A
 
 T8.14–T8.15 已完成本阶段切片：公共反馈条完成最小提取，领域专属组件未被过度抽象。Web typecheck、test:typecheck、24 个 Web unit、Web build、18 条桌面/移动 E2E、docs:check 和 `git diff --check` 通过；下一步进入 T9 独立验证与验收。
 
+### T8.16 Evidence 中心画布与并行抽屉视觉细化（本轮）
+
+- T8.16.1 将工作台默认状态改为中心画布优先；历史和依据 drawer 保持独立开关，可同时打开，宽屏使用剩余空间布局。
+- T8.16.2 新增依据抽屉 300–560px 的 pointer/keyboard resize seam；宽度只保存在当前页面内，关闭或刷新回到 360px。
+- T8.16.3 将 Snapshot 预览从全屏 modal 迁入依据抽屉 slot；预览关闭统一关闭依据抽屉，保留 controller 的请求、Abort、错误和只读表格行为。
+- T8.16.4 调整移动端历史/依据为 bottom sheet，补充 drawer close/focus/keyboard 语义，保留 44px 触控目标与 reduced-motion。
+- T8.16.5 仅调整工作台 CSS 和必要 JSX/state；不改 API、Query key、领域状态、生成 Job、Revision 或 Review 合同。
+
 ### T9 独立验证与验收（本阶段）
 
 独立验证角色在 `e800fe7` 完整实现快照上执行只读复核，期间未修改文件或提交代码。以下命令全部通过：
@@ -128,7 +138,7 @@ T8.14–T8.15 已完成本阶段切片：公共反馈条完成最小提取，领
 - `pnpm --filter @langreport/web test:typecheck`
 - `pnpm --filter @langreport/web test`（24/24）
 - `pnpm --filter @langreport/web build`
-- `pnpm --filter @langreport/web test:e2e`（桌面 + 390px 移动端 18/18）
+- `pnpm --filter @langreport/web test:e2e`（桌面 + 390px 移动端 22 条中 20 条通过，2 条 live-auth 跳过）
 - `pnpm docs:check`、`git diff --check`
 - `pnpm typecheck`、`pnpm test`、`pnpm build`
 
@@ -180,3 +190,4 @@ T8.14–T8.15 已完成本阶段切片：公共反馈条完成最小提取，领
 - [ ] Chart Editor、Generation、Evidence、Review 的领域行为与重构前一致。
 - [ ] Web typecheck、test:typecheck、Web unit/E2E、全仓 typecheck/test/build/docs:check 通过。
 - [ ] acceptance.md、handoff.md 和需求追踪矩阵已同步，未把未验证内容标为通过。
+- [x] T8.16 的中心画布、并行抽屉、依据宽度拖拽、Snapshot 覆盖预览和移动 bottom sheet 在设计基线下通过验证。

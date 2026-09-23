@@ -281,12 +281,20 @@ Do not add one-off colors to the product chrome. A Project Visual Template or ex
 
 ## Layout and spacing
 
-- The primary workbench is a three-region layout: conversation history, evidence canvas, and project context. The center canvas always gets the flexible width.
+- The primary workbench is center-canvas first: the evidence canvas gets the flexible width by default, while conversation history and project context are independent drawers that can be opened in parallel. On wide screens, open drawers consume their own grid tracks and the center canvas uses the remaining width; the project context drawer can be resized without changing the evidence data contract.
 - The API Console and Plugin page reuse the same canvas, surface, border, type, and control tokens; they are utility views, not separate brands.
 - Use the 8px base rhythm: 8px for compact gaps, 12px for field and row gaps, 16px for component padding, 24px for panel padding, 32px for section separation, and 64px only for major page breaks.
 - Keep the reading column around 760–840px when displaying findings, explanations, or validation messages.
 - Prefer one clear panel surface over several nested colored cards. Use borders and spacing to show ownership and hierarchy.
 - Long IDs, file names, request URLs, and field names may wrap or ellipsize, but their full value must remain available through the existing trace or detail view.
+
+### 工作台抽屉与文件预览
+
+- 历史抽屉和依据抽屉互不排斥，可以同时打开；它们分别贴靠左右边缘，不覆盖彼此。
+- 依据抽屉默认约 360px，可通过垂直拖拽把手调整到 300–560px；宽度只在当前页面会话内保留，刷新后回到默认值。
+- Evidence 画布保持中心优先。抽屉打开时使用剩余宽度，不改变图表、Revision 或证据数据行为。
+- 文件预览直接替换依据抽屉的内容区域，不创建全屏 Modal；关闭预览会关闭整个依据抽屉。
+- 平板使用边缘抽屉，紧凑移动端使用底部 sheet；移动端不再依赖始终可见的横向历史条。
 
 ## Components
 
@@ -305,7 +313,7 @@ Do not add one-off colors to the product chrome. A Project Visual Template or ex
 
 ### Evidence and trace
 
-- The evidence panel keeps chart preview, finding, source, metric, transform, theme, and validation in one visual group.
+- The evidence canvas keeps chart preview and finding in the main reading flow; source, metric, transform, theme, and validation stay one action away in the context drawer.
 - Trace values use Inter at 15–16px. Field names and technical keys may use JetBrains Mono at 11–12px.
 - Status badges use one semantic color each and always include readable text; color is never the only status signal.
 - Approved content is visually calm and read-only. Error and warning panels explain the cause and the next action in normal body text.
@@ -314,6 +322,8 @@ Do not add one-off colors to the product chrome. A Project Visual Template or ex
 
 - The default chart palette is limited to `{colors.accent}`, `{colors.ink-muted}`, and `{colors.success}`. Use the first color for the primary series.
 - Chart titles use Inter; axes and compact legend labels use JetBrains Mono. Chart labels must remain at least 11px in exports.
+- Chart visuals are centered within their stage and editor preview; the chart keeps a readable max width instead of stretching to the full panel.
+- Chart-editing select controls use the same neutral field treatment as other form controls, with a clear focus ring, hover border, and disabled state.
 - The interactive preview and deterministic SVG/PNG renderer must use the same font families and default palette.
 - A custom Project Visual Template or plugin Theme may override chart styling only when the explicit choice and its version are recorded in the revision.
 
@@ -323,9 +333,9 @@ Do not add one-off colors to the product chrome. A Project Visual Template or ex
 
 | Name | Width | Behavior |
 |---|---:|---|
-| Wide | 1240px and above | Three-region workbench with persistent side rails |
-| Tablet | 900–1239px | Context rail becomes an overlay; center canvas remains primary |
-| Mobile | 760–899px | History becomes a horizontal strip; panels stack |
+| Wide | 1240px and above | Center canvas first; history and context drawers can open independently and in parallel; context width is resizable |
+| Tablet | 900–1239px | Center canvas remains primary; history/context use edge drawers and may both remain open |
+| Mobile | 760–899px | History and context become bottom sheets; panels stack inside the active sheet |
 | Compact | 430px and below | Single-column actions, wrapped headings, no horizontal clipping |
 
 ### Requirements

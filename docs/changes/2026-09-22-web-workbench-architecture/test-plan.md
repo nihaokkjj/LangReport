@@ -9,6 +9,8 @@
 
 验证登录网关已存在的 Web 合同在架构迁移后不回归，并验证工作台的认证上下文、远端状态、URL 状态、Generation Job、Chart Editor、Evidence、Review 和 Plugin feature 可以独立演化。测试不重新证明 API scrypt/JWT 实现；该部分由 `CHG-2026-09-22-login-gateway` 负责。
 
+本轮 T8.16 额外验证 Evidence 中心画布优先、历史/依据并行抽屉、依据宽度拖拽、Snapshot 预览覆盖依据位置及移动 bottom sheet。验证只检查展示容器、可访问交互和响应式行为，不改变领域或 API 测试边界。
+
 ## 风险到测试映射
 
 | 风险 | 测试类型 | 场景 | 预期结果 |
@@ -21,6 +23,8 @@
 | 切换上下文收到迟到响应 | watcher unit + E2E | 切换 Project/Conversation/Job 时旧请求延迟返回 | Abort 或 session/query key 阻止旧数据写入 |
 | Query key 未包含作用域 | Query unit + integration | 两个 Project 使用同名 Conversation/Revision | 缓存不串 Project、Workspace 或用户 |
 | Job 终态刷新不完整 | watcher/reducer unit + live smoke | succeeded、needs_clarification、failed、cancelled、edit | Evidence/Revision/Conversation 按规则重新读取，状态与旧行为一致 |
+| 抽屉布局遮挡 Evidence 或无法关闭 | Playwright + 人工响应式检查 | 两个抽屉并行、Esc/关闭、宽度拖拽、390px bottom sheet | 中心画布可读；抽屉互不覆盖；关闭后焦点和滚动可继续；无横向溢出 |
+| Snapshot 预览与依据上下文脱节 | Playwright + controller unit | 打开预览、切换版本、错误/加载、关闭预览 | 预览只占依据位置；请求/Abort 语义不变；关闭预览同时关闭依据抽屉 |
 | Editor 拆分改变业务逻辑 | pure unit + E2E | 视觉编辑、筛选/聚合/排序、Approved 只读 | TransformPlan、Revision append-only、Approved 禁止编辑均不变 |
 | Feature 提取后遗漏空/错/加载态 | browser visual/manual | 首次空态、上传中、401、错误、移动端 390px | 信息层级、触控区域、对比度、溢出和下一步动作可用 |
 | API Console 诊断行为回归 | E2E/manual | Auth login/session/logout 与未登录业务请求 | Auth 操作可调试；业务 401 展示稳定错误，不自动跳转 |
@@ -64,6 +68,7 @@ git diff --check
 - T8 Evidence canvas 组合回归：`EvidenceCanvas` 只接收受控 props，Evidence 图表、发现、快照/指标/版本摘要、质量提示、依据、导出和提交审核入口保持现有 DOM/门禁语义；桌面与 390px 移动端固定 Revision、审核和图表编辑链路通过。
 - T8 Review composition 组合回归：`ReviewComposition` 只负责 `in_review` 显示门禁和 controller props forwarding；非审核 Revision 不渲染 Review 面板，审核中仍可刷新/新增评论、提交修改请求和批准，桌面与 390px 移动端行为保持一致。
 - T8 公共反馈组件回归：`AlertBanner` 在工作台和插件页复用全局 alert class，error/notice 的 role、文案、关闭动作和移动布局保持一致；领域专属组件不被错误上移。
+- T8.16 UI 回归：初始桌面加载时左右抽屉关闭且 Evidence 画布占剩余空间；历史与依据可同时打开；依据拖拽限制在 300–560px；Snapshot 预览替换依据内容，关闭预览关闭依据抽屉；平板 edge drawer、390px bottom sheet、Esc/focus/reduced-motion 通过。
 
 全仓 `typecheck/test/build` 与 `docs:check` 已通过；API Console 401 smoke、Snapshot 预览、Review comments、Plugin trace、Evidence canvas、Review composition 和浏览器 logout/cache 契约场景桌面/移动回归已通过，AlertBanner 的复用契约通过类型检查、生产构建和现有页面回归验证。`test:e2e:auth-live` 已提供真实同源部署入口，但本地未配置部署域名和账号，因此 live-auth 仍待部署环境执行。
 
@@ -101,4 +106,4 @@ git diff --check
 - API 端 scrypt、JWT claim、Cookie Secure/SameSite 和生产限流：属于登录网关变更的测试计划。
 - 多账号并发、用户注册、MFA、OAuth/OIDC 和共享 Session Store：不在第一阶段范围。
 - 新增 API 或领域模型：本变更明确不做；若实现需要则重新规划。
-- 视觉风格重新设计：只验证现有 DESIGN.md 规则在拆分后保持一致。
+- 非本轮范围的完整视觉重设计、跨页面品牌重做和新图表主题：本轮只验证 `DESIGN.md` 中确认的工作台抽屉/证据画布规则。

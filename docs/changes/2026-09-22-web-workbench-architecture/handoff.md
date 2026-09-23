@@ -7,7 +7,7 @@
 
 ## 当前状态
 
-本变更已根据 2026-09-22 工作区代码快照进入实现；当前为 `VERIFYING / PARTIAL`。T8 页面组合与公共组件审计、T9 本地全量检查、浏览器 logout/cache 契约和只读角色复核已完成，保留真实同源 live-auth 与登录网关部署验收。
+本变更已根据 2026-09-22 工作区代码快照进入实现；当前为 `VERIFYING / PARTIAL`。T8 页面组合与公共组件审计、T8.16 中心画布与并行抽屉视觉交互、T9 本地全量检查、浏览器 logout/cache 契约和只读角色复核已完成，保留真实同源 live-auth 与登录网关部署验收。
 
 ## 已完成
 
@@ -31,9 +31,10 @@
 - 完成 T8 Plugin trace controller 切片：新增 `features/evidence/use-plugin-trace.ts`，统一 Plugin Context fetcher、快照结构校验、Revision 切换清理和 Abort/stale-response 防护；页面只保留 `PluginTrace` 展示映射。
 - 完成 T8 Evidence canvas 组合切片：新增 `features/evidence/evidence-canvas.tsx`，统一 Evidence 标题、Revision 状态、图表 slot、发现、证据摘要、质量提示、依据、导出和审核入口的受控展示；页面只负责组装窄 props，保留现有 DOM、CSS、门禁和回调语义。
 - 完成 T8 Review composition 组合切片：新增 `features/review/review-composition.tsx`，把 `in_review` 显示门禁和评论 controller 到 `ReviewPanel` 的 props 投影收敛到 Review feature；页面继续拥有 Revision transition、Evidence Query 回填和错误/通知投影。
+- 完成 T8.16 工作台视觉交互细化：中心画布作为默认主区域，历史与依据改为可并行打开的独立抽屉；依据抽屉支持 300–560px 会话内拖拽，Snapshot 预览直接占用依据位，关闭预览同时关闭依据抽屉；桌面、平板和 390px 移动端分别使用边缘抽屉/底部抽屉布局。
 - 完成 T8 跨 feature 公共组件审计：确认只有工作台与插件页的全局 error/notice banner 具备稳定无领域状态契约，新增 `components/feedback/alert-banner.tsx` 并迁移两处；InteractiveChart、Snapshot、Evidence、Review、Plugin 和 Editor 保持各自 feature/page 所有权。
-- 新增 24 个 Web unit 测试覆盖 Chart Editor、T7 HTTP/Export seam、Project/Server Query key 与 fetcher、Snapshot controller fetcher/排序、Review comments controller fetcher/竞态、Plugin trace parser/fetcher、watcher、Generation reducer、URL context；桌面/移动 Playwright 20/20 本地回归通过，2 条 live-auth 显式跳过。
-- 完成 T9 本地可执行验证与只读独立角色复核：Web/全仓 typecheck、test、build，24 个 Web unit，桌面/390px Playwright 20/20，docs:check 和 `git diff --check` 全部通过。复核角色未修改文件，工作区保持干净；由于共享工作区，结果不等同于隔离 worktree 验证。
+- 新增 24 个 Web unit 测试覆盖 Chart Editor、T7 HTTP/Export seam、Project/Server Query key 与 fetcher、Snapshot controller fetcher/排序、Review comments controller fetcher/竞态、Plugin trace parser/fetcher、watcher、Generation reducer、URL context；桌面/移动 Playwright 22 条中 20 条通过，2 条 live-auth 显式跳过，新增抽屉/预览行为已覆盖。
+- 完成 T9 本地可执行验证与只读独立角色复核：Web/全仓 typecheck、test、build，24 个 Web unit，桌面/390px Playwright 22 条中 20 条通过（2 条 live-auth 跳过），docs:check 和 `git diff --check` 全部通过。复核角色未修改文件，工作区保持干净；由于共享工作区，结果不等同于隔离 worktree 验证。
 - 补充本地浏览器 logout/cache 契约：`login.spec.ts` 验证 Cookie Jar、logout Cookie、localStorage 选择清理、Generation abort 广播、旧 DOM 不回显和重新登录恢复；`auth-live.spec.ts` 提供真实同源部署入口。
 
 ## 进行中
@@ -56,7 +57,7 @@
 
 ## 已运行验证
 
-- Web typecheck、test:typecheck、24 个 unit、Next build、全仓 typecheck/test/build、docs:check、`git diff --check` 和 Playwright 20/20 已通过；只读验证角色已在同一干净快照复核，证据详见 `test-report.md`。
+- Web typecheck、test:typecheck、24 个 unit、Next build、全仓 typecheck/test/build、docs:check、`git diff --check` 和 Playwright 22 条（20 通过、2 条 live-auth 跳过）已通过；只读验证角色已在同一干净快照复核，证据详见 `test-report.md`。
 - API Console 401 smoke、Snapshot 预览、Review comments、Plugin trace、Evidence canvas、Review composition、AlertBanner 和本地 logout/cache 契约桌面/移动回归已通过。真实同源 live-auth、隔离 worktree 验证补充和登录网关 HTTPS 验收仍未完成，不能将本变更标为 COMPLETE。
 
 ## 已确认决策

@@ -195,7 +195,18 @@ test("数据预览默认打开最新版本并可切换历史 Snapshot", async ({
   await page.locator('input[aria-label="选择数据文件"]').setInputFiles({ name: "sales-v2.csv", mimeType: "text/csv", buffer: Buffer.from("month,amount\nJan,11") });
   await expect(page.getByRole("status").filter({ hasText: "更新为数据快照 v2" })).toBeVisible();
 
-  if (page.viewportSize()?.width === 390) await page.getByRole("button", { name: "打开项目依据" }).click();
+  const openContextButton = page.getByRole("button", { name: /打开项目依据|显示依据面板/ }).first();
+  await expect(openContextButton).toBeVisible();
+  await openContextButton.click();
+  await expect(page.locator(".app-shell.right-open .context-rail")).toBeVisible();
+  if ((page.viewportSize()?.width ?? 0) > 760) {
+    const resizeHandle = page.getByRole("separator", { name: "调整依据宽度" });
+    await resizeHandle.focus();
+    await resizeHandle.press("ArrowLeft");
+    await expect(resizeHandle).toHaveAttribute("aria-valuenow", "376");
+    await resizeHandle.press("ArrowRight");
+    await expect(resizeHandle).toHaveAttribute("aria-valuenow", "360");
+  }
   const snapshotDetails = page.locator(".context-rail details").first();
   await snapshotDetails.locator("summary").click();
   await snapshotDetails.locator(".snapshot-preview-trigger").click();
@@ -213,6 +224,7 @@ test("数据预览默认打开最新版本并可切换历史 Snapshot", async ({
   await expect(dialog.getByText("sales-v1.csv", { exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "关闭数据预览" }).click();
   await expect(dialog).toBeHidden();
+  await expect(page.locator(".app-shell")).toHaveClass(/right-collapsed/);
 });
 
 test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => {
@@ -258,9 +270,13 @@ test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => 
     });
     await page.reload();
   } else {
+    const openHistoryButton = page.getByRole("button", { name: /打开对话历史|显示对话历史/ }).first();
+    await expect(openHistoryButton).toBeVisible();
+    await openHistoryButton.click();
+    await expect(page.locator(".app-shell.left-open .history-rail")).toBeVisible();
     await expect(sampleButton).toHaveCount(1);
     await expect(sampleButton).toBeEnabled();
-    await sampleButton.click({ force: true });
+    await sampleButton.click();
   }
   await expect(page.locator(".context-summary-copy")).toContainText("sales-sample.csv");
   const snapshotDetails = page.locator(".context-rail details").first();
@@ -284,6 +300,14 @@ test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => 
   const evidenceCanvas = page.getByLabel("证据画布");
   await expect(evidenceCanvas.getByRole("heading", { name: "各区域月度销售额" })).toBeVisible({ timeout: 10000 });
   await expect(evidenceCanvas.getByText("草稿", { exact: true })).toBeVisible();
+  const chartAlignment = await evidenceCanvas.locator(".chart-stage").evaluate((stage) => {
+    const visual = stage.querySelector<HTMLElement>(".chart-visual");
+    if (!visual) throw new Error("图表视觉区域未渲染");
+    const stageRect = stage.getBoundingClientRect();
+    const visualRect = visual.getBoundingClientRect();
+    return Math.abs((stageRect.left + stageRect.width / 2) - (visualRect.left + visualRect.width / 2));
+  });
+  expect(chartAlignment).toBeLessThanOrEqual(1);
   await expect(page.locator(".plugin-trace-banner")).toHaveCount(0);
 
   await evidenceCanvas.getByRole("button", { name: "提交审核" }).click();

@@ -13,13 +13,13 @@
 | `pnpm --filter @langreport/web test:typecheck` | 通过 |
 | `pnpm --filter @langreport/web test` | 通过，24 个单测 |
 | `pnpm --filter @langreport/web build` | 通过，Next.js 生产构建完成 |
-| Playwright 桌面 + 390px 移动端 | 通过，20/20；另有 2 条 live-auth 因未配置部署凭据跳过（含 API Console 401 smoke） |
+| Playwright 桌面 + 390px 移动端 | 通过，22 条中 20 条通过；另有 2 条 live-auth 因未配置部署凭据跳过（含 API Console 401 smoke） |
 | `pnpm typecheck` | 通过，workspace 与 test:typecheck 全部通过 |
 | `pnpm test` | 通过，workspace 离线测试全部通过 |
 | `pnpm build` | 通过，workspace build 全部通过 |
 | `pnpm docs:check` / `git diff --check` | 通过 |
 
-本轮跨 feature 公共组件审计复验：`pnpm --filter @langreport/web typecheck`、`pnpm --filter @langreport/web test:typecheck`、`pnpm --filter @langreport/web test`（24 个单测）、`pnpm --filter @langreport/web build`、Playwright 桌面 + 390px 移动端（20/20；live-auth 2 条因缺少环境变量跳过）、`pnpm docs:check` 和 `git diff --check` 均通过。`AlertBanner` 只复用现有 global alert class；未新增 API、Query、Revision mutation 或视觉 token。
+本轮跨 feature 公共组件审计复验：`pnpm --filter @langreport/web typecheck`、`pnpm --filter @langreport/web test:typecheck`、`pnpm --filter @langreport/web test`（24 个单测）、`pnpm --filter @langreport/web build`、Playwright 桌面 + 390px 移动端（22 条中 20 条通过；live-auth 2 条因缺少环境变量跳过）、`pnpm docs:check` 和 `git diff --check` 均通过。T8.16 的中心画布、并行抽屉、依据宽度拖拽和 Snapshot 覆盖位已由桌面/移动 E2E 覆盖。`AlertBanner` 只复用现有 global alert class；未新增 API、Query、Revision mutation 或视觉 token。
 
 ## T9 只读独立复核
 
@@ -28,11 +28,11 @@
 | 检查 | 结果 |
 | --- | --- |
 | Web typecheck / test:typecheck / 24 个 unit / build | 通过 |
-| Web Playwright 桌面 + 390px 移动端 | 通过，20/20；live-auth 2 条因缺少部署凭据跳过 |
+| Web Playwright 桌面 + 390px 移动端 | 通过，22 条中 20 条通过；live-auth 2 条因缺少部署凭据跳过 |
 | 全仓 `pnpm typecheck` / `pnpm test` / `pnpm build` | 通过 |
 | `pnpm docs:check` / `git diff --check` | 通过 |
 
-复核覆盖 Auth/HTTP seam、Cookie credentials 与 401 策略、受保护路由和登录回跳、URL/Query 作用域、Generation watcher/reducer、Chart Editor、Snapshot/Review comments/Plugin trace controller、Evidence canvas、Review composition、AlertBanner、API Console 401 不跳转，以及桌面/390px 移动端主要状态。Playwright 在沙箱首次启动 Chromium 时遇到 `spawn EPERM`，获准启动本机浏览器进程后 18/18 通过；本轮新增登出场景后主回归为 20/20。
+复核覆盖 Auth/HTTP seam、Cookie credentials 与 401 策略、受保护路由和登录回跳、URL/Query 作用域、Generation watcher/reducer、Chart Editor、Snapshot/Review comments/Plugin trace controller、Evidence canvas、Review composition、AlertBanner、API Console 401 不跳转、T8.16 抽屉/预览行为，以及桌面/390px 移动端主要状态。Playwright 在沙箱首次启动 Chromium 时遇到 `spawn EPERM`，获准启动本机浏览器进程后主回归为 22 条中 20 条通过；2 条 live-auth 仍因未配置部署凭据显式跳过。
 
 本复核使用与主 Agent 相同的工作区快照，没有隔离 worktree；因此记录为“只读独立角色复核”，不宣称隔离环境验证。
 

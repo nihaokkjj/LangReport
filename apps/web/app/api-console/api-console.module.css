@@ -430,6 +430,10 @@
 }
 
 .scenarioDetails summary::-webkit-details-marker { display: none; }
+.scenarioDetails summary > span, .rawDetails summary > span { display: grid; place-items: center; width: 16px; height: 16px; color: var(--ink-muted); }
+.scenarioDetails summary > span svg, .rawDetails summary > span svg { display: block; width: 16px; height: 16px; transition: transform .18s ease, color .18s ease; }
+.scenarioDetails[open] summary > span, .rawDetails[open] summary > span { color: var(--ink); }
+.scenarioDetails[open] summary > span svg, .rawDetails[open] summary > span svg { transform: rotate(180deg); }
 
 .scenarioJsonGrid {
   display: grid;

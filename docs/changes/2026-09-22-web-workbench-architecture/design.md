@@ -1,7 +1,7 @@
 # Web 工作台认证感知架构重构：Design
 
 - 变更编号：`CHG-2026-09-22-WEB-WORKBENCH-ARCHITECTURE`
-- 状态：`APPROVED`
+- 状态：`VERIFYING / PARTIAL`
 - 创建时间：2026-09-22
 - 更新时间：2026-09-23
 
@@ -212,6 +212,20 @@ T8 先处理页面组合层中仍然自持请求生命周期的 Snapshot 预览�
 - `InteractiveChart`、`SnapshotPreviewModal`、`EvidenceCanvas`、`ReviewComposition` 和插件/编辑器面板均不迁移到 `components/*`：它们依赖 Chart/Evidence/Review/Plugin 的领域数据与交互合同，不满足稳定跨 feature 复用条件。
 
 本轮不新增 API、不改变 Query ownership 或视觉 token；公共组件目录只新增反馈条，作为可回滚的最小审计结果。
+
+#### T8 UI 视觉与抽屉交互细化（2026-09-23）
+
+本轮按用户确认的视觉决策细化工作台，不改变 API、Query ownership、领域状态或生成/审核行为。设计决策记录在 [ADR 0023](../../adr/0023-center-first-evidence-drawers.md)，根视觉规则同步到 `DESIGN.md`。
+
+- `leftRailOpen` 与 `rightRailOpen` 默认均为关闭，两个抽屉互不排斥；宽屏使用左右 grid track，中心 Evidence 画布占剩余空间；平板使用左右 edge drawer，移动端使用底部 sheet。
+- 依据抽屉通过 pointer drag handle 调整宽度，范围 300–560px，默认 360px；宽度仅保存于当前页面会话，不写入 localStorage，不进入 URL 或领域状态。
+- Snapshot 预览不再使用全屏 `modal-backdrop`。打开时临时替换依据抽屉的内容，保留同一宽度和焦点入口；预览的关闭按钮、Esc 和底部关闭操作统一关闭整个依据抽屉。
+- Evidence 画布的主阅读顺序保持标题/状态、图表、发现、紧凑来源摘要；完整追溯信息仍由依据抽屉承载。全局按钮和上下文操作减少 pill 形状，状态徽标继续使用语义颜色和文本。
+- 图表在 Evidence stage 与编辑预览中保持居中，并限制最大可读宽度；图表编辑的下拉选择沿用通用字段控件样式，只增加明确的 hover、focus 和 disabled 状态。
+- 顶栏在桌面保留 Project、历史/依据开关、会话菜单；移动端提供历史与依据的明确打开按钮。所有 drawer/sheet 过渡只使用 transform/opacity，并遵守 `prefers-reduced-motion`。
+- 本轮不抽取新的领域组件，不改变 `SnapshotPreview` controller 的请求/Abort 语义；只改变它的展示容器和关闭回调。
+
+回滚方式：恢复 `leftRailOpen`/`rightRailOpen` 默认值、移除 context width state/resize handle，并将 Snapshot preview wrapper 恢复为原有 modal；API 与服务端状态无需回滚。
 
 ### URL context module
 

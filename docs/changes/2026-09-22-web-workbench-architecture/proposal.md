@@ -3,7 +3,7 @@
 - 变更编号：`CHG-2026-09-22-WEB-WORKBENCH-ARCHITECTURE`
 - 状态：`APPROVED`
 - 创建时间：2026-09-22
-- 更新时间：2026-09-22
+- 更新时间：2026-09-23
 
 > 用户于 2026-09-22 指示执行本变更；按兼容现有 `/` 入口的实现方案采用公开 API Console 诊断入口，Project/Conversation/Revision 均使用 query，并进入实现阶段。
 
@@ -41,6 +41,7 @@ LangReport 的登录网关已在 `CHG-2026-09-22-login-gateway` 中实现：开�
 5. 将当前 Project、Conversation、Revision 纳入 URL；`localStorage` 只保留可选的最近选择偏好，不作为事实来源。
 6. 按业务 feature 拆分页面，并将 Chart Editor 与 Generation Job 协调逻辑分别收进 reducer/module。
 7. 保持现有 API、Generation、Revision、Review、导出和 API Console 的业务行为不变。
+8. 在不改变业务合同的前提下，将主工作台收敛为 Evidence 中心画布优先：历史与依据可并行打开，依据宽度可调整，Snapshot 预览直接覆盖依据位置。
 
 ### 后续范围
 
@@ -66,6 +67,7 @@ LangReport 的登录网关已在 `CHG-2026-09-22-login-gateway` 中实现：开�
 - 刷新或复制 URL 后，Project、Conversation、Revision 能恢复；URL 中不包含密码、JWT 或 Cookie 值。
 - `page.tsx` 只保留工作台组合与布局编排，不直接实现业务请求和跨 feature 的远端缓存。
 - 现有 login E2E、Generation watcher 单测、咨询工作台 E2E、类型检查和 live smoke 行为保持通过。
+- 桌面与移动端工作台在中心画布优先、并行抽屉、可调依据宽度和 Snapshot 预览覆盖状态下保持可读、可键盘操作且无横向溢出。
 
 ## 假设、依赖与风险
 
@@ -89,3 +91,4 @@ LangReport 的登录网关已在 `CHG-2026-09-22-login-gateway` 中实现：开�
 4. Generation Job 的 watcher 与 reducer 可在不挂载完整工作台的情况下验证终态、澄清、失败、取消和切换上下文。
 5. Feature 拆分后咨询项目报告的 API、数据血缘、审核和固定 Revision 导出行为不变。
 6. 通过本变更 test-plan 中的 Web 类型检查、单测、E2E、文档检查和必要 live smoke。
+7. 通过本变更新增的 UI 交互检查：默认中心画布、双抽屉并行、依据拖拽范围、预览关闭语义、桌面/移动状态和 reduced-motion。
