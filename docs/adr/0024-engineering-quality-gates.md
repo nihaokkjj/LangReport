@@ -10,6 +10,10 @@ LangReport 采用“文档规范 + 本地命令 + CI 门禁 + PR/Commit 追踪�
 - 直接复制 DeerFlow 的 `ruff`/Make/Pre-commit：与 TypeScript monorepo 不匹配；不采用。
 - 一开始将所有检查放进本地 Hook：反馈快，但会增加安装成本、Windows 兼容问题和完整测试等待时间；暂不采用。
 
+## 覆盖率决策
+
+本变更不调整现有覆盖率阈值，也不修改业务测试。`pnpm test:coverage` 仍在 PR workflow 中执行并保留完整输出，但通过 step-level `continue-on-error: true` 作为 report-only 项运行；本地直接执行时仍会在基线未达标时返回失败。覆盖率基线提升、历史测试补齐和转为阻断门禁另立后续变更。
+
 ## 后果
 
 - 工程规范可以逐步收紧，不需要一次性清理所有历史债务；

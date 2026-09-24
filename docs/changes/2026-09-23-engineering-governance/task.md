@@ -13,6 +13,8 @@
 - 用户已同意第一批范围：文档、最小 ESLint/Prettier、包边界、PR 模板、Commit CI 检查和 PR CI；
 - 当前登录网关变更仍独立处于 `VERIFYING`，本变更不修改其代码、文档、当前任务状态或部署验收；
 - 用户已确认第一批范围并授权继续执行，变更进入 `IMPLEMENTING`；
+- 用户已选择 B：PR workflow 保留覆盖率命令和原始输出，但将其设为 report-only；覆盖率基线提升另立后续变更；
+- 用户已明确要求提交本次治理改动；本地 commit 已创建，未执行推送；T9 远端 workflow 和人工验收仍未完成；
 - 本变更只允许修改工程治理、测试和本变更文档范围。
 
 ## 任务清单
@@ -25,7 +27,7 @@
 | T3 | 实现 Harness/Domain/Contracts/Web/Worker 包边界检查 | T1 | 是 | LangReport owner | DONE | `pnpm check:boundaries` | 合法依赖通过，至少一类非法依赖被测试拒绝 |
 | T4 | 实现仓库卫生和提交前静态检查 | T1 | 是 | LangReport owner | DONE | `pnpm check:hygiene`; `pnpm docs:check`; `pnpm db:verify`; `git diff --check` | 迁移 journal、敏感路径、生成物和 diff 规则可执行 |
 | T5 | 新增 PR 模板和 Commit/change-id checker | T1 | 是 | LangReport owner | DONE | checker unit tests; PR fixture tests | L/XL 缺 change-id 失败，合法 S/M 提交通过 |
-| T6 | 扩展 `.github/workflows/pr-offline.yml` | T2-T5 | 否 | LangReport owner | DONE | workflow review; local command parity | CI 执行所有 MVP 门禁且不使用真实外部环境 |
+| T6 | 扩展 `.github/workflows/pr-offline.yml` | T2-T5 | 否 | LangReport owner | DONE | workflow review; local command parity | CI 执行所有 MVP 阻断门禁，coverage 保留为报告项，且不使用真实外部环境 |
 | T7 | 运行全仓回归并同步文档 | T2-T6 | 否 | LangReport owner | DONE | `pnpm docs:check`; `pnpm typecheck`; `pnpm test`; `pnpm build` | 运行时行为无回归，验收矩阵和 handoff 与实际一致；coverage 基线缺口已记录 |
 | T8 | 独立只读快照验证 | T7 | 否 | Verification agent | DONE | `test-plan.md` 静态、类型、测试、迁移命令 | 独立报告记录快照、命令、结果、失败和覆盖缺口；Web build 的快照依赖路径限制已记录 |
 | T9 | 人工验收、提交和交接 | T8 | 否 | User / LangReport owner | TODO | acceptance review; `git diff --check` | 所有必需标准通过，commit 含 change-id，未提交无关文件 |
@@ -70,9 +72,10 @@ T10 不进入本次执行序列。
 - [x] `CONTRIBUTING.md` 和工程规范文档完成且不复制权威事实；
 - [x] `pnpm check`、`pnpm lint`、`pnpm format:check`、`pnpm check:boundaries`、`pnpm check:hygiene` 可执行；
 - [x] 正反例测试覆盖新增脚本；
-- [x] PR offline gate 已配置并由治理契约测试核对所有 MVP 门禁；远端执行仍待完成；
+- [x] PR offline gate 已配置并由治理契约测试核对所有 MVP 门禁及 coverage report-only 配置；远端执行仍待完成；
 - [x] 全仓 typecheck、offline test、build 和 docs check 通过；
 - [x] 既有离线业务测试通过，登录网关范围未扩大；
 - [x] 测试报告、acceptance、handoff 和需求追踪矩阵已同步当前本地结果；
 - [x] 独立测试报告已记录快照、命令、通过项、coverage 缺口和 Web build 环境限制；
-- [ ] 用户完成最终验收后，才允许提交或推送。
+- [x] 用户已明确授权本地 commit，提交包含 change-id，且未执行推送；
+- [ ] 用户完成最终验收后，才允许推送。

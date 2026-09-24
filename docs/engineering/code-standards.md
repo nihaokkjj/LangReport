@@ -30,6 +30,7 @@
 - `pnpm check` 依次运行 `format:check`、`lint`、`check:boundaries`、`check:hygiene`、`docs:check` 和 `check:commits`，是提交 PR 前的静态检查组合入口。
 - `pnpm check:hygiene` 检查版本控制候选路径中的敏感文件、生成物、未解决冲突、变更空白和迁移 journal；它不会删除文件，也不会读取或打印 secret 内容。
 - `pnpm db:verify` 执行数据库迁移文件检查和隔离 schema 回放；需要本地测试数据库时，按数据库开发文档准备环境。
+- `pnpm test:coverage` 执行现有覆盖率命令并保留基线输出；PR workflow 当前将它作为 report-only 项运行，本地命令仍按阈值返回真实结果。
 - 当前门禁优先报告新改动的问题，不把一次工具接入升级成全仓格式迁移。CI 接入时必须显式设置稳定的 base commit，并保留本地复现方式。
 - ESLint 错误会使命令失败；警告会出现在报告中，但不会因为历史范围扩大而被静默隐藏。
 
@@ -163,7 +164,7 @@ T2 已把格式和基础 lint 接入本地脚本，T3/T4/T5 已接入包边界�
 - 迁移、生成物和锁文件只在确有必要时修改，并在 PR 中说明来源；
 - `git diff --check` 必须通过，工作树中不得混入其他任务改动。
 
-当前不自动强制以下事项：历史 `any` 的全量清理、覆盖率阈值、Pre-commit Hook、SDD 状态自动推进、发布自动化和 DeerFlow 运行时接入。它们属于独立变更，不能在普通 PR 中偷偷改变规则强度。
+当前不自动强制以下事项：历史 `any` 的全量清理、覆盖率阻断阈值、Pre-commit Hook、SDD 状态自动推进、发布自动化和 DeerFlow 运行时接入。覆盖率报告仍保留在 PR workflow 中；基线提升和转为阻断门禁属于独立变更，不能在普通 PR 中偷偷改变规则强度。
 
 ## 例外、升级与回滚
 

@@ -2,7 +2,7 @@
 
 - 变更编号：`CHG-2026-09-23-engineering-governance`
 - 测试状态：`PARTIAL`
-- 代码快照：`LangReport 工作树；基线 commit 97a05cbb9d26f20542ec9ca260494270856eb7d0；尚未提交`
+- 代码快照：`LangReport；变更前基线 commit 97a05cbb9d26f20542ec9ca260494270856eb7d0；治理改动已本地提交，尚未推送`
 
 ## 测试范围
 
@@ -27,7 +27,7 @@
 | `pnpm test` | 通过 | root 治理契约测试和 workspace 离线单元测试通过 |
 | `pnpm typecheck` | 通过 | workspace 与测试类型检查通过 |
 | `pnpm build` | 通过 | workspace build 通过 |
-| `pnpm test:coverage` | 基线失败 | `@langreport/domain` branch coverage `76.09% < 81%`；未修改阈值或业务测试 |
+| `pnpm test:coverage` | 报告项（本地基线未达标） | `@langreport/domain` branch coverage `76.09% < 81%`；未修改阈值或业务测试；PR workflow 使用 `continue-on-error: true` 保留输出但不阻断 |
 | `git diff --check` | 通过 | 无空白错误 |
 
 ## 独立只读快照
@@ -45,11 +45,11 @@
 
 ## 失败用例
 
-T1-T8 没有新增失败用例。唯一失败是既有 `@langreport/domain` coverage threshold：branch coverage 为 `76.09%`，低于 `81%`；这属于本变更明确延期的历史覆盖率清理，不通过降低阈值或修改业务测试处理。
+T1-T8 没有新增产品失败用例。`@langreport/domain` coverage threshold 的本地结果为 branch coverage `76.09%`，低于 `81%`；按用户选择 B，PR workflow 将该命令作为报告项继续执行，不通过降低阈值或修改业务测试处理，后续另立覆盖率变更。
 
 ## 测试代码变更
 
-更新了既有 `tests/support/test-system.contract.test.mjs`：将 PR workflow 契约测试从旧的三项离线命令扩展为当前全部 MVP 门禁，并保持只验证工程契约，不改变产品运行时行为。
+更新了既有 `tests/support/test-system.contract.test.mjs`：将 PR workflow 契约测试从旧的三项离线命令扩展为当前全部 MVP 门禁，并额外锁定 coverage step 的 report-only 配置；测试仍只验证工程契约，不改变产品运行时行为。
 
 ## 覆盖缺口
 
@@ -57,7 +57,7 @@ T1-T8 没有新增失败用例。唯一失败是既有 `@langreport/domain` cove
 - 尚未验证 PR workflow 在 PR/push 场景的 Commit 历史读取；Commit checker 本地正反例通过；
 - 尚未在远端 Runner 验证 workflow 的 service container 和权限行为；
 - 独立快照 Web build 受依赖 Junction 绝对路径限制，主工作树 build 已通过；
-- 覆盖率阈值仍未达标，后续需单独处理历史测试覆盖缺口；
+- 覆盖率阈值仍未达标，但 PR workflow 已按 B 作为报告项运行；后续需单独处理历史测试覆盖缺口和阻断策略；
 - 本地完整回归和独立快照验证通过，仍不能替代远端 workflow 和 T9 人工验收。
 
 ## 复测记录

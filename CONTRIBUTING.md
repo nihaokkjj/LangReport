@@ -79,6 +79,8 @@ pnpm db:verify
 
 当前 `pnpm check`、`pnpm format:check`、`pnpm format:write`、`pnpm lint`、`pnpm check:boundaries`、`pnpm check:hygiene` 和 `pnpm check:commits` 已可用。`pnpm check` 组合静态、文档、边界、卫生和 Commit 检查，不替代 `typecheck`、`test`、`build` 或 `db:verify`。格式和 lint 默认只检查当前工作树或 `CHECK_BASE`/`GITHUB_BASE_SHA` 之后变更的源码、测试和配置文件，不代表历史全仓基线已经格式化；PR workflow 已接入对应独立门禁。
 
+`pnpm test:coverage` 仍可用于查看覆盖率基线；当前 PR workflow 会执行它并保留结果，但按用户确认的 B 方案作为 report-only 项，不阻断合并。现有 `@langreport/domain` 分支覆盖率低于阈值时，本地命令仍会返回失败；覆盖率修复和阻断策略调整必须另立变更。
+
 ## 分支、提交和 PR
 
 分支名使用能表达意图的前缀，例如 `feature/`、`fix/`、`docs/`、`refactor/`。提交信息使用 Conventional Commits 风格，例如：

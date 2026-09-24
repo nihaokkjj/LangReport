@@ -24,6 +24,7 @@
 | PR 模板遗漏领域风险 | 人工审阅 | API、DB、Worker、UI、认证和 AI 改动 | 模板能要求范围、不变量和证据 |
 | 工程治理引入运行时回归 | 全仓回归 | API/Web/Generation/Render/Auth 现有测试 | typecheck、test、build 和专项测试保持通过 |
 | 首次格式化产生无关大 diff | diff 审计 | 运行 format 后检查文件列表 | 只包含批准范围，必要时拆分基线清理 |
+| 既有覆盖率基线暂未达标 | workflow review + 本地复现 | 执行 `pnpm test:coverage` 并检查 PR step 配置 | 保留原始覆盖率输出；当前 PR 作为 report-only，不降低阈值或修改业务测试 |
 
 ## 测试数据与环境
 
@@ -52,6 +53,8 @@ pnpm test:coverage
 git diff --check
 ```
 
+`pnpm test:coverage` 的本地非零结果属于已记录的历史基线；PR workflow 必须继续执行该命令，但按 B 方案不因该报告项阻断作业。
+
 专项场景：
 
 - Web：`pnpm --filter @langreport/web typecheck`、Web unit、E2E；
@@ -76,6 +79,6 @@ git diff --check
 
 - Pre-commit Hook：本次明确延期到 T10；
 - 真实模型调用和生产 HTTPS smoke：属于既有产品/部署变更，不属于工程治理；
-- 新的覆盖率阈值：没有先建立基线，不在本次强制；
+- 新的覆盖率阈值：没有先建立基线，不在本次强制；现有 coverage 命令只作为 PR report-only 项保留；
 - 全量历史 `any` 清理：属于后续代码质量债务，不应阻塞本次治理；
 - DeerFlow Agent/MCP/Sandbox 行为：本变更不引入这些能力。

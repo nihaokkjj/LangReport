@@ -186,6 +186,10 @@ test("the PR workflow installs a frozen lockfile and runs the offline quality ga
   ]) {
     assert.match(workflow, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+  assert.match(
+    workflow,
+    /- name: Coverage \(report-only baseline\)[\s\S]*?continue-on-error:\s*true[\s\S]*?run:\s*pnpm test:coverage/,
+  );
 });
 
 test("the migration ledger records every pre-T2 test path", () => {

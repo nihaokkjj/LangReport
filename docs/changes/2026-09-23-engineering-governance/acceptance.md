@@ -9,9 +9,15 @@
 
 - 结论：`PARTIAL`
 - 验收时间：2026-09-24
-- 验证 commit：`N/A`
+- 验证 commit：已创建本地 commit，尚未推送
 
-当前已完成 T1-T8：工程规范、静态检查、边界/卫生/Commit 检查、PR workflow、本地全仓回归和独立只读快照验证均已落地或验证。`pnpm test:coverage` 暴露了既有 `@langreport/domain` 分支覆盖率基线不足（76.09% < 81%）；本变更不降低阈值、不修改业务测试。独立快照的 Web build 受共享依赖 Junction 的绝对路径限制，主工作树 `pnpm build` 已通过，因此整体验收仍为部分通过，待远端 workflow 运行和人工最终验收。
+当前已完成 T1-T8：工程规范、静态检查、边界/卫生/Commit 检查、PR workflow、本地全仓回归和独立只读快照验证均已落地或验证。用户已选择 B：`pnpm test:coverage` 保留在 PR workflow 中，但作为报告项运行，保留原始失败输出，不把既有 `@langreport/domain` 分支覆盖率基线（76.09% < 81%）作为本变更的阻断条件；本变更不降低阈值、不修改业务测试。独立快照的 Web build 受共享依赖 Junction 的绝对路径限制，主工作树 `pnpm build` 已通过，因此整体验收仍为部分通过，待远端 workflow 运行和人工最终验收。
+
+## 覆盖率决策
+
+- 用户选择 B：PR workflow 使用 `continue-on-error: true` 执行 `pnpm test:coverage`，命令仍会运行并把覆盖率结果写入 CI 日志。
+- 本地直接运行 `pnpm test:coverage` 仍会按现有阈值返回失败，避免把报告项伪装成通过。
+- 覆盖率基线提升、历史测试补齐和阻断策略调整另立后续变更，不在本次治理改动中偷偷降低阈值或修改业务测试。
 
 ## 验收证据
 
@@ -28,14 +34,14 @@
 | PR offline gate 执行 MVP 门禁 | T6 workflow | `.github/workflows/pr-offline.yml` | 通过审阅，待远端运行 |
 | 风险有对应验证方式 | Test Plan | `test-plan.md` | 已记录并完成本地/快照验证 |
 | 工程工具和 CI 已可执行 | 实现与 PR workflow | T2-T6；`test-system.contract.test.mjs` | 本地通过，远端待运行 |
-| 全仓无运行时回归 | 回归命令 | T7/T8；本地 `pnpm test`、`pnpm typecheck`、`pnpm build`，快照逐包测试与类型检查 | 本地和快照测试/类型检查通过；快照 Web build 受依赖路径限制；coverage 基线未达标 |
+| 全仓无运行时回归 | 回归命令 | T7/T8；本地 `pnpm test`、`pnpm typecheck`、`pnpm build`，快照逐包测试与类型检查 | 本地和快照测试/类型检查通过；快照 Web build 受依赖路径限制；coverage 作为报告项保留基线缺口 |
 | 独立验证和最终验收 | `test-report.md`、handoff | T8 快照报告；T9 人工验收 | 独立验证完成，最终验收未完成 |
 
 ## 失败项与遗留问题
 
 - 详细设计已获本轮执行授权，整体验收仍未完成；
 - T1-T8 已完成本地实现、回归和独立只读快照验证，但尚未完成远端 workflow 和最终人工验收；
-- `pnpm test:coverage` 仍因既有 `@langreport/domain` 分支覆盖率 `76.09%` 低于 `81%` 阈值而失败；该阈值与历史测试清理已明确延期，本变更未调整它；
+- 本地 `pnpm test:coverage` 仍因既有 `@langreport/domain` 分支覆盖率 `76.09%` 低于 `81%` 阈值而失败；按用户选择 B，PR workflow 将其作为报告项继续执行，覆盖率基线提升和阻断策略调整另立后续变更；
 - 独立快照的 Next Web build 使用共享依赖 Junction 时被 Turbopack/Webpack 的绝对路径解析限制拦截；主工作树 `pnpm build` 已通过，该快照环境失败不归因于产品代码；
 - PR workflow 尚未在远端 GitHub Runner 实际执行；
 - Pre-commit 明确延期，不属于本次 MVP；
@@ -56,4 +62,4 @@
 - [x] T1 已运行底层 `node scripts/docs-check.mjs` 和 `git diff --check`；
 - [x] 已运行完整 `pnpm docs:check`、类型检查、离线测试和构建；
 - [x] 已完成独立只读快照的静态检查、逐包类型检查、逐包离线测试和迁移验证，并记录 Web build 环境限制；
-- [x] 已记录 coverage 基线失败、远端 workflow 和人工最终验收缺口，不将部分通过描述为最终通过。
+- [x] 已记录 coverage 基线、PR 报告项决策、远端 workflow 和人工最终验收缺口，不将部分通过描述为最终通过。
