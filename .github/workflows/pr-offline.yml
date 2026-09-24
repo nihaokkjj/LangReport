@@ -12,8 +12,25 @@ jobs:
     name: Offline test gate
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: langreport
+          POSTGRES_PASSWORD: langreport
+          POSTGRES_DB: langreport
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U langreport -d langreport"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
@@ -22,6 +39,24 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm check:boundaries
+      - run: pnpm check:hygiene
+      - run: pnpm docs:check
+      - name: Check commit messages and change-id
+        env:
+          CHANGE_SIZE: ""
+          CHANGE_ID: ""
+          COMMIT_BASE: ${{ github.event.pull_request.base.sha || '' }}
+          COMMIT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_BODY: ${{ github.event.pull_request.body || '' }}
+          REQUIRE_CHANGE_METADATA: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+        run: pnpm check:commits
+      - name: Verify database migrations
+        env:
+          DATABASE_URL: postgres://langreport:langreport@127.0.0.1:54329/langreport
+        run: pnpm db:verify
       - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm build

@@ -10,6 +10,13 @@
     "test:coverage": "node scripts/test-offline.mjs --coverage",
     "test:integration": "node scripts/test-integration.mjs",
     "test:e2e": "pnpm --filter @langreport/web test:e2e",
+    "format:check": "node scripts/check-changed.mjs format",
+    "format:write": "node scripts/check-changed.mjs format:write",
+    "lint": "node scripts/check-changed.mjs lint",
+    "check": "pnpm format:check && pnpm lint && pnpm check:boundaries && pnpm check:hygiene && pnpm docs:check && pnpm check:commits",
+    "check:boundaries": "node --test scripts/check-boundaries.test.mjs && node scripts/check-boundaries.mjs",
+    "check:hygiene": "node --test scripts/check-hygiene.test.mjs && node scripts/check-hygiene.mjs",
+    "check:commits": "node scripts/check-commits.mjs",
     "db:generate": "pnpm --filter @langreport/db db:generate",
     "db:migrate": "pnpm --filter @langreport/db db:migrate",
     "db:verify": "pnpm --filter @langreport/db db:verify",
@@ -27,5 +34,12 @@
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "pnpm@11.19.0"
+  "packageManager": "pnpm@11.19.0",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.8",
+    "typescript-eslint": "^8.70.1"
+  }
 }
