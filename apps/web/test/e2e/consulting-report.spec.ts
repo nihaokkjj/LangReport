@@ -172,13 +172,16 @@ test("导入文件与更新当前数据保持显式分流", async ({ page }) => 
   await expect(page.locator(".rail-source input[type=file]")).toBeEnabled();
   await page.locator(".rail-source input[type=file]").setInputFiles({ name: "sales-v1.csv", mimeType: "text/csv", buffer: Buffer.from("month,amount\nJan,10") });
   await expect(page.getByRole("status").filter({ hasText: "创建为数据快照 v1" })).toBeVisible();
+  await page.getByRole("button", { name: /打开项目依据|显示依据面板/ }).first().click();
   await expect(page.locator(".context-summary-copy")).toContainText("sales-v1.csv · v1");
+  await page.getByRole("button", { name: /关闭依据面板|隐藏依据面板/ }).click();
   const updateButton = page.locator(".canvas-header-actions").getByRole("button", { name: "更新当前数据" });
   await expect(updateButton).toBeVisible();
   await updateButton.click();
 
   await page.locator('input[aria-label="选择数据文件"]').setInputFiles({ name: "sales-v2.csv", mimeType: "text/csv", buffer: Buffer.from("month,amount\nJan,11") });
   await expect(page.getByRole("status").filter({ hasText: "更新为数据快照 v2" })).toBeVisible();
+  await page.getByRole("button", { name: /打开项目依据|显示依据面板/ }).first().click();
   await expect(page.locator(".context-summary-copy")).toContainText("sales-v2.csv · v2");
 });
 
@@ -198,20 +201,23 @@ test("数据预览默认打开最新版本并可切换历史 Snapshot", async ({
   const openContextButton = page.getByRole("button", { name: /打开项目依据|显示依据面板/ }).first();
   await expect(openContextButton).toBeVisible();
   await openContextButton.click();
-  await expect(page.locator(".app-shell.right-open .context-rail")).toBeVisible();
+  await expect(page.locator(".app-shell.right-open .context-drawer-view")).toBeVisible();
   if ((page.viewportSize()?.width ?? 0) > 760) {
-    const resizeHandle = page.getByRole("separator", { name: "调整依据宽度" });
+    const resizeHandle = page.getByRole("separator", { name: "调整右侧抽屉宽度" });
     await resizeHandle.focus();
     await resizeHandle.press("ArrowLeft");
     await expect(resizeHandle).toHaveAttribute("aria-valuenow", "376");
     await resizeHandle.press("ArrowRight");
     await expect(resizeHandle).toHaveAttribute("aria-valuenow", "360");
   }
-  const snapshotDetails = page.locator(".context-rail details").first();
+  const contextHeaderHeight = await page.locator(".context-header").evaluate((element) => element.getBoundingClientRect().height);
+  const snapshotDetails = page.locator(".context-drawer-view details").first();
   await snapshotDetails.locator("summary").click();
   await snapshotDetails.locator(".snapshot-preview-trigger").click();
   const dialog = page.getByRole("dialog", { name: "查看数据" });
   await expect(dialog).toBeVisible();
+  const snapshotHeaderHeight = await dialog.locator(".snapshot-preview-head").evaluate((element) => element.getBoundingClientRect().height);
+  expect(snapshotHeaderHeight).toBeCloseTo(contextHeaderHeight, 0);
   await expect(dialog.locator(".snapshot-version-item")).toHaveCount(2);
   await expect(dialog.locator(".snapshot-version-item").first()).toHaveClass(/selected/);
   await expect(dialog.getByText("sales-v2.csv", { exact: true })).toBeVisible();
@@ -224,7 +230,7 @@ test("数据预览默认打开最新版本并可切换历史 Snapshot", async ({
   await expect(dialog.getByText("sales-v1.csv", { exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "关闭数据预览" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.locator(".app-shell")).toHaveClass(/right-collapsed/);
+  await expect(page.locator(".app-shell.right-open .context-drawer-view")).toBeVisible();
 });
 
 test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => {
@@ -264,7 +270,7 @@ test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => 
   expect(Math.abs(composerDistanceFromViewportBottom)).toBeLessThanOrEqual(1);
 
   const sampleButton = page.getByRole("button", { name: "使用示例" });
-  if (page.viewportSize()?.width === 390) {
+  if ((page.viewportSize()?.width ?? 0) <= 760) {
     await page.evaluate(async () => {
       await fetch("/api/v1/projects/project-sales/data-assets/paste", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "sales-sample.csv", conversationId: "conversation-sales", content: "月份,区域,销售额\n2026-01,华东,120000\n2026-02,华东,138000" }) });
     });
@@ -272,15 +278,36 @@ test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => 
   } else {
     const openHistoryButton = page.getByRole("button", { name: /打开对话历史|显示对话历史/ }).first();
     await expect(openHistoryButton).toBeVisible();
+    const mainWidthBeforeHistory = await page.locator(".workspace-main").evaluate((element) => element.getBoundingClientRect().width);
     await openHistoryButton.click();
     await expect(page.locator(".app-shell.left-open .history-rail")).toBeVisible();
+    await expect.poll(
+      () => page.locator(".workspace-main").evaluate((element) => element.getBoundingClientRect().width),
+      { timeout: 1_000 },
+    ).toBeLessThan(mainWidthBeforeHistory - 1);
     await expect(sampleButton).toHaveCount(1);
     await expect(sampleButton).toBeEnabled();
     await sampleButton.click();
+    if ((page.viewportSize()?.width ?? 0) <= 1024) {
+      await page.locator(".history-drawer-close").click();
+      await expect.poll(
+        () => page.locator(".history-rail").evaluate((element) => element.getBoundingClientRect().width),
+        { timeout: 1_000 },
+      ).toBeLessThan(1);
+    }
   }
+  const mainWidthBeforeContext = await page.locator(".workspace-main").evaluate((element) => element.getBoundingClientRect().width);
+  await page.getByRole("button", { name: /打开项目依据|显示依据面板/ }).first().click();
   await expect(page.locator(".context-summary-copy")).toContainText("sales-sample.csv");
-  const snapshotDetails = page.locator(".context-rail details").first();
+  if ((page.viewportSize()?.width ?? 0) > 760) {
+    await expect.poll(
+      () => page.locator(".workspace-main").evaluate((element) => element.getBoundingClientRect().width),
+      { timeout: 1_000 },
+    ).toBeLessThan(mainWidthBeforeContext - 1);
+  }
+  const snapshotDetails = page.locator(".context-drawer-view details").first();
   expect(await snapshotDetails.evaluate((element) => (element as HTMLDetailsElement).open)).toBe(false);
+  await page.getByRole("button", { name: /关闭依据面板|隐藏依据面板/ }).click();
 
   await page.getByRole("button", { name: "确认指标" }).click();
   await page.getByRole("button", { name: "确认并保存" }).click();
@@ -338,7 +365,9 @@ test("图表编辑器把逻辑和显示变化提交为可追溯 Patch", async ({
     await fetch("/api/v1/projects/project-sales/data-assets/paste", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "sales-sample.csv", conversationId: "conversation-sales", content: "月份,区域,销售额\n2026-01,华东,120000\n2026-02,华东,138000" }) });
   });
   await page.reload();
+  await page.getByRole("button", { name: /打开项目依据|显示依据面板/ }).first().click();
   await expect(page.locator(".context-summary-copy")).toContainText("sales-sample.csv");
+  await page.getByRole("button", { name: /关闭依据面板|隐藏依据面板/ }).click();
   await page.getByRole("button", { name: "确认指标" }).click();
   await page.getByRole("button", { name: "确认并保存" }).click();
   await expect(page.getByText("指标已确认")).toBeVisible();

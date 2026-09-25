@@ -3,12 +3,13 @@ import sharp from "sharp";
 import type { FlintSpec, ValidationRecord } from "@langreport/contracts";
 
 export const FLINT_VERSION = "0.5.1";
-export const RENDERER_VERSION = "vega-lite-svg-v1";
+export const RENDERER_VERSION = "vega-lite-svg-v2";
 export const DESIGN_FONT_FAMILIES = {
+  display: '"Degular Display", Inter, "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
   sans: 'Inter, "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
   mono: '"JetBrains Mono", "SF Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace'
 } as const;
-export const DESIGN_CHART_COLORS = ["#2457C5", "#5B6875", "#18794E"] as const;
+export const DESIGN_CHART_COLORS = ["#FF4F00", "#939084", "#18794E"] as const;
 
 export type RenderedChart = {
   vegaLiteSpec: Record<string, unknown>;
@@ -122,18 +123,19 @@ export function createStaticSvgHtml(input: StaticSvgHtmlInput): string {
     <meta name="generator" content="LangReport static revision export">
     <title>${escapeHtml(input.title)} · LangReport</title>
     <style>
-      :root { color-scheme: light; font-family: Inter, "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17212b; background: #f5f7fa; }
+      :root { color-scheme: light; font-family: ${DESIGN_FONT_FAMILIES.sans}; color: #201515; background: #f8f4f0; }
       body { margin: 0; padding: 32px; }
-      main { max-width: 1080px; margin: 0 auto; background: #fff; border: 1px solid #d7dee6; border-radius: 12px; padding: 32px; box-sizing: border-box; }
+      main { max-width: 1080px; margin: 0 auto; background: #fffefb; border: 1px solid #c5c0b1; border-radius: 12px; padding: 32px; box-sizing: border-box; }
       h1, h2, p { margin: 0; }
+      h1, h2 { font-family: ${DESIGN_FONT_FAMILIES.display}; }
       h1 { font-size: 26px; line-height: 1.25; font-weight: 600; }
       h2 { font-size: 16px; line-height: 1.5; font-weight: 600; margin-bottom: 8px; }
-      .eyebrow, .meta { font-family: "JetBrains Mono", Consolas, monospace; font-size: 11px; line-height: 1.4; letter-spacing: .2px; color: #5b6875; }
+      .eyebrow, .meta { font-family: "JetBrains Mono", Consolas, monospace; font-size: 11px; line-height: 1.4; letter-spacing: .2px; color: #939084; }
       .eyebrow { margin-bottom: 8px; }
       .chart { margin: 24px 0; overflow-x: auto; }
       .chart svg { display: block; max-width: 100%; height: auto; }
-      .finding { border-top: 1px solid #e8edf2; padding-top: 20px; font-size: 16px; line-height: 1.6; }
-      .metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e8edf2; }
+      .finding { border-top: 1px solid #ebe4dd; padding-top: 20px; font-size: 16px; line-height: 1.6; }
+      .metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; margin-top: 24px; padding-top: 16px; border-top: 1px solid #ebe4dd; }
       .metadata span { display: block; }
       @media (max-width: 640px) { body { padding: 12px; } main { padding: 20px; } .metadata { grid-template-columns: 1fr; } }
     </style>
@@ -258,20 +260,21 @@ function renderDeterministicSvg(spec: FlintSpec): string {
   const parts: string[] = [];
   const sansFont = escapeXml(DESIGN_FONT_FAMILIES.sans);
   const monoFont = escapeXml(DESIGN_FONT_FAMILIES.mono);
+  const displayFont = escapeXml(DESIGN_FONT_FAMILIES.display);
   parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-kerning="normal" role="img" aria-label="${escapeXml(spec.chartSpec.title)}">`);
-  parts.push(`<rect width="${width}" height="${height}" fill="#ffffff"/>`);
-  parts.push(`<text x="${left}" y="32" font-family="${sansFont}" font-size="22" font-weight="600" fill="#17212b">${escapeXml(spec.chartSpec.title)}</text>`);
-  if (spec.chartSpec.subtitle) parts.push(`<text x="${left}" y="54" font-family="${sansFont}" font-size="12" fill="#17212b">${escapeXml(spec.chartSpec.subtitle)}</text>`);
+  parts.push(`<rect width="${width}" height="${height}" fill="#fffefb"/>`);
+  parts.push(`<text x="${left}" y="32" font-family="${displayFont}" font-size="22" font-weight="600" fill="#201515">${escapeXml(spec.chartSpec.title)}</text>`);
+  if (spec.chartSpec.subtitle) parts.push(`<text x="${left}" y="54" font-family="${sansFont}" font-size="12" fill="#201515">${escapeXml(spec.chartSpec.subtitle)}</text>`);
   for (const [index, annotation] of (spec.chartSpec.annotations ?? []).entries()) {
-    parts.push(`<text x="${left}" y="${76 + index * 16}" font-family="${sansFont}" font-size="12" fill="#5B6875">${escapeXml(annotation.text)}</text>`);
+    parts.push(`<text x="${left}" y="${76 + index * 16}" font-family="${sansFont}" font-size="12" fill="#939084">${escapeXml(annotation.text)}</text>`);
   }
-  parts.push(`<line x1="${left}" y1="${top + plotHeight}" x2="${left + plotWidth}" y2="${top + plotHeight}" stroke="#17212b" stroke-width="1"/>`);
-  parts.push(`<line x1="${left}" y1="${top}" x2="${left}" y2="${top + plotHeight}" stroke="#17212b" stroke-width="1"/>`);
-  parts.push(`<text x="${left - 12}" y="${top + 4}" text-anchor="end" font-family="${monoFont}" font-size="11" fill="#17212b">${formatNumber(maxValue)}</text>`);
-  parts.push(`<text x="${left - 12}" y="${top + plotHeight}" text-anchor="end" font-family="${monoFont}" font-size="11" fill="#17212b">${formatNumber(minValue)}</text>`);
+  parts.push(`<line x1="${left}" y1="${top + plotHeight}" x2="${left + plotWidth}" y2="${top + plotHeight}" stroke="#201515" stroke-width="1"/>`);
+  parts.push(`<line x1="${left}" y1="${top}" x2="${left}" y2="${top + plotHeight}" stroke="#201515" stroke-width="1"/>`);
+  parts.push(`<text x="${left - 12}" y="${top + 4}" text-anchor="end" font-family="${monoFont}" font-size="11" fill="#201515">${formatNumber(maxValue)}</text>`);
+  parts.push(`<text x="${left - 12}" y="${top + plotHeight}" text-anchor="end" font-family="${monoFont}" font-size="11" fill="#201515">${formatNumber(minValue)}</text>`);
   for (const [index, value] of xValues.entries()) {
     const x = left + (xValues.length <= 1 ? plotWidth / 2 : index * plotWidth / (xValues.length - 1));
-    parts.push(`<text x="${x}" y="${top + plotHeight + 24}" text-anchor="middle" font-family="${monoFont}" font-size="11" fill="#17212b">${escapeXml(value)}</text>`);
+    parts.push(`<text x="${x}" y="${top + plotHeight + 24}" text-anchor="middle" font-family="${monoFont}" font-size="11" fill="#201515">${escapeXml(value)}</text>`);
   }
   for (const [seriesIndex, seriesValue] of series.entries()) {
     const points = rows.filter((row) => !colorField || String(row[colorField] ?? "") === seriesValue);
@@ -286,7 +289,7 @@ function renderDeterministicSvg(spec: FlintSpec): string {
         const baseline = top + yPosition(Math.min(value, minValue));
         parts.push(`<rect x="${x - barWidth / 2}" y="${Math.min(y, baseline)}" width="${barWidth - 2}" height="${Math.max(1, Math.abs(baseline - y))}" fill="${colors[seriesIndex % colors.length]}" opacity="0.86"><title>${escapeXml(`${String(row[xField] ?? "")}: ${formatNumber(value)}`)}</title></rect>`);
         if (spec.chartSpec.showValues && pointIndex < 40) {
-          parts.push(`<text x="${x}" y="${Math.min(y, baseline) - 6}" text-anchor="middle" font-family="${monoFont}" font-size="10" fill="#17212b">${formatNumber(value)}</text>`);
+          parts.push(`<text x="${x}" y="${Math.min(y, baseline) - 6}" text-anchor="middle" font-family="${monoFont}" font-size="10" fill="#201515">${formatNumber(value)}</text>`);
         }
         void xIndex;
       }
@@ -304,14 +307,14 @@ function renderDeterministicSvg(spec: FlintSpec): string {
         const cy = top + yPosition(value);
         parts.push(`<circle cx="${cx}" cy="${cy}" r="4" fill="${colors[seriesIndex % colors.length]}"><title>${escapeXml(`${String(row[xField] ?? "")}: ${formatNumber(value)}`)}</title></circle>`);
         if (spec.chartSpec.showValues && pointIndex < 40) {
-          parts.push(`<text x="${cx}" y="${cy - 8}" text-anchor="middle" font-family="${monoFont}" font-size="10" fill="#17212b">${formatNumber(value)}</text>`);
+          parts.push(`<text x="${cx}" y="${cy - 8}" text-anchor="middle" font-family="${monoFont}" font-size="10" fill="#201515">${formatNumber(value)}</text>`);
         }
       }
     }
     if (colorField && seriesValue && spec.chartSpec.showLegend !== false) {
       const legendX = left + seriesIndex * 120;
       parts.push(`<circle cx="${legendX}" cy="${height - 18}" r="4" fill="${colors[seriesIndex % colors.length]}"/>`);
-      parts.push(`<text x="${legendX + 10}" y="${height - 14}" font-family="${monoFont}" font-size="11" fill="#17212b">${escapeXml(seriesValue)}</text>`);
+      parts.push(`<text x="${legendX + 10}" y="${height - 14}" font-family="${monoFont}" font-size="11" fill="#201515">${escapeXml(seriesValue)}</text>`);
     }
   }
   parts.push("</svg>");

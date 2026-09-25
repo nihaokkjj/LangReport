@@ -38,7 +38,7 @@ import { sendHttpError } from "./http-errors.js";
 import { AuthenticationError, userIdFromRequest } from "./auth.js";
 import { assertProjectThemeReference, PluginServiceError } from "@langreport/plugins";
 
-const RENDERER_VERSION = "vega-lite-svg-v1";
+const RENDERER_VERSION = "vega-lite-svg-v2";
 
 export async function registerChartRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { projectId: string } }>("/api/v1/projects/:projectId/chart-artifacts", async (request, reply) => {

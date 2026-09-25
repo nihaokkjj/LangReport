@@ -18,6 +18,8 @@ export default defineConfig({
   },
   projects: [
     { name: "chromium-desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
+    { name: "chromium-tablet", use: { ...devices["Desktop Chrome"], viewport: { width: 1024, height: 900 } } },
+    { name: "chromium-compact", use: { ...devices["Desktop Chrome"], viewport: { width: 760, height: 900 } } },
     { name: "chromium-mobile", use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 } } }
   ],
   ...(liveBaseURL ? {} : {

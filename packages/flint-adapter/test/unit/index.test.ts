@@ -18,12 +18,13 @@ test("plugin theme config reaches Flint and deterministic SVG output", async () 
   assert.deepEqual(input.theme_spec, { extends: "economist", ink: { series: { single: "#2563EB" } } });
   const rendered = await renderChart(spec);
   assert.match(rendered.svg, /#2563EB/);
-  assert.ok(rendered.svg.includes(`font-family="${DESIGN_FONT_FAMILIES.sans.replaceAll('"', "&quot;")}"`));
+  assert.ok(rendered.svg.includes(`font-family="${DESIGN_FONT_FAMILIES.display.replaceAll('"', "&quot;")}"`));
   assert.ok(rendered.svg.includes(`font-family="${DESIGN_FONT_FAMILIES.mono.replaceAll('"', "&quot;")}"`));
 });
 
-test("default deterministic chart uses the restrained design palette", async () => {
+test("default deterministic chart uses the warm workbench palette", async () => {
   const rendered = await renderChart({ ...spec, themeConfig: {} });
+  assert.deepEqual([...DESIGN_CHART_COLORS], ["#FF4F00", "#939084", "#18794E"]);
   assert.ok(rendered.svg.includes(DESIGN_CHART_COLORS[0]));
   assert.doesNotMatch(rendered.svg, /#ff3d8b|#1f1d3d|#c5b0f4/i);
 });
@@ -69,6 +70,9 @@ test("static HTML wraps trusted SVG and escapes evidence metadata without script
   });
 
   assert.match(html, /<!doctype html>/i);
+  assert.match(html, /#fffefb/i);
+  assert.match(html, /#f8f4f0/i);
+  assert.match(html, /#201515/i);
   assert.match(html, /&lt;不执行&gt;/);
   assert.match(html, /发现 &amp; 结论/);
   assert.doesNotMatch(html, /<script\b|javascript:/i);
@@ -99,7 +103,7 @@ test("adapter payload validation rejects unknown fields and accepts the builtin 
 
 test("platform renderer registry resolves only the built-in Vega-Lite adapter", () => {
   const renderer = resolveRendererAdapter("vega-lite");
-  assert.equal(renderer.version, "vega-lite-svg-v1");
+  assert.equal(renderer.version, "vega-lite-svg-v2");
   assert.equal(renderer.render, renderChart);
   assert.throws(() => resolveRendererAdapter("untrusted-renderer"), /平台未注册渲染器/);
 });

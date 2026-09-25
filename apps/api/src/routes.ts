@@ -17,7 +17,7 @@ import { isDevBootstrapAllowed } from "./http-contracts.js";
 import { AuthenticationError, userIdFromRequest } from "./auth.js";
 import { registerAuthRoutes } from "./auth-routes.js";
 
-const RENDERER_VERSION = "vega-lite-svg-v1";
+const RENDERER_VERSION = "vega-lite-svg-v2";
 const MAX_GENERATION_ATTEMPTS = 3;
 const retryableGenerationErrors = new Set(["GENERATION_FAILED", "RENDER_FAILED", "MODEL_RATE_LIMITED", "MODEL_TIMEOUT", "MODEL_PROVIDER_UNAVAILABLE"]);
 const terminalGenerationJobStatuses = new Set(["succeeded", "failed", "needs_clarification", "cancelled"]);
