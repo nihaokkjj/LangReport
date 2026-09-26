@@ -420,11 +420,33 @@ function parameterKey(parameter: Pick<OpenApiParameter, "in" | "name">): string 
 
 function isSensitiveHeader(name: string): boolean {
   const normalized = name.toLowerCase();
-  return normalized === "authorization"
-    || normalized === "cookie"
-    || normalized.includes("api-key")
-    || normalized.includes("apikey")
-    || normalized === "proxy-authorization";
+  return (
+    isSensitiveCredentialName(name) ||
+    normalized === "authorization" ||
+    normalized === "cookie" ||
+    normalized === "proxy-authorization"
+  );
+}
+
+function redactSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(headers).map(([name, value]) => [name, isSensitiveHeader(name) ? "[REDACTED]" : value]),
+  );
+}
+
+function redactSensitiveUrl(value: string): string {
+  try {
+    const isAbsolute = /^[a-z][a-z\d+.-]*:/i.test(value);
+    const url = isAbsolute ? new URL(value) : new URL(value, "http://langreport.invalid");
+    for (const name of [...url.searchParams.keys()]) {
+      if (isSensitiveCredentialName(name)) url.searchParams.set(name, "[REDACTED]");
+    }
+    const redacted = isAbsolute ? url.href : `${url.pathname}${url.search}${url.hash}`;
+    return redacted.replace(/%5BREDACTED%5D/gi, "[REDACTED]");
+  } catch {
+    const queryIndex = value.indexOf("?");
+    return queryIndex >= 0 ? value.slice(0, queryIndex) : value;
+  }
 }
 
 function shellQuote(value: string): string {
@@ -455,25 +477,75 @@ function buildEntries(document: OpenApiDocument): OperationEntry[] {
 }
 
 function seedParameterValues(operation: OpenApiOperation): Record<string, string> {
-  return Object.fromEntries((operation.parameters ?? []).map((parameter) => {
-    const initialValue = parameter.schema?.default !== undefined
-      ? parameter.schema.default
-      : "";
-    return [parameterKey(parameter), inputValue(initialValue)];
-  }));
+  return Object.fromEntries(
+    (operation.parameters ?? []).map((parameter) => {
+      const sensitive =
+        isSensitiveCredentialName(parameter.name) || (parameter.in === "header" && isSensitiveHeader(parameter.name));
+      const initialValue = !sensitive && parameter.schema?.default !== undefined ? parameter.schema.default : "";
+      return [parameterKey(parameter), inputValue(initialValue)];
+    }),
+  );
 }
 
 function seedRequestState(entry: OperationEntry, contentTypeOverride?: string): RequestState {
   const contentType = contentTypeOverride ?? bodyContentTypes(entry.operation)[0] ?? "";
   const bodySchema = entry.operation.requestBody?.content?.[contentType]?.schema;
-  const bodyFields = Object.fromEntries(Object.entries(bodySchema?.properties ?? {})
-    .filter(([, property]) => property.format !== "binary")
-    .map(([name, property]) => [name, inputValue(schemaExample(property))]));
+  const bodyFields = Object.fromEntries(
+    Object.entries(bodySchema?.properties ?? {})
+      .filter(([, property]) => property.format !== "binary")
+      .map(([name, property]) => [name, isSensitiveCredentialName(name) ? "" : inputValue(schemaExample(property))]),
+  );
+  const example = bodySchema ? scrubSensitiveValues(schemaExample(bodySchema), "") : undefined;
   return {
     parameterValues: seedParameterValues(entry.operation),
     contentType,
-    bodyText: bodySchema ? formatJson(schemaExample(bodySchema)) : "",
-    bodyFields
+    bodyText: bodySchema ? formatJson(example) : "",
+    bodyFields,
+  };
+}
+
+function isSensitiveCredentialName(name: string): boolean {
+  return /(password|passphrase|secret|token|credential|api[_-]?key)/i.test(name);
+}
+
+function isSensitiveParameterKey(key: string): boolean {
+  if (isSensitiveCredentialName(key)) return true;
+  const separator = key.indexOf(":");
+  return separator > 0 && key.slice(0, separator) === "header" && isSensitiveHeader(key.slice(separator + 1));
+}
+
+function scrubSensitiveValues(value: unknown, replacement: string): unknown {
+  if (Array.isArray(value)) return value.map((item) => scrubSensitiveValues(item, replacement));
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([name, item]) => [
+      name,
+      isSensitiveCredentialName(name) ? replacement : scrubSensitiveValues(item, replacement),
+    ]),
+  );
+}
+
+function sanitizeStoredBody(bodyText: string): string {
+  try {
+    return formatJson(scrubSensitiveValues(JSON.parse(bodyText), ""));
+  } catch {
+    return "";
+  }
+}
+
+function sanitizeStoredHistoryState(state: RequestState): RequestState {
+  return {
+    parameterValues: Object.fromEntries(
+      Object.entries(state.parameterValues ?? {}).filter(([name]) => !isSensitiveParameterKey(name)),
+    ),
+    contentType: state.contentType,
+    bodyText: sanitizeStoredBody(state.bodyText ?? ""),
+    bodyFields: Object.fromEntries(
+      Object.entries(state.bodyFields ?? {}).map(([name, value]) => [
+        name,
+        isSensitiveCredentialName(name) ? "" : value,
+      ]),
+    ),
   };
 }
 
@@ -484,22 +556,29 @@ function sanitizeHistoryState(state: RequestState, operation: OpenApiOperation):
     return [[parameterKey(parameter), value]];
   }));
   return {
-    parameterValues,
+    parameterValues: Object.fromEntries(
+      Object.entries(parameterValues).filter(([name]) => !isSensitiveCredentialName(name)),
+    ),
     contentType: state.contentType,
-    bodyText: operation.operationId === "login" ? "" : state.bodyText,
-    bodyFields: operation.operationId === "login" ? {} : state.bodyFields
+    bodyText: sanitizeStoredBody(state.bodyText),
+    bodyFields: Object.fromEntries(
+      Object.entries(state.bodyFields).map(([name, value]) => [name, isSensitiveCredentialName(name) ? "" : value]),
+    ),
   };
 }
 
 function createCurl(request: Omit<BuiltRequest, "curl">): string {
-  const url = typeof window === "undefined" ? request.url : new URL(request.url, window.location.origin).href;
+  const url = redactSensitiveUrl(
+    typeof window === "undefined" ? request.url : new URL(request.url, window.location.origin).href,
+  );
   const parts = ["curl", "--request", request.method, shellQuote(url)];
   for (const [name, value] of Object.entries(request.headers)) {
     if (!isSensitiveHeader(name)) parts.push("--header", shellQuote(`${name}: ${value}`));
   }
   if (request.formEntries.length > 0) {
     for (const entry of request.formEntries) {
-      parts.push("--form", shellQuote(`${entry.name}=${entry.file ? `@${entry.value}` : entry.value}`));
+      const value = isSensitiveCredentialName(entry.name) ? "[REDACTED]" : entry.value;
+      parts.push("--form", shellQuote(`${entry.name}=${entry.file ? `@${entry.value}` : value}`));
     }
   } else if (request.bodyPreview) {
     parts.push("--data-raw", shellQuote(request.bodyPreview));
@@ -558,7 +637,12 @@ function buildRequest(
       }
     }
     body = formData;
-    bodyPreview = formEntries.map((entry) => `${entry.name}: ${entry.file ? `[文件] ${entry.value}` : entry.value}`).join("\n");
+    bodyPreview = formEntries
+      .map(
+        (entry) =>
+          `${entry.name}: ${entry.file ? `[文件] ${entry.value}` : isSensitiveCredentialName(entry.name) ? "[REDACTED]" : entry.value}`,
+      )
+      .join("\n");
   } else if (bodySchema) {
     try {
       JSON.parse(state.bodyText);
@@ -567,12 +651,8 @@ function buildRequest(
     }
     headers["content-type"] = contentType || "application/json";
     body = state.bodyText;
-    if (entry.operation.operationId === "login") {
-      const parsed = JSON.parse(state.bodyText) as Record<string, unknown>;
-      bodyPreview = formatJson({ ...parsed, password: "[REDACTED]" });
-    } else {
-      bodyPreview = state.bodyText;
-    }
+    const parsed = JSON.parse(state.bodyText) as unknown;
+    bodyPreview = formatJson(scrubSensitiveValues(parsed, "[REDACTED]"));
   }
 
   const partial = { url, method: entry.method, headers, body, bodyPreview, formEntries };
@@ -655,9 +735,9 @@ function responseFromFetch(response: Response, raw: string, duration: number, re
   const responseHeaders = Object.fromEntries(response.headers.entries());
   const payload = isRecord(parsed) ? parsed : {};
   const requestPreview = [
-    `${request.method} ${request.url}`,
-    Object.keys(request.headers).length > 0 ? formatJson(request.headers) : "(no headers)",
-    request.bodyPreview || "(no body)"
+    `${request.method} ${redactSensitiveUrl(request.url)}`,
+    Object.keys(request.headers).length > 0 ? formatJson(redactSensitiveHeaders(request.headers)) : "(no headers)",
+    request.bodyPreview || "(no body)",
   ].join("\n\n");
   return {
     status: response.status,
@@ -667,7 +747,7 @@ function responseFromFetch(response: Response, raw: string, duration: number, re
     requestId: responseHeaders["x-request-id"] ?? (typeof payload.requestId === "string" ? payload.requestId : null),
     raw,
     formatted,
-    requestUrl: request.url,
+    requestUrl: redactSensitiveUrl(request.url),
     curl: request.curl,
     requestPreview,
     bodyPreview: request.bodyPreview,
@@ -1032,8 +1112,15 @@ export default function ApiConsolePage() {
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(historyStorageKey);
-      const parsed = stored ? JSON.parse(stored) as HistoryItem[] : [];
-      setHistory(Array.isArray(parsed) ? parsed.slice(0, 30) : []);
+      const parsed = stored ? (JSON.parse(stored) as HistoryItem[]) : [];
+      setHistory(
+        Array.isArray(parsed)
+          ? parsed.slice(0, 30).map((item) => ({
+              ...item,
+              state: sanitizeStoredHistoryState(item.state),
+            }))
+          : [],
+      );
     } catch {
       setHistory([]);
     } finally {
@@ -1042,7 +1129,16 @@ export default function ApiConsolePage() {
   }, []);
 
   useEffect(() => {
-    if (historyHydrated) window.localStorage.setItem(historyStorageKey, JSON.stringify(history.slice(0, 30)));
+    if (historyHydrated)
+      window.localStorage.setItem(
+        historyStorageKey,
+        JSON.stringify(
+          history.slice(0, 30).map((item) => ({
+            ...item,
+            state: sanitizeStoredHistoryState(item.state),
+          })),
+        ),
+      );
   }, [history, historyHydrated]);
 
   useEffect(() => {

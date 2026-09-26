@@ -71,9 +71,9 @@ services:
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}
       AUTH_SESSION_COOKIE: ${AUTH_SESSION_COOKIE:-langreport_session}
       AUTH_SESSION_TTL_SECONDS: ${AUTH_SESSION_TTL_SECONDS:-604800}
-      AUTH_LOGIN_USERNAME: ${AUTH_LOGIN_USERNAME:?AUTH_LOGIN_USERNAME is required}
-      AUTH_LOGIN_USER_ID: ${AUTH_LOGIN_USER_ID:?AUTH_LOGIN_USER_ID is required}
-      AUTH_LOGIN_PASSWORD_HASH: ${AUTH_LOGIN_PASSWORD_HASH:?AUTH_LOGIN_PASSWORD_HASH is required}
+      AUTH_BOOTSTRAP_USERNAME: ${AUTH_BOOTSTRAP_USERNAME:-}
+      AUTH_SHARED_DEFAULT_PASSWORD: ${AUTH_SHARED_DEFAULT_PASSWORD:-}
+      AUTH_LEGACY_USER_ID: ${AUTH_LEGACY_USER_ID:-}
       AUTH_JWT_ISSUER: ${AUTH_JWT_ISSUER:-}
       AUTH_JWT_AUDIENCE: ${AUTH_JWT_AUDIENCE:-}
       GENERATION_MODE: ${GENERATION_MODE:?GENERATION_MODE is required}
@@ -94,7 +94,13 @@ services:
     expose:
       - "4000"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 5s
       retries: 12

@@ -12,8 +12,15 @@ const integrationServiceKeys = [
   "BAILIAN_API_KEY",
   "MODEL_CREDENTIAL_ENCRYPTION_KEY",
   "AUTH_JWT_SECRET",
+  "AUTH_BOOTSTRAP_USERNAME",
+  "AUTH_SHARED_DEFAULT_PASSWORD",
+  "AUTH_LEGACY_USER_ID",
+  "AUTH_LOGIN_USERNAME",
+  "AUTH_LOGIN_USER_ID",
+  "AUTH_LOGIN_PASSWORD_HASH",
+  "AUTH_SESSION_TTL_SECONDS",
   "RUN_INTEGRATION",
-  "RUN_WORKER_INTEGRATION"
+  "RUN_WORKER_INTEGRATION",
 ];
 
 function parseDatabaseUrl(databaseUrl) {
@@ -45,7 +52,8 @@ export function assertIsolatedIntegrationEnvironment(environment) {
 
   const schema = requireString(environment, "DATABASE_SCHEMA");
   if (schema === "public") throw new Error("DATABASE_SCHEMA must not be public");
-  if (!/^langreport_test_[a-z0-9]+$/.test(schema)) throw new Error("DATABASE_SCHEMA must identify one generated test run");
+  if (!/^langreport_test_[a-z0-9]+$/.test(schema))
+    throw new Error("DATABASE_SCHEMA must identify one generated test run");
 
   const endpoint = requireString(environment, "S3_ENDPOINT");
   if (endpoint !== "http://127.0.0.1:9002") throw new Error("S3_ENDPOINT must target the test Compose MinIO endpoint");
@@ -71,7 +79,7 @@ export function createIsolatedIntegrationEnvironment(parentEnvironment, runId) {
     S3_ENDPOINT: "http://127.0.0.1:9002",
     S3_ACCESS_KEY: "langreport_test",
     S3_SECRET_KEY: "langreport-test-secret",
-    S3_BUCKET: `langreport-test-${runId}`
+    S3_BUCKET: `langreport-test-${runId}`,
   });
   assertIsolatedIntegrationEnvironment(environment);
   return environment;

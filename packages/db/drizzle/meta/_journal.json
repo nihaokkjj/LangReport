@@ -190,6 +190,13 @@
       "when": 1790056800000,
       "tag": "0027_generation_result_summary",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790417129501,
+      "tag": "0028_database_user_accounts",
+      "breakpoints": true
     }
   ]
 }

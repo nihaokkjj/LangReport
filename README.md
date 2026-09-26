@@ -41,4 +41,5 @@ Consulting Project
 - [开发环境](./docs/operations/development-setup.md)
 - [ECS 发布与真实百炼门禁](./docs/operations/deploy-ecs.md)
 - [登录网关变更设计](./docs/changes/2026-09-22-login-gateway/proposal.md)
+- [数据库账号管理变更设计](./docs/changes/2026-09-26-database-user-accounts/proposal.md)
 - [架构决策记录](./docs/adr/)

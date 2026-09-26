@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { randomBytes, randomUUID, scryptSync } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createIsolatedIntegrationEnvironment } from "./integration-environment.mjs";
@@ -9,11 +9,8 @@ const composeFile = resolve(repositoryRoot, "infra/docker-compose.test.yml");
 const isWindows = process.platform === "win32";
 const pnpmCommand = isWindows ? "pnpm.cmd" : "pnpm";
 const runId = randomUUID().replaceAll("-", "").toLowerCase();
-const userId = "phase1-live-" + runId;
 const loginUsername = "phase1-smoke-" + runId;
 const loginPassword = randomBytes(32).toString("base64url");
-const loginSalt = randomBytes(16);
-const loginPasswordHash = `scrypt$${loginSalt.toString("base64url")}$${scryptSync(loginPassword, loginSalt, 32, { N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }).toString("base64url")}`;
 const environment = createIsolatedIntegrationEnvironment(process.env, runId);
 Object.assign(environment, {
   API_PORT: "4100",
@@ -25,9 +22,8 @@ Object.assign(environment, {
   GENERATION_STATUS_LONG_POLL: "true",
   LANGREPORT_WORKER_TEST: "0",
   AUTH_JWT_SECRET: randomBytes(32).toString("base64url"),
-  AUTH_LOGIN_USERNAME: loginUsername,
-  AUTH_LOGIN_PASSWORD_HASH: loginPasswordHash,
-  AUTH_LOGIN_USER_ID: userId,
+  AUTH_BOOTSTRAP_USERNAME: loginUsername,
+  AUTH_SHARED_DEFAULT_PASSWORD: loginPassword,
   AUTH_SESSION_TTL_SECONDS: "300"
 });
 
@@ -87,7 +83,7 @@ function startService(label, args) {
 
 function redact(value) {
   let result = String(value);
-  for (const key of ["BAILIAN_API_KEY", "MODEL_CREDENTIAL_ENCRYPTION_KEY", "AUTH_JWT_SECRET", "AUTH_LOGIN_PASSWORD_HASH", "S3_SECRET_KEY"]) {
+  for (const key of ["BAILIAN_API_KEY", "MODEL_CREDENTIAL_ENCRYPTION_KEY", "AUTH_JWT_SECRET", "AUTH_SHARED_DEFAULT_PASSWORD", "S3_SECRET_KEY"]) {
     const secret = environment[key];
     if (secret) result = result.replaceAll(secret, "[REDACTED]");
   }
@@ -227,7 +223,7 @@ async function main() {
   sessionCookie = cookieAttributes[0];
 
   const session = await expectStatus("恢复登录会话", "GET", "/api/v1/auth/session", 200);
-  assertCondition(session.body.userId === userId, "登录会话 userId 不匹配");
+  assertCondition(typeof session.body.userId === "string" && session.body.userId.length > 0, "登录会话 userId 不匹配");
   const bootstrap = await expectStatus("登录后开发 Bootstrap", "POST", "/api/v1/dev/bootstrap", 200, {});
   assertCondition(typeof bootstrap.body.workspace?.id === "string" && typeof bootstrap.body.project?.id === "string", "开发 Bootstrap 响应不完整");
 

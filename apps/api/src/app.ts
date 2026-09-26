@@ -8,6 +8,7 @@ import { registerRoutes } from "./routes.js";
 import { attachRequestId, sendHttpError } from "./http-errors.js";
 import { attachRouteContracts, isInternalSurfaceAllowed } from "./http-contracts.js";
 import { swaggerUiHtml } from "./swagger.js";
+import { createDatabaseAuthAccountStore, type AuthAccountStore } from "./user-account-store.js";
 import { AuthenticationError, configureAuth, createJwtAuthProvider, type AuthProvider, type AuthenticatedUser } from "./auth.js";
 
 export type { AuthProvider, AuthenticatedUser } from "./auth.js";
@@ -16,12 +17,14 @@ export type AppOptions = {
   environment?: NodeJS.ProcessEnv;
   logger?: boolean;
   authProvider?: AuthProvider;
+  accountStore?: AuthAccountStore;
 };
 
 export async function buildApp(options: AppOptions = {}): Promise<FastifyInstance> {
   const environment = options.environment ?? process.env;
   configureAuth(environment);
-  const authProvider = options.authProvider ?? createJwtAuthProvider(environment);
+  const accountStore = options.accountStore ?? createDatabaseAuthAccountStore();
+  const authProvider = options.authProvider ?? createJwtAuthProvider(environment, accountStore);
   const app = Fastify({
     logger: options.logger ?? true,
     requestIdHeader: "x-request-id",
@@ -58,7 +61,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
 
   attachRouteContracts(app);
   attachRequestId(app);
-  await registerRoutes(app, environment);
+  await registerRoutes(app, environment, accountStore);
 
   app.get("/openapi.json", async (_request, reply) => {
     if (!isInternalSurfaceAllowed(environment)) return sendHttpError(reply, 404, "资源不存在", "NOT_FOUND");

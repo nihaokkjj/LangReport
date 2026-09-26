@@ -29,6 +29,25 @@ test("serves OpenAPI JSON and a standard Swagger UI page", async () => {
     assert.ok(document.paths["/health"]?.get);
     assert.ok(document.paths["/ready"]?.get);
     assert.ok(document.paths["/api/v1/dev/bootstrap"]?.post);
+    assert.ok(document.paths["/api/v1/auth/login"]?.post);
+    assert.ok(document.paths["/api/v1/auth/session"]?.get);
+    const changePassword = document.paths["/api/v1/auth/password"]?.post as
+      | {
+          operationId?: string;
+          requestBody?: {
+            required?: boolean;
+            content?: Record<
+              string,
+              { schema?: { properties?: Record<string, { minLength?: number; maxLength?: number }> } }
+            >;
+          };
+        }
+      | undefined;
+    assert.equal(changePassword?.operationId, "changeAuthPassword");
+    const passwordProperties = changePassword?.requestBody?.content?.["application/json"]?.schema?.properties ?? {};
+    assert.equal(passwordProperties.currentPassword?.maxLength, 1024);
+    assert.equal(passwordProperties.newPassword?.minLength, 6);
+    assert.equal(passwordProperties.newPassword?.maxLength, 1024);
     assert.ok(document.paths["/api/v1/projects/{projectId}/data-assets/paste"]?.post);
     assert.ok(document.paths["/api/v1/projects/{projectId}/metric-definitions"]?.post);
     assert.ok(document.paths["/api/v1/projects/{projectId}/analysis-brief"]?.post);

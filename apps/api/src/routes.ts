@@ -16,6 +16,7 @@ import { sendHttpError } from "./http-errors.js";
 import { isDevBootstrapAllowed } from "./http-contracts.js";
 import { AuthenticationError, userIdFromRequest } from "./auth.js";
 import { registerAuthRoutes } from "./auth-routes.js";
+import type { AuthAccountStore } from "./user-account-store.js";
 
 const RENDERER_VERSION = "vega-lite-svg-v2";
 const MAX_GENERATION_ATTEMPTS = 3;
@@ -55,11 +56,15 @@ function multipartTextField(fields: Record<string, unknown>, name: string): stri
   return typeof text === "string" && text.trim() ? text.trim() : undefined;
 }
 
-export async function registerRoutes(app: FastifyInstance, environment: NodeJS.ProcessEnv = process.env): Promise<void> {
+export async function registerRoutes(
+  app: FastifyInstance,
+  environment: NodeJS.ProcessEnv,
+  accountStore: AuthAccountStore,
+): Promise<void> {
   const generationJobStatusObserver = createGenerationJobStatusObserver(app.log);
   const generationStatusLongPollEnabled = !["0", "false", "off"].includes(String(environment.GENERATION_STATUS_LONG_POLL ?? "true").toLowerCase());
   app.addHook("onClose", async () => generationJobStatusObserver.close());
-  await registerAuthRoutes(app, environment);
+  await registerAuthRoutes(app, environment, accountStore);
   await registerChartRoutes(app);
 
   app.post("/api/v1/dev/bootstrap", async (request, reply) => {

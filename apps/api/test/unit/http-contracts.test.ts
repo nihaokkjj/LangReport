@@ -37,3 +37,18 @@ test("snapshot re-ingest contracts expose the target Asset path and multipart sh
   assert.deepEqual(Object.keys((upload.request?.params as { properties: Record<string, unknown> }).properties).sort(), ["assetId", "projectId"]);
   assert.deepEqual(Object.keys((paste.request?.params as { properties: Record<string, unknown> }).properties).sort(), ["assetId", "projectId"]);
 });
+
+test("database account contracts expose session identity and the current-password change route", () => {
+  const session = getRouteContract("GET", "/api/v1/auth/session");
+  const passwordChange = getRouteContract("POST", "/api/v1/auth/password");
+  assert.ok(session);
+  assert.ok(passwordChange);
+  assert.equal(passwordChange.operationId, "changeAuthPassword");
+  assert.deepEqual(
+    Object.keys((passwordChange.request?.body as { properties: Record<string, unknown> }).properties).sort(),
+    ["currentPassword", "newPassword"],
+  );
+  assert.ok(passwordChange.responses[200]);
+  assert.ok(passwordChange.responses[400]);
+  assert.ok(passwordChange.responses[401]);
+});

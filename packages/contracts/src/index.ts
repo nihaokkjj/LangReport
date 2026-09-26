@@ -544,6 +544,13 @@ export const updateWorkspaceModelCredentialRequestSchema = z.object({
   apiKey: z.string().trim().min(8).max(1000)
 }).strict();
 
+export const changePasswordRequestSchema = z
+  .object({
+    currentPassword: z.string().min(1).max(1024),
+    newPassword: z.string().min(6).max(1024),
+  })
+  .strict();
+
 export const createProjectRequestSchema = z.object({
   name: z.string().trim().min(1).max(80),
   clientName: z.string().trim().min(1).max(120),
@@ -577,6 +584,7 @@ export type UpdateAnalysisBriefRequest = z.infer<typeof updateAnalysisBriefReque
 export type ProjectThemeInput = z.infer<typeof projectThemeSchema>;
 export type CreateShareRequest = z.infer<typeof createShareRequestSchema>;
 export type UpdateWorkspaceModelCredentialRequest = z.infer<typeof updateWorkspaceModelCredentialRequestSchema>;
+export type ChangePasswordRequest = z.infer<typeof changePasswordRequestSchema>;
 export type MemoryScope = z.infer<typeof memoryScopeSchema>;
 export type MemoryType = z.infer<typeof memoryTypeSchema>;
 export type MemoryCandidateStatus = z.infer<typeof memoryCandidateStatusSchema>;

@@ -16,18 +16,23 @@ const externalEnvironmentKeys = [
   "BAILIAN_API_KEY",
   "MODEL_CREDENTIAL_ENCRYPTION_KEY",
   "AUTH_JWT_SECRET",
+  "AUTH_BOOTSTRAP_USERNAME",
+  "AUTH_SHARED_DEFAULT_PASSWORD",
+  "AUTH_LEGACY_USER_ID",
   "AUTH_LOGIN_USERNAME",
   "AUTH_LOGIN_USER_ID",
   "AUTH_LOGIN_PASSWORD_HASH",
   "AUTH_SESSION_TTL_SECONDS",
   "RUN_INTEGRATION",
   "RUN_WORKER_INTEGRATION",
-  "LANGREPORT_WORKER_TEST"
+  "LANGREPORT_WORKER_TEST",
 ];
 
 const configuredExternalEnvironment = externalEnvironmentKeys.filter((key) => process.env[key]?.trim());
 if (configuredExternalEnvironment.length > 0) {
-  console.error(`Offline test mode refuses configured external environment: ${configuredExternalEnvironment.join(", ")}`);
+  console.error(
+    `Offline test mode refuses configured external environment: ${configuredExternalEnvironment.join(", ")}`,
+  );
   process.exit(1);
 }
 
@@ -45,10 +50,15 @@ Object.assign(environment, {
   S3_ENDPOINT: "http://127.0.0.1:1",
   S3_ACCESS_KEY: "offline-test-access-key",
   S3_SECRET_KEY: "offline-test-secret-key",
-  S3_BUCKET: "langreport-offline-test"
+  S3_BUCKET: "langreport-offline-test",
 });
 function run(command, args) {
-  const result = spawnSync(command, args, { cwd: repositoryRoot, env: environment, stdio: "inherit", shell: process.platform === "win32" });
+  const result = spawnSync(command, args, {
+    cwd: repositoryRoot,
+    env: environment,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
   if (result.error) {
     console.error(result.error.message);
     return 1;
@@ -57,8 +67,17 @@ function run(command, args) {
 }
 
 const nodeTestArgs = coverage
-  ? ["--experimental-test-coverage", "--test", "tests/support/test-system.contract.test.mjs", "tests/support/integration-environment.contract.test.mjs"]
-  : ["--test", "tests/support/test-system.contract.test.mjs", "tests/support/integration-environment.contract.test.mjs"];
+  ? [
+      "--experimental-test-coverage",
+      "--test",
+      "tests/support/test-system.contract.test.mjs",
+      "tests/support/integration-environment.contract.test.mjs",
+    ]
+  : [
+      "--test",
+      "tests/support/test-system.contract.test.mjs",
+      "tests/support/integration-environment.contract.test.mjs",
+    ];
 const contractStatus = run(process.execPath, nodeTestArgs);
 if (contractStatus !== 0) process.exit(contractStatus);
 

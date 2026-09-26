@@ -37,6 +37,29 @@ export const pluginValidationStatus = pgEnum("plugin_validation_status", ["valid
 export const pluginInstallationStatus = pgEnum("plugin_installation_status", ["installed", "revoked", "incompatible"]);
 export const projectPluginBindingStatus = pgEnum("project_plugin_binding_status", ["enabled", "disabled"]);
 
+export const userAccountStatus = pgEnum("user_account_status", ["active", "disabled"]);
+
+export const users = pgTable(
+  "users",
+  {
+    id: text("id").primaryKey(),
+    username: text("username").notNull(),
+    usernameKey: text("username_key").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    status: userAccountStatus("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }).defaultNow().notNull(),
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
+    legacyAuthSubject: text("legacy_auth_subject"),
+    legacyAuthSubjectExpiresAt: timestamp("legacy_auth_subject_expires_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("users_username_key_unique").on(table.usernameKey),
+    uniqueIndex("users_legacy_auth_subject_unique").on(table.legacyAuthSubject),
+  ],
+);
+
 export const workspaces = pgTable("workspaces", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),

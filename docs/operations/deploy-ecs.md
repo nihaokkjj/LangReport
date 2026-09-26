@@ -11,7 +11,7 @@ cp .env.production.example .env.production
 chmod 600 .env.production
 ```
 
-填写强随机的 `POSTGRES_PASSWORD`、`S3_SECRET_KEY`、`AUTH_JWT_SECRET`，并将 `WEB_ORIGIN` 改为 Vercel 生产域名。使用 `pnpm auth:hash-password` 离线生成密码哈希，将整段输出以单引号包裹后写入 `AUTH_LOGIN_PASSWORD_HASH`，同时配置 `AUTH_LOGIN_USERNAME` 和作为 JWT `sub` 的 `AUTH_LOGIN_USER_ID`。不要把明文密码写入 `.env.production`。内置登录网关签发 HS256 JWT，并只通过 HttpOnly `langreport_session` Cookie 返回浏览器；默认有效期为 7 天，部署侧只允许缩短。
+填写强随机的 `POSTGRES_PASSWORD`、`S3_SECRET_KEY`、`AUTH_JWT_SECRET`，并将 `WEB_ORIGIN` 改为 Vercel 生产域名。设置 `AUTH_BOOTSTRAP_USERNAME` 和至少 15 个字符的随机 `AUTH_SHARED_DEFAULT_PASSWORD`；首次启动时，API 只会在 `users` 表为空时创建该账号。共享密码同时供 CLI 创建账号和重置密码使用，应通过部署 secret 管理，并且用户首次登录后应在账号页改密。不要把密码写入命令参数或 Git。迁移旧单账号数据库时，将旧 `AUTH_LOGIN_USER_ID` 填入 `AUTH_LEGACY_USER_ID`，让首次引导把原成员关系转给新账号。内置登录网关从 PostgreSQL 读取账号并签发 HS256 JWT，只通过 HttpOnly `langreport_session` Cookie 返回浏览器；默认有效期为 7 天，部署侧只允许缩短。
 
 ## 2. 启动 API、基础服务和 Workers
 
@@ -20,6 +20,10 @@ cd /opt/langreport
 docker compose --env-file .env.production -f infra/docker-compose.prod.yml config
 docker compose --env-file .env.production -f infra/docker-compose.prod.yml up -d --build
 ```
+
+首次启动成功且确认账号已可登录后，可以从部署 secret 中移除 `AUTH_BOOTSTRAP_USERNAME`
+和 `AUTH_LEGACY_USER_ID`；它们只在 `users` 表为空时读取。保留 `AUTH_SHARED_DEFAULT_PASSWORD`
+供账号 CLI 创建账号和重置密码使用。旧 JWT 映射已保存在数据库中，不依赖该环境变量继续生效。
 
 查看状态和日志：
 
@@ -47,17 +51,39 @@ docker compose --env-file .env.production -f infra/docker-compose.prod.yml run -
 
 `db:verify` 只在目标数据库创建并删除 `migration_verify_*` 临时 schema，重放完整迁移链并检查历史 Phase 2–4 Job/Revision/Theme；生产发布仍需由运维确认备份、回滚窗口和数据库权限。
 
-首次部署还需要把 `AUTH_LOGIN_USER_ID` 初始化为个人 Project 作用域。开发 Bootstrap 在生产环境不可用，使用下面的显式确认命令按用户创建内部私有 Workspace、Project 和授权记录；重复执行不会重复创建成员或 Project：
+首次部署完成后，先读取数据库生成的新账号 ID：
 
 ```sh
-docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm \\
-  -e PROVISION_CONFIRM=I_UNDERSTAND \\
-  -e PROVISION_USER_ID='<AUTH_LOGIN_USER_ID>' \\
-  -e PROVISION_PROJECT_NAME='咨询项目 Demo' \\
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm api \
+  pnpm --filter @langreport/api users -- list
+```
+
+将列表中该账号的 UUID 传给生产初始化脚本，创建内部私有 Workspace、Project 和授权记录；重复执行不会重复创建成员或 Project：
+
+```sh
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm \
+  -e PROVISION_CONFIRM=I_UNDERSTAND \
+  -e PROVISION_USER_ID='<database-user-id>' \
+  -e PROVISION_PROJECT_NAME='咨询项目 Demo' \
   api pnpm --filter @langreport/api provision:production
 ```
 
 只读预览可将确认变量替换为 `PROVISION_DRY_RUN=true`。只有迁移或修复历史数据时才额外设置 `PROVISION_WORKSPACE_ID`；普通用户初始化不要复用已有 Workspace，脚本不会因为重复执行而提升已有成员权限。
+
+账号生命周期由 API 容器中的 CLI 管理。`list` 只输出 ID、用户名和状态；`create` 与 `reset-password` 使用 secret 中的 `AUTH_SHARED_DEFAULT_PASSWORD`，不会把密码放进命令参数：
+
+```sh
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm api \
+  pnpm --filter @langreport/api users -- list
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm api \
+  pnpm --filter @langreport/api users -- create analyst
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm api \
+  pnpm --filter @langreport/api users -- disable '<database-user-id>'
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm api \
+  pnpm --filter @langreport/api users -- reset-password '<database-user-id>'
+```
+
+停用账号不会删除 Workspace/Project 数据；管理员重置密码和用户自助改密不会撤销已签发 JWT，各会话仍有效至原始 `exp`，最长 7 天。公开流量必须经过生产 Nginx/WAF 限速，不能直接暴露 API 端口。
 
 ## 4. 第一阶段发布前真实百炼门禁
 
@@ -89,15 +115,15 @@ pnpm phase1:release-gate
 完成登录网关配置和数据库初始化后，在可访问 API 的环境执行一次：
 
 ```sh
-PHASE5_API_ORIGIN=https://<public-api-origin> \\
-PHASE5_LOGIN_USERNAME='<AUTH_LOGIN_USERNAME>' \\
-PHASE5_LOGIN_PASSWORD='<deployment-login-password>' \\
-PHASE5_WORKSPACE_ID='<workspace-id>' \\
-PHASE5_PROJECT_ID='<optional-project-id>' \\
+PHASE5_API_ORIGIN=https://<public-api-origin> \
+PHASE5_LOGIN_USERNAME='<database-username>' \
+PHASE5_LOGIN_PASSWORD='<deployment-login-password>' \
+PHASE5_WORKSPACE_ID='<workspace-id>' \
+PHASE5_PROJECT_ID='<optional-project-id>' \
 pnpm phase5:smoke
 ```
 
-该命令只输出每个检查的 HTTP 状态，不输出认证凭据。推荐提供 `PHASE5_LOGIN_USERNAME` 和 `PHASE5_LOGIN_PASSWORD`，脚本会真实登录并验证 `langreport_session` 的 `HttpOnly`、`Secure`、`SameSite=Lax`、`Path=/` 和 7 天 `Max-Age`，再用 Cookie 查询会话、访问业务接口并登出。`PHASE5_JWT` 或 `PHASE5_SESSION_COOKIE` 仍可用于兼容验证。脚本同时验证健康检查、数据库就绪、无认证拒绝、生产环境伪造 `x-user-id` 拒绝和插件管理接口。提供 `PHASE5_PROJECT_ID` 时还会检查 Project 插件 Binding 和能力目录。
+该命令只输出每个检查的 HTTP 状态，不输出认证凭据。推荐提供已存在数据库账号的 `PHASE5_LOGIN_USERNAME` 和 `PHASE5_LOGIN_PASSWORD`，脚本会真实登录并验证 `langreport_session` 的 `HttpOnly`、`Secure`、`SameSite=Lax`、`Path=/` 和 7 天 `Max-Age`，再用 Cookie 查询会话、访问业务接口并登出。`PHASE5_JWT` 或 `PHASE5_SESSION_COOKIE` 仍可用于兼容验证。脚本同时验证健康检查、数据库就绪、无认证拒绝、生产环境伪造 `x-user-id` 拒绝和插件管理接口。提供 `PHASE5_PROJECT_ID` 时还会检查 Project 插件 Binding 和能力目录。
 
 如需验证完整垂直链路，可在 Smoke 通过后执行下面的验收脚本。它会写入一条带随机后缀的数据快照、对话和 Generation Job，并默认执行“撤销插件 → 读取历史 Revision → 导出 → 恢复插件”；不要在需要保持生产数据完全不变的环境执行，或设置 `PHASE5_E2E_REVOCATION=false` 跳过撤销段：
 

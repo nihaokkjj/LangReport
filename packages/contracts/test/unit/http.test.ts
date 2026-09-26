@@ -15,6 +15,7 @@ const expectedRoutes = [
   "GET /ready",
   "POST /api/v1/auth/login",
   "GET /api/v1/auth/session",
+  "POST /api/v1/auth/password",
   "POST /api/v1/auth/logout",
   "POST /api/v1/dev/bootstrap",
   "GET /openapi.json",

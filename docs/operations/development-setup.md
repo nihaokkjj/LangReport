@@ -24,16 +24,21 @@ docker compose version
 ```powershell
 Copy-Item .env.example .env
 pnpm install
-pnpm auth:hash-password
 pnpm infra:up
 pnpm db:push
 pnpm dev:all
 ```
 
-把哈希脚本输出写入本地 `.env` 的 `AUTH_LOGIN_PASSWORD_HASH`，并同时配置
-`AUTH_JWT_SECRET`、`AUTH_LOGIN_USERNAME` 和 `AUTH_LOGIN_USER_ID`。开发环境不会接受
-`x-user-id` 或隐式 `local-dev-user`；未配置登录网关时 `/login` 会明确提示服务不可用。
+首次使用空数据库时，在 `.env` 中配置 `AUTH_JWT_SECRET`、`AUTH_BOOTSTRAP_USERNAME`
+和至少 15 个字符的随机 `AUTH_SHARED_DEFAULT_PASSWORD`。API 首次启动会创建该账号；
+后续启动不会覆盖账号或密码。`AUTH_SHARED_DEFAULT_PASSWORD` 也供 CLI 创建账号和重置密码使用。
+登录后可在“账号”页面把初始密码改成自己的密码。开发环境不会接受 `x-user-id` 或隐式
+`local-dev-user`；未配置 JWT secret 时 `/login` 会明确提示服务不可用。
 本地 HTTP Cookie 仍为 `HttpOnly; SameSite=Lax; Path=/`，只有 `Secure` 留给 HTTPS 生产环境。
+
+如果把旧版单账号数据库升级到新版本，在首次启动 API 前，把旧 `AUTH_LOGIN_USER_ID`
+填入 `AUTH_LEGACY_USER_ID`。首次引导会把该 ID 的 Workspace/Project 成员关系转给新账号，
+并在旧 JWT 最长 7 天有效期内兼容原身份。
 
 启动后：
 
@@ -122,6 +127,10 @@ pnpm db:push
 
 # 打开 Drizzle Studio
 pnpm db:studio
+
+# 查看或管理数据库账号；create/reset 使用 .env 中的共享随机初始密码
+pnpm --filter @langreport/api users -- list
+pnpm --filter @langreport/api users -- create analyst
 
 # 停止本地数据库和对象存储
 pnpm infra:down

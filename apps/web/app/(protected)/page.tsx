@@ -1478,6 +1478,9 @@ export default function Home() {
           <a className="plugin-link" href="/plugins">
             插件
           </a>
+          <a className="plugin-link" href="/account">
+            账号
+          </a>
           <button type="button" className="plugin-link" onClick={() => void logout()}>
             退出
           </button>

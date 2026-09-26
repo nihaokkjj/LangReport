@@ -232,6 +232,81 @@ async function run() {
           )
       `);
       assert.equal(indexes.length, 3, "Phase 5 uniqueness indexes must be present");
+      const [usersTable] = await transaction.unsafe(`
+        SELECT count(*)::integer AS count
+        FROM information_schema.tables
+        WHERE table_schema = '${schemaName}' AND table_name = 'users'
+      `);
+      assert.equal(usersTable.count, 1, "database-backed account table must exist");
+
+      const userColumns = Array.from(
+        await transaction.unsafe(`
+        SELECT column_name, is_nullable
+        FROM information_schema.columns
+        WHERE table_schema = '${schemaName}' AND table_name = 'users'
+        ORDER BY ordinal_position
+      `),
+      );
+      assert.deepEqual(
+        userColumns,
+        [
+          { column_name: "id", is_nullable: "NO" },
+          { column_name: "username", is_nullable: "NO" },
+          { column_name: "username_key", is_nullable: "NO" },
+          { column_name: "password_hash", is_nullable: "NO" },
+          { column_name: "status", is_nullable: "NO" },
+          { column_name: "created_at", is_nullable: "NO" },
+          { column_name: "updated_at", is_nullable: "NO" },
+          { column_name: "password_changed_at", is_nullable: "NO" },
+          { column_name: "disabled_at", is_nullable: "YES" },
+          { column_name: "legacy_auth_subject", is_nullable: "YES" },
+          { column_name: "legacy_auth_subject_expires_at", is_nullable: "YES" },
+        ],
+        "account table columns must match the intended lifecycle and migration fields",
+      );
+
+      const userIndexes = await transaction.unsafe(`
+        SELECT indexname
+        FROM pg_indexes
+        WHERE schemaname = '${schemaName}'
+          AND indexname IN ('users_username_key_unique', 'users_legacy_auth_subject_unique')
+      `);
+      assert.equal(userIndexes.length, 2, "username keys and nullable legacy subjects must be unique");
+
+      const accountStatuses = Array.from(
+        await transaction.unsafe(`
+        SELECT e.enumlabel
+        FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE n.nspname = '${schemaName}' AND t.typname = 'user_account_status'
+        ORDER BY e.enumsortorder
+      `),
+      );
+      assert.deepEqual(
+        accountStatuses,
+        [{ enumlabel: "active" }, { enumlabel: "disabled" }],
+        "account status enum must preserve enabled and disabled states",
+      );
+
+      const memberIdentityColumns = Array.from(
+        await transaction.unsafe(`
+        SELECT table_name, data_type
+        FROM information_schema.columns
+        WHERE table_schema = '${schemaName}'
+          AND ((table_name = 'members' AND column_name = 'user_id')
+            OR (table_name = 'project_members' AND column_name = 'user_id'))
+        ORDER BY table_name
+      `),
+      );
+      assert.deepEqual(
+        memberIdentityColumns,
+        [
+          { table_name: "members", data_type: "text" },
+          { table_name: "project_members", data_type: "text" },
+        ],
+        "legacy member identity references must remain migratable text IDs",
+      );
     });
     console.log(`Migration compatibility verification passed (${migrations.join(", ")})`);
   } finally {

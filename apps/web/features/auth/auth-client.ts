@@ -3,7 +3,8 @@ import { apiFetch, ApiError, jsonHeaders, safeReturnTo, type ApiErrorPayload } f
 export type AuthSession = {
   authenticated: true;
   userId: string;
-  expiresAt: string;
+  username: string;
+  expiresAt: string | null;
 };
 
 export type AnonymousSession = { authenticated: false };
@@ -19,20 +20,34 @@ export async function getSession(): Promise<SessionProjection> {
 }
 
 export async function login(credentials: { username: string; password: string }): Promise<AuthSession> {
-  return apiFetch<AuthSession>("/api/v1/auth/login", {
-    method: "POST",
-    headers: jsonHeaders,
-    body: JSON.stringify(credentials)
-  }, { unauthorized: "none" });
+  return apiFetch<AuthSession>(
+    "/api/v1/auth/login",
+    {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(credentials),
+    },
+    { unauthorized: "none" },
+  );
 }
 
 export async function logout(): Promise<void> {
   await apiFetch<void>("/api/v1/auth/logout", { method: "POST" }, { unauthorized: "none" });
 }
 
+export async function changePassword(input: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ updated: boolean }> {
+  return apiFetch<{ updated: boolean }>("/api/v1/auth/password", {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify(input),
+  });
+}
+
 export function authErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 429 || error.code === "AUTH_LOGIN_RATE_LIMITED") return "登录尝试过于频繁，请稍后再试。";
     if (error.status === 503 || error.code === "AUTH_LOGIN_UNAVAILABLE") return "登录服务尚未配置，请联系部署维护者。";
     if (error.status === 401 || error.code === "INVALID_CREDENTIALS") return "账号或密码错误，请重新输入。";
     return error.message || "请求失败，请稍后再试。";

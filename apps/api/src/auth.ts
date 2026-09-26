@@ -1,5 +1,7 @@
-import { createHash, createHmac, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import type { FastifyRequest } from "fastify";
+import type { AuthAccountStore } from "./user-account-store.js";
+import { normalizeUsername, validateSharedPassword } from "./user-account-utils.js";
 export const DEFAULT_SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 const MIN_SESSION_TTL_SECONDS = 5 * 60;
 const PASSWORD_HASH_BYTES = 32;
@@ -15,17 +17,13 @@ export type AuthEnvironment = {
   AUTH_JWT_AUDIENCE?: string;
   AUTH_SESSION_COOKIE?: string;
   AUTH_SESSION_TTL_SECONDS?: string;
-  AUTH_LOGIN_USERNAME?: string;
-  AUTH_LOGIN_PASSWORD_HASH?: string;
-  AUTH_LOGIN_USER_ID?: string;
 };
-export type AuthenticatedUser = { id: string; expiresAt?: string };
-export type AuthProvider = (request: FastifyRequest) => AuthenticatedUser | null | undefined | Promise<AuthenticatedUser | null | undefined>;
+export type AuthenticatedUser = { id: string; username?: string; expiresAt?: string };
+export type AuthProvider = (
+  request: FastifyRequest,
+) => AuthenticatedUser | null | undefined | Promise<AuthenticatedUser | null | undefined>;
 type AuthRequest = { headers: Record<string, string | string[] | undefined>; user?: unknown };
 type LoginConfiguration = {
-  username: string;
-  passwordHash: string;
-  userId: string;
   jwtSecret: string;
   issuer?: string;
   audience?: string;
@@ -35,7 +33,10 @@ type LoginConfiguration = {
 };
 
 export type LoginGateway = {
-  authenticate(username: string, password: string): Promise<{ token: string; user: AuthenticatedUser } | null>;
+  authenticate(
+    username: string,
+    password: string,
+  ): Promise<{ token: string; user: AuthenticatedUser & { username: string } } | null>;
   sessionCookie(token: string, maxAge?: number): string;
 };
 
@@ -55,50 +56,80 @@ export function configureAuth(environment: AuthEnvironment): void {
   currentEnvironment = environment;
 }
 
-export function createJwtAuthProvider(environment: AuthEnvironment): AuthProvider | undefined {
+export function createJwtAuthProvider(
+  environment: AuthEnvironment,
+  accounts: AuthAccountStore,
+): AuthProvider | undefined {
   const secret = environment.AUTH_JWT_SECRET?.trim();
   if (!secret) return undefined;
   if (secret.length < 32) throw new Error("AUTH_JWT_SECRET 至少需要 32 个字符");
 
   const sessionCookie = sessionCookieName(environment);
-  return (request) => {
+  return async (request) => {
     const bearer = headerValue(request.headers.authorization);
-    const token = bearer?.startsWith("Bearer ") ? bearer.slice("Bearer ".length).trim() : cookieValue(request.headers.cookie, sessionCookie);
+    const token = bearer?.startsWith("Bearer ")
+      ? bearer.slice("Bearer ".length).trim()
+      : cookieValue(request.headers.cookie, sessionCookie);
     if (!token) return null;
     const claims = verifyJwt(token, secret, environment);
-    return claims ? {
-      id: claims.sub,
-      ...(claims.exp ? { expiresAt: new Date(claims.exp * 1000).toISOString() } : {})
-    } : null;
+    if (!claims) return null;
+    const directUser = await accounts.findById(claims.sub);
+    const user = directUser ?? (await accounts.findByLegacySubject(claims.sub));
+    if (!user) return null;
+    if (!directUser && (!user.legacyAuthSubjectExpiresAt || user.legacyAuthSubjectExpiresAt.getTime() <= Date.now()))
+      return null;
+    return {
+      id: user.id,
+      username: user.username,
+      ...(claims.exp ? { expiresAt: new Date(claims.exp * 1000).toISOString() } : {}),
+    };
   };
 }
 
-export function createLoginGateway(environment: AuthEnvironment): LoginGateway | undefined {
+export async function createLoginGateway(
+  environment: AuthEnvironment,
+  accounts: AuthAccountStore,
+): Promise<LoginGateway | undefined> {
   const configuration = loginConfiguration(environment);
   if (!configuration) return undefined;
+  const unknownAccountPasswordHash = await hashLoginPassword(randomBytes(32).toString("base64url"));
   return {
     async authenticate(username, password) {
       if (username.length > 128 || password.length > 1024) return null;
-      const [usernameMatches, passwordMatches] = await Promise.all([
-        Promise.resolve(constantTimeTextEqual(username, configuration.username)),
-        verifyLoginPassword(password, configuration.passwordHash)
-      ]);
-      if (!usernameMatches || !passwordMatches) return null;
+      let usernameKey: string;
+      try {
+        usernameKey = normalizeUsername(username).usernameKey;
+      } catch {
+        return null;
+      }
+      const account = await accounts.findByUsernameKey(usernameKey);
+      if (!account) {
+        await verifyLoginPassword(password, unknownAccountPasswordHash);
+        return null;
+      }
+      const passwordMatches = await verifyLoginPassword(password, account.passwordHash);
+      if (account.status !== "active" || !passwordMatches) return null;
       const now = Math.floor(Date.now() / 1000);
       const exp = now + configuration.ttlSeconds;
-      const token = signJwt({
-        sub: configuration.userId,
-        iat: now,
-        exp,
-        jti: randomUUID(),
-        ...(configuration.issuer ? { iss: configuration.issuer } : {}),
-        ...(configuration.audience ? { aud: configuration.audience } : {})
-      }, configuration.jwtSecret);
-      return { token, user: { id: configuration.userId, expiresAt: new Date(exp * 1000).toISOString() } };
+      const token = signJwt(
+        {
+          sub: account.id,
+          iat: now,
+          exp,
+          jti: randomUUID(),
+          ...(configuration.issuer ? { iss: configuration.issuer } : {}),
+          ...(configuration.audience ? { aud: configuration.audience } : {}),
+        },
+        configuration.jwtSecret,
+      );
+      return {
+        token,
+        user: { id: account.id, username: account.username, expiresAt: new Date(exp * 1000).toISOString() },
+      };
     },
     sessionCookie(token, maxAge = configuration.ttlSeconds) {
       return serializeSessionCookie(configuration.cookieName, token, maxAge, configuration.secureCookie);
-    }
+    },
   };
 }
 
@@ -107,6 +138,10 @@ export async function hashLoginPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
   const digest = await derivePassword(password, salt);
   return `scrypt$${salt.toString("base64url")}$${digest.toString("base64url")}`;
+}
+
+export async function hashSharedDefaultPassword(password: string | undefined): Promise<string> {
+  return hashLoginPassword(validateSharedPassword(password));
 }
 
 export function userIdFromRequest(request: AuthRequest): string {
@@ -124,30 +159,28 @@ export function userIdFromRequest(request: AuthRequest): string {
   throw new AuthenticationError();
 }
 
-type JwtClaims = { sub: string; iat?: number; exp?: number; nbf?: number; jti?: string; iss?: string; aud?: string | string[] };
+type JwtClaims = {
+  sub: string;
+  iat?: number;
+  exp?: number;
+  nbf?: number;
+  jti?: string;
+  iss?: string;
+  aud?: string | string[];
+};
 
 function loginConfiguration(environment: AuthEnvironment): LoginConfiguration | undefined {
-  const username = environment.AUTH_LOGIN_USERNAME?.trim();
-  const passwordHash = environment.AUTH_LOGIN_PASSWORD_HASH?.trim();
-  const userId = environment.AUTH_LOGIN_USER_ID?.trim();
-  if (!username && !passwordHash && !userId) return undefined;
-  if (!username || !passwordHash || !userId) throw new Error("AUTH_LOGIN_USERNAME、AUTH_LOGIN_PASSWORD_HASH 和 AUTH_LOGIN_USER_ID 必须同时配置");
-  if (username.length > 128) throw new Error("AUTH_LOGIN_USERNAME 不能超过 128 个字符");
-  if (userId.length > 200) throw new Error("AUTH_LOGIN_USER_ID 不能超过 200 个字符");
-  parsePasswordHash(passwordHash);
   const jwtSecret = environment.AUTH_JWT_SECRET?.trim();
-  if (!jwtSecret || jwtSecret.length < 32) throw new Error("启用登录网关时 AUTH_JWT_SECRET 至少需要 32 个字符");
+  if (!jwtSecret) return undefined;
+  if (jwtSecret.length < 32) throw new Error("启用登录网关时 AUTH_JWT_SECRET 至少需要 32 个字符");
   const ttlSeconds = parseSessionTtl(environment.AUTH_SESSION_TTL_SECONDS);
   return {
-    username,
-    passwordHash,
-    userId,
     jwtSecret,
     ...(environment.AUTH_JWT_ISSUER?.trim() ? { issuer: environment.AUTH_JWT_ISSUER.trim() } : {}),
     ...(environment.AUTH_JWT_AUDIENCE?.trim() ? { audience: environment.AUTH_JWT_AUDIENCE.trim() } : {}),
     cookieName: sessionCookieName(environment),
     ttlSeconds,
-    secureCookie: environment.NODE_ENV === "production" || environment.APP_ENV === "production"
+    secureCookie: environment.NODE_ENV === "production" || environment.APP_ENV === "production",
   };
 }
 
@@ -155,7 +188,9 @@ function parseSessionTtl(value: string | undefined): number {
   if (!value?.trim()) return DEFAULT_SESSION_TTL_SECONDS;
   const ttl = Number(value);
   if (!Number.isSafeInteger(ttl) || ttl < MIN_SESSION_TTL_SECONDS || ttl > DEFAULT_SESSION_TTL_SECONDS) {
-    throw new Error(`AUTH_SESSION_TTL_SECONDS 必须是 ${MIN_SESSION_TTL_SECONDS}–${DEFAULT_SESSION_TTL_SECONDS} 之间的整数`);
+    throw new Error(
+      `AUTH_SESSION_TTL_SECONDS 必须是 ${MIN_SESSION_TTL_SECONDS}–${DEFAULT_SESSION_TTL_SECONDS} 之间的整数`,
+    );
   }
   return ttl;
 }
@@ -172,16 +207,32 @@ function verifyJwt(token: string, secret: string, environment: AuthEnvironment):
   if (parts.length !== 3) return null;
   const [encodedHeader, encodedPayload, encodedSignature] = parts;
   try {
-    const header = JSON.parse(Buffer.from(encodedHeader, "base64url").toString("utf8")) as { alg?: unknown; typ?: unknown };
+    const header = JSON.parse(Buffer.from(encodedHeader, "base64url").toString("utf8")) as {
+      alg?: unknown;
+      typ?: unknown;
+    };
     if (header.alg !== "HS256") return null;
     const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8")) as Partial<JwtClaims>;
     if (typeof payload.sub !== "string" || !payload.sub.trim()) return null;
     const expectedSignature = createHmac("sha256", secret).update(`${encodedHeader}.${encodedPayload}`).digest();
     const actualSignature = Buffer.from(encodedSignature, "base64url");
-    if (actualSignature.toString("base64url") !== encodedSignature || expectedSignature.length !== actualSignature.length || !timingSafeEqual(expectedSignature, actualSignature)) return null;
+    if (
+      actualSignature.toString("base64url") !== encodedSignature ||
+      expectedSignature.length !== actualSignature.length ||
+      !timingSafeEqual(expectedSignature, actualSignature)
+    )
+      return null;
 
     const now = Math.floor(Date.now() / 1000);
-    if (typeof payload.exp === "number" && now >= payload.exp) return null;
+    if (typeof payload.iat !== "number" || !Number.isSafeInteger(payload.iat)) return null;
+    if (typeof payload.exp !== "number" || !Number.isSafeInteger(payload.exp)) return null;
+    if (
+      payload.iat > now ||
+      payload.exp <= now ||
+      payload.exp <= payload.iat ||
+      payload.exp - payload.iat > DEFAULT_SESSION_TTL_SECONDS
+    )
+      return null;
     if (typeof payload.nbf === "number" && now < payload.nbf) return null;
     const expectedIssuer = environment.AUTH_JWT_ISSUER?.trim();
     const expectedAudience = environment.AUTH_JWT_AUDIENCE?.trim();
@@ -189,10 +240,11 @@ function verifyJwt(token: string, secret: string, environment: AuthEnvironment):
     if (expectedAudience && !audienceMatches(payload.aud, expectedAudience)) return null;
     return {
       sub: payload.sub.trim(),
-      ...(typeof payload.exp === "number" ? { exp: payload.exp } : {}),
+      exp: payload.exp,
+      iat: payload.iat,
       ...(typeof payload.nbf === "number" ? { nbf: payload.nbf } : {}),
       ...(typeof payload.iss === "string" ? { iss: payload.iss } : {}),
-      ...(typeof payload.aud === "string" || Array.isArray(payload.aud) ? { aud: payload.aud } : {})
+      ...(typeof payload.aud === "string" || Array.isArray(payload.aud) ? { aud: payload.aud } : {}),
     };
   } catch {
     return null;
@@ -203,13 +255,7 @@ function audienceMatches(audience: JwtClaims["aud"], expected: string): boolean 
   return audience === expected || (Array.isArray(audience) && audience.includes(expected));
 }
 
-function constantTimeTextEqual(left: string, right: string): boolean {
-  const leftHash = createHash("sha256").update(left).digest();
-  const rightHash = createHash("sha256").update(right).digest();
-  return timingSafeEqual(leftHash, rightHash);
-}
-
-async function verifyLoginPassword(password: string, encodedHash: string): Promise<boolean> {
+export async function verifyLoginPassword(password: string, encodedHash: string): Promise<boolean> {
   try {
     const { salt, digest } = parsePasswordHash(encodedHash);
     const actual = await derivePassword(password, salt);
@@ -221,11 +267,17 @@ async function verifyLoginPassword(password: string, encodedHash: string): Promi
 
 function parsePasswordHash(encodedHash: string): { salt: Buffer; digest: Buffer } {
   const [algorithm, encodedSalt, encodedDigest, extra] = encodedHash.split("$");
-  if (algorithm !== "scrypt" || !encodedSalt || !encodedDigest || extra !== undefined) throw new Error("AUTH_LOGIN_PASSWORD_HASH 格式无效");
+  if (algorithm !== "scrypt" || !encodedSalt || !encodedDigest || extra !== undefined)
+    throw new Error("数据库中的 scrypt 密码哈希格式无效");
   const salt = Buffer.from(encodedSalt, "base64url");
   const digest = Buffer.from(encodedDigest, "base64url");
-  if (salt.toString("base64url") !== encodedSalt || salt.length < 16 || digest.toString("base64url") !== encodedDigest || digest.length !== PASSWORD_HASH_BYTES) {
-    throw new Error("AUTH_LOGIN_PASSWORD_HASH 格式无效");
+  if (
+    salt.toString("base64url") !== encodedSalt ||
+    salt.length < 16 ||
+    digest.toString("base64url") !== encodedDigest ||
+    digest.length !== PASSWORD_HASH_BYTES
+  ) {
+    throw new Error("数据库中的 scrypt 密码哈希格式无效");
   }
   return { salt, digest };
 }
@@ -240,7 +292,13 @@ function derivePassword(password: string, salt: Buffer): Promise<Buffer> {
 }
 
 function serializeSessionCookie(name: string, value: string, maxAge: number, secure: boolean): string {
-  const attributes = [`${name}=${encodeURIComponent(value)}`, `Max-Age=${maxAge}`, "Path=/", "HttpOnly", "SameSite=Lax"];
+  const attributes = [
+    `${name}=${encodeURIComponent(value)}`,
+    `Max-Age=${maxAge}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+  ];
   if (secure) attributes.push("Secure");
   return attributes.join("; ");
 }
