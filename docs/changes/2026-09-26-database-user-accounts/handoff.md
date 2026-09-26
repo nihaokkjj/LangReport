@@ -1,7 +1,7 @@
 # 数据库账号管理：Handoff
 
 - 变更编号：CHG-2026-09-26-database-user-accounts
-- 状态：ACCEPTED（生产部署验收项待环境验证）
+- 状态：COMMITTED（生产部署验收项待环境验证）
 - 创建时间：2026-09-26
 - 更新时间：2026-09-26
 
@@ -31,9 +31,9 @@
 
 ## 当前 commit 与修改范围
 
-- 当前实现、自动化验收和账号范围代码审查均已完成，进入提交准备阶段。
+- 实现、自动化验收和账号范围代码审查已完成；代码提交为 `16bf52a`（`feat(auth): add database-backed user accounts CHG-2026-09-26-database-user-accounts`）。
 - 本次修改范围按已批准的 task.md 执行，覆盖 packages/db、apps/api、apps/web、contracts、infra 和运维文档。
-- 既有未提交登录页、CONTEXT、旧 login-gateway acceptance/handoff/task、记忆系统文档和 ADR 0025/0026 均保留在工作区，没有加入本次暂存区。
+- 既有未提交登录页、CONTEXT、旧 login-gateway acceptance/handoff/task、记忆系统文档和 ADR 0025/0026 均保留为工作区未提交内容。
 - agent-tasks/current-task.md 跟踪本变更并保留前一登录网关 VERIFYING/PARTIAL 状态；agent-tasks/decisions.md 已登记 WDG-011。
 
 ## 已运行验证

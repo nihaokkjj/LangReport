@@ -1,7 +1,7 @@
 # 数据库账号管理：Design
 
 - 变更编号：CHG-2026-09-26-database-user-accounts
-- 状态：ACCEPTED
+- 状态：COMMITTED（生产部署实测待目标环境）
 - 创建时间：2026-09-26
 - 更新时间：2026-09-26
 
@@ -197,12 +197,12 @@ CLI 仅能通过服务器/API 容器运行，访问权限由操作系统和部�
 
 | 需求 | 设计 | 任务 | 测试 | commit |
 | --- | --- | --- | --- | --- |
-| R1 数据库用户和唯一用户名 | 数据模型 | T1 | DB migration/integration | 已实现，提交待记录 |
-| R2 一次性启动引导与旧关系迁移 | 引导与迁移事务 | T1、T2 | empty/existing DB、迁移事务 | 已实现，提交待记录 |
-| R3 数据库登录和安全会话 | 认证与会话、API | T2 | API Auth unit/HTTP | 已实现，提交待记录 |
-| R4 自助密码修改 | API、模块边界 | T4 | API contract/Web E2E | 已实现，提交待记录 |
-| R5 CLI 生命周期管理 | 账号 CLI | T3 | CLI integration | 已实现，提交待记录 |
-| R6 私有 Workspace 和历史数据 | 迁移、权限 | T1、T2 | DB authorization integration | 已实现，提交待记录 |
-| R7 停用/重置会话语义 | 认证与会话 | T2 | JWT exp regression | 已实现，提交待记录 |
-| R8 入口限速、不加应用失败窗口 | 外部契约、权限 | T5 | Nginx config/production smoke | 配置与应用实现完成；生产实测待部署 |
-| R9 文档、契约与部署同步 | 模块边界、测试策略 | T5 | docs-check/API Console | 已实现，提交待记录 |
+| R1 数据库用户和唯一用户名 | 数据模型 | T1 | DB migration/integration | 16bf52a |
+| R2 一次性启动引导与旧关系迁移 | 引导与迁移事务 | T1、T2 | empty/existing DB、迁移事务 | 16bf52a |
+| R3 数据库登录和安全会话 | 认证与会话、API | T2 | API Auth unit/HTTP | 16bf52a |
+| R4 自助密码修改 | API、模块边界 | T4 | API contract/Web E2E | 16bf52a |
+| R5 CLI 生命周期管理 | 账号 CLI | T3 | CLI integration | 16bf52a |
+| R6 私有 Workspace 和历史数据 | 迁移、权限 | T1、T2 | DB authorization integration | 16bf52a |
+| R7 停用/重置会话语义 | 认证与会话 | T2 | JWT exp regression | 16bf52a |
+| R8 入口限速、不加应用失败窗口 | 外部契约、权限 | T5 | Nginx config/production smoke | 16bf52a（配置已提交；生产实测待部署） |
+| R9 文档、契约与部署同步 | 模块边界、测试策略 | T5 | docs-check/API Console | 16bf52a |

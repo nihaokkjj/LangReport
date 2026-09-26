@@ -1,7 +1,7 @@
 # 数据库账号管理：Test Plan
 
 - 变更编号：CHG-2026-09-26-database-user-accounts
-- 状态：ACCEPTED
+- 状态：COMMITTED（生产部署验收项待目标环境）
 - 创建时间：2026-09-26
 - 更新时间：2026-09-26
 

@@ -1,7 +1,7 @@
 # 数据库账号管理：Acceptance
 
 - 变更编号：CHG-2026-09-26-database-user-accounts
-- 状态：ACCEPTED（生产部署验收项待环境验证）
+- 状态：COMMITTED（生产部署验收项待环境验证）
 - 创建时间：2026-09-26
 - 更新时间：2026-09-26
 
@@ -9,7 +9,7 @@
 
 - 结论：代码与自动化验收通过；生产网络验收未执行
 - 验收时间：2026-09-26
-- 验证 commit：N/A
+- 验证 commit：16bf52a
 
 用户已批准完整 SDD。代码、隔离集成、API/Contracts/Web 自动化和独立快照复核均已完成。未提供生产部署环境，因此不把 Nginx/WAF 实际限速、外部 API 旁路和真实 HTTPS Cookie 行为记为通过。
 
