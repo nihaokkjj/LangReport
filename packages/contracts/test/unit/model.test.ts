@@ -17,7 +17,7 @@ import {
   type RuntimeModelRequest,
   generationValidationSchema,
   generationDecisionSchema,
-  validationRecordSchema
+  validationRecordSchema,
 } from "../../src/index.js";
 
 const validIntent = {
@@ -31,18 +31,20 @@ const validIntent = {
   measureColumns: ["销售额"],
   comparison: "none" as const,
   title: "各区域月度销售额",
-  confidence: 0.92
+  confidence: 0.92,
 };
 
 const validPlan = {
   version: "v1" as const,
   rationale: "按月份和区域汇总销售额",
-  steps: [{
-    kind: "aggregate" as const,
-    groupBy: ["月份", "区域"],
-    measures: [{ column: "销售额", operation: "sum" as const, outputColumn: "销售额_sum" }]
-  }],
-  expectedColumns: ["月份", "区域", "销售额_sum"]
+  steps: [
+    {
+      kind: "aggregate" as const,
+      groupBy: ["月份", "区域"],
+      measures: [{ column: "销售额", operation: "sum" as const, outputColumn: "销售额_sum" }],
+    },
+  ],
+  expectedColumns: ["月份", "区域", "销售额_sum"],
 };
 
 const validChartSelection = {
@@ -50,7 +52,7 @@ const validChartSelection = {
   xField: "月份",
   yField: "销售额_sum",
   seriesField: "区域",
-  tooltipFields: ["销售额_sum"]
+  tooltipFields: ["销售额_sum"],
 };
 
 const validProposal = {
@@ -63,7 +65,7 @@ const validProposal = {
     source: "model_output" as const,
     message: "请确认销售额口径",
     field: "销售额",
-    evidence: [{ label: "可选指标", value: "销售额、净销售额" }]
+    evidence: [{ label: "可选指标", value: "销售额、净销售额" }],
   },
   code: "metric_ambiguous",
   target: "metric" as const,
@@ -74,7 +76,7 @@ const validProposal = {
   field: "销售额",
   candidates: [],
   recommendedCandidate: null,
-  requiresUserDecision: true as const
+  requiresUserDecision: true as const,
 };
 
 const validPreparedModelContext = {
@@ -157,7 +159,7 @@ test("chart-plan ready decision contains a plan and chart selection", () => {
     intent: validIntent,
     plan: validPlan,
     chartSelection: validChartSelection,
-    proposal: null
+    proposal: null,
   });
 
   assert.equal(decision.decision, "ready");
@@ -172,7 +174,7 @@ test("chart-plan needs_clarification decision contains one Proposal and no plan"
     intent: null,
     plan: null,
     chartSelection: null,
-    proposal: validProposal
+    proposal: validProposal,
   });
 
   assert.equal(decision.decision, "needs_clarification");
@@ -186,7 +188,7 @@ test("Generation Readiness Proposal carries one diagnostic and deterministic can
     label: "按「月份」作为横轴（需要保留该字段）",
     source: "snapshot_requires_transform" as const,
     requiresTransformAdjustment: true,
-    evidence: [{ label: "月份 字段证据", value: "Data Snapshot，需调整变换；类型=date；唯一值=2；缺失值=0" }]
+    evidence: [{ label: "月份 字段证据", value: "Data Snapshot，需调整变换；类型=date；唯一值=2；缺失值=0" }],
   };
   const proposal = generationClarificationProposalSchema.parse({
     version: "v1",
@@ -198,7 +200,7 @@ test("Generation Readiness Proposal carries one diagnostic and deterministic can
       source: "deterministic_gate",
       message: "当前图表缺少可验证的横轴字段",
       field: "chartSelection.xField",
-      evidence: [{ label: "当前 Transform 输出", value: "区域、销售额_sum" }]
+      evidence: [{ label: "当前 Transform 输出", value: "区域、销售额_sum" }],
     },
     code: "MISSING_X_FIELD",
     target: "x_field",
@@ -209,66 +211,85 @@ test("Generation Readiness Proposal carries one diagnostic and deterministic can
     field: "chartSelection.xField",
     candidates: [candidate],
     recommendedCandidate: candidate,
-    requiresUserDecision: true
+    requiresUserDecision: true,
   });
   assert.equal(proposal.diagnostic.source, "deterministic_gate");
   assert.equal(proposal.recommendedCandidate?.requiresTransformAdjustment, true);
   assert.throws(() => generationClarificationProposalSchema.parse({ ...proposal, requiresUserDecision: false }));
-  assert.throws(() => generationClarificationProposalSchema.parse({ ...proposal, recommendedCandidate: { ...candidate, value: "不存在" } }));
+  assert.throws(() =>
+    generationClarificationProposalSchema.parse({
+      ...proposal,
+      recommendedCandidate: { ...candidate, value: "不存在" },
+    }),
+  );
 });
 
 test("generation decisions accept only current-cycle actions and bounded targets", () => {
-  assert.deepEqual(generationDecisionSchema.parse({
-    action: "accept_recommendation",
-    parentJobId: "00000000-0000-4000-8000-000000000099",
-    questionCode: "MISSING_X_FIELD",
-    target: "x_field",
-    selectedValue: "月份"
-  }), {
-    action: "accept_recommendation",
-    parentJobId: "00000000-0000-4000-8000-000000000099",
-    questionCode: "MISSING_X_FIELD",
-    target: "x_field",
-    selectedValue: "月份"
-  });
-  assert.deepEqual(generationDecisionSchema.parse({
-    action: "adjust_direction",
-    parentJobId: "00000000-0000-4000-8000-000000000099",
-    text: "改成按区域比较"
-  }).action, "adjust_direction");
-  assert.throws(() => generationDecisionSchema.parse({
-    action: "select_candidate",
-    parentJobId: "not-a-uuid",
-    questionCode: "MISSING_X_FIELD",
-    target: "y_field",
-    selectedValue: "销售额"
-  }));
+  assert.deepEqual(
+    generationDecisionSchema.parse({
+      action: "accept_recommendation",
+      parentJobId: "00000000-0000-4000-8000-000000000099",
+      questionCode: "MISSING_X_FIELD",
+      target: "x_field",
+      selectedValue: "月份",
+    }),
+    {
+      action: "accept_recommendation",
+      parentJobId: "00000000-0000-4000-8000-000000000099",
+      questionCode: "MISSING_X_FIELD",
+      target: "x_field",
+      selectedValue: "月份",
+    },
+  );
+  assert.deepEqual(
+    generationDecisionSchema.parse({
+      action: "adjust_direction",
+      parentJobId: "00000000-0000-4000-8000-000000000099",
+      text: "改成按区域比较",
+    }).action,
+    "adjust_direction",
+  );
+  assert.throws(() =>
+    generationDecisionSchema.parse({
+      action: "select_candidate",
+      parentJobId: "not-a-uuid",
+      questionCode: "MISSING_X_FIELD",
+      target: "y_field",
+      selectedValue: "销售额",
+    }),
+  );
 });
 
 test("chart-plan decisions cannot contain both a plan and a Proposal", () => {
-  assert.throws(() => chartPlanDecisionSchema.parse({
-    decision: "ready",
-    intent: validIntent,
-    plan: validPlan,
-    chartSelection: validChartSelection,
-    proposal: validProposal
-  }));
+  assert.throws(() =>
+    chartPlanDecisionSchema.parse({
+      decision: "ready",
+      intent: validIntent,
+      plan: validPlan,
+      chartSelection: validChartSelection,
+      proposal: validProposal,
+    }),
+  );
 
-  assert.throws(() => chartPlanDecisionSchema.parse({
-    decision: "needs_clarification",
-    intent: null,
-    plan: validPlan,
-    chartSelection: null,
-    proposal: { ...validProposal, code: "missing_time_range" }
-  }));
+  assert.throws(() =>
+    chartPlanDecisionSchema.parse({
+      decision: "needs_clarification",
+      intent: null,
+      plan: validPlan,
+      chartSelection: null,
+      proposal: { ...validProposal, code: "missing_time_range" },
+    }),
+  );
 
-  assert.throws(() => chartPlanDecisionSchema.parse({
-    decision: "needs_clarification",
-    intent: null,
-    plan: null,
-    chartSelection: null,
-    proposal: null
-  }));
+  assert.throws(() =>
+    chartPlanDecisionSchema.parse({
+      decision: "needs_clarification",
+      intent: null,
+      plan: null,
+      chartSelection: null,
+      proposal: null,
+    }),
+  );
 });
 
 test("prepared model context is a strict canonical text projection", () => {
@@ -278,18 +299,24 @@ test("prepared model context is a strict canonical text projection", () => {
   assert.equal(context.fieldProfiles[0]?.name, "月份");
   assert.equal(context.samples[0]?.text, "月份=2026-01；区域=华东；销售额=125");
 
-  assert.throws(() => preparedModelContextSchema.parse({
-    ...validPreparedModelContext,
-    reasoning: "不得把隐藏推理放入首期上下文"
-  }));
-  assert.throws(() => preparedModelContextSchema.parse({
-    ...validPreparedModelContext,
-    historyPolicy: { strategy: "full_conversation", adapterVersion: "v1" }
-  }));
-  assert.throws(() => preparedModelContextSchema.parse({
-    ...validPreparedModelContext,
-    historyPolicy: { strategy: "canonical_text_context", adapterVersion: "another-projection-v1" }
-  }));
+  assert.throws(() =>
+    preparedModelContextSchema.parse({
+      ...validPreparedModelContext,
+      reasoning: "不得把隐藏推理放入首期上下文",
+    }),
+  );
+  assert.throws(() =>
+    preparedModelContextSchema.parse({
+      ...validPreparedModelContext,
+      historyPolicy: { strategy: "full_conversation", adapterVersion: "v1" },
+    }),
+  );
+  assert.throws(() =>
+    preparedModelContextSchema.parse({
+      ...validPreparedModelContext,
+      historyPolicy: { strategy: "canonical_text_context", adapterVersion: "another-projection-v1" },
+    }),
+  );
 });
 
 test("chart-plan output descriptor is generated from the local decision contract", () => {
@@ -313,24 +340,26 @@ test("execution assembly is versioned, non-secret, and does not fabricate legacy
       id: "evidence-generation-graph",
       definitionHash: `sha256:${"a".repeat(64)}`,
       runtimeVersion: "@langchain/langgraph@1.4.15",
-      checkpointerMode: "none"
+      checkpointerMode: "none",
     },
     harness: { adapterVersion: "structured-model-harness-v1" },
     structuredOutput: {
       contractId: "chart-plan",
       contractVersion: "v1",
-      contractHash: `sha256:${"b".repeat(64)}`
+      contractHash: `sha256:${"b".repeat(64)}`,
     },
-    modelRoute: { routeSnapshotId: "route-001" }
+    modelRoute: { routeSnapshotId: "route-001" },
   });
 
   assert.equal(assembly.graph.checkpointerMode, "none");
   assert.equal(assembly.modelRoute.routeSnapshotId, "route-001");
   assert.throws(() => executionAssemblySchema.parse({ ...assembly, apiKey: "must-not-persist" }));
-  assert.throws(() => executionAssemblySchema.parse({
-    ...assembly,
-    structuredOutput: { ...assembly.structuredOutput, rawProviderResponse: "must-not-persist" }
-  }));
+  assert.throws(() =>
+    executionAssemblySchema.parse({
+      ...assembly,
+      structuredOutput: { ...assembly.structuredOutput, rawProviderResponse: "must-not-persist" },
+    }),
+  );
 });
 
 test("result summary preserves complete transformed facts without preview rows", () => {
@@ -342,7 +371,7 @@ test("result summary preserves complete transformed facts without preview rows",
     columns: ["月份", "销售额"],
     numericSummaries: [{ field: "销售额", count: 600, sum: 180300, min: 1, max: 600 }],
     topGroups: [{ field: "销售额", value: 600, dimensions: { 月份: "2026-600" } }],
-    qualityWarnings: []
+    qualityWarnings: [],
   });
 
   assert.equal(summary.transformedRowCount, 600);
@@ -364,74 +393,82 @@ test("persisted request excludes runtime parser and cancellation objects", () =>
     output: createChartPlanOutputDescriptor(),
     budget: {
       deadlineAt: 1799011200000,
-      maxOutputTokens: 2048
-    }
+      maxOutputTokens: 2048,
+    },
   });
 
   assert.equal(persistedRequest.output.schemaId, "chart-plan");
-  assert.throws(() => persistedModelRequestSchema.parse({
-    ...persistedRequest,
-    output: {
-      ...persistedRequest.output,
-      parse: () => validIntent
-    }
-  }));
+  assert.throws(() =>
+    persistedModelRequestSchema.parse({
+      ...persistedRequest,
+      output: {
+        ...persistedRequest.output,
+        parse: () => validIntent,
+      },
+    }),
+  );
 });
 
 test("model result has mutually exclusive success and error envelopes", () => {
   const success = modelResultSchema.parse({
     status: "ok",
     data: { decision: "needs_clarification" },
-    invocationId: "invocation-001"
+    invocationId: "invocation-001",
   });
   const failure = modelResultSchema.parse({
     status: "error",
     code: "MODEL_TIMEOUT",
     message: "模型调用超过截止时间",
     retryable: true,
-    invocationId: "invocation-001"
+    invocationId: "invocation-001",
   });
 
   assert.equal(success.status, "ok");
   assert.equal(failure.status, "error");
-  assert.throws(() => modelResultSchema.parse({
-    status: "ok",
-    data: validIntent,
-    code: "MODEL_TIMEOUT",
-    invocationId: "invocation-001"
-  }));
-  assert.throws(() => modelResultSchema.parse({
-    status: "error",
-    data: validIntent,
-    code: "MODEL_TIMEOUT",
-    message: "非法混合结果",
-    retryable: true,
-    invocationId: "invocation-001"
-  }));
-  assert.throws(() => modelResultSchema.parse({
-    status: "error",
-    code: "MODEL_TIMEOUT",
-    message: "审计记录不能属于另一次调用",
-    retryable: true,
-    invocationId: "invocation-001",
-    invocation: {
-      version: "v1",
-      invocationId: "invocation-002",
-      routeSnapshotId: "route-001",
-      provider: "bailian",
-      modelId: "qwen-plus",
-      adapterVersion: "bailian-qwen-native-http-v1",
-      startedAt: "2026-09-06T00:00:00.000Z",
-      completedAt: "2026-09-06T00:00:01.000Z",
-      outcome: "failed",
-      providerRequestId: null,
-      providerModelId: null,
-      finishReason: null,
-      usage: { inputTokens: null, outputTokens: null, totalTokens: null },
-      httpStatus: null,
-      errorCode: "MODEL_TIMEOUT"
-    }
-  }));
+  assert.throws(() =>
+    modelResultSchema.parse({
+      status: "ok",
+      data: validIntent,
+      code: "MODEL_TIMEOUT",
+      invocationId: "invocation-001",
+    }),
+  );
+  assert.throws(() =>
+    modelResultSchema.parse({
+      status: "error",
+      data: validIntent,
+      code: "MODEL_TIMEOUT",
+      message: "非法混合结果",
+      retryable: true,
+      invocationId: "invocation-001",
+    }),
+  );
+  assert.throws(() =>
+    modelResultSchema.parse({
+      status: "error",
+      code: "MODEL_TIMEOUT",
+      message: "审计记录不能属于另一次调用",
+      retryable: true,
+      invocationId: "invocation-001",
+      invocation: {
+        version: "v1",
+        invocationId: "invocation-002",
+        routeSnapshotId: "route-001",
+        provider: "bailian",
+        modelId: "qwen-plus",
+        adapterVersion: "bailian-qwen-native-http-v1",
+        startedAt: "2026-09-06T00:00:00.000Z",
+        completedAt: "2026-09-06T00:00:01.000Z",
+        outcome: "failed",
+        providerRequestId: null,
+        providerModelId: null,
+        finishReason: null,
+        usage: { inputTokens: null, outputTokens: null, totalTokens: null },
+        httpStatus: null,
+        errorCode: "MODEL_TIMEOUT",
+      },
+    }),
+  );
 });
 
 test("model gateway interface keeps parsing and cancellation runtime-only", async () => {
@@ -440,9 +477,9 @@ test("model gateway interface keeps parsing and cancellation runtime-only", asyn
       return {
         status: "ok" as const,
         data: request.output.parse({}),
-        invocationId: request.invocationId
+        invocationId: request.invocationId,
       };
-    }
+    },
   };
 
   const result = await gateway.generateStructured({
@@ -456,13 +493,13 @@ test("model gateway interface keeps parsing and cancellation runtime-only", asyn
     context: validPreparedModelContext,
     output: {
       ...createChartPlanOutputDescriptor(),
-      parse: () => validIntent
+      parse: () => validIntent,
     },
     budget: {
       deadlineAt: 1799011200000,
-      maxOutputTokens: 2048
+      maxOutputTokens: 2048,
     },
-    signal: new AbortController().signal
+    signal: new AbortController().signal,
   });
 
   assert.equal(result.status, "ok");
@@ -472,14 +509,16 @@ test("model gateway interface keeps parsing and cancellation runtime-only", asyn
 test("history policy fixes the first context strategy", () => {
   const policy = historyPolicySchema.parse({
     strategy: "canonical_text_context",
-    adapterVersion: "v1"
+    adapterVersion: "v1",
   });
 
   assert.equal(policy.strategy, "canonical_text_context");
-  assert.throws(() => historyPolicySchema.parse({
-    strategy: "full_conversation",
-    adapterVersion: "v1"
-  }));
+  assert.throws(() =>
+    historyPolicySchema.parse({
+      strategy: "full_conversation",
+      adapterVersion: "v1",
+    }),
+  );
 });
 
 test("model profile and run snapshot retain effective routing and options", () => {
@@ -496,19 +535,19 @@ test("model profile and run snapshot retain effective routing and options", () =
     tasks: ["chart-plan"],
     structuredOutput: {
       methods: ["jsonSchema", "jsonMode"],
-      schemaVersion: "v1"
+      schemaVersion: "v1",
     },
     capabilities: {
       streaming: false,
       cancellation: true,
       usageMetadata: true,
-      toolCalling: false
+      toolCalling: false,
     },
     historyPolicy: {
       strategy: "canonical_text_context",
-      adapterVersion: "v1"
+      adapterVersion: "v1",
     },
-    verifiedAt: "2026-09-05T00:00:00.000Z"
+    verifiedAt: "2026-09-05T00:00:00.000Z",
   });
 
   const snapshot = modelRunSnapshotSchema.parse({
@@ -521,10 +560,10 @@ test("model profile and run snapshot retain effective routing and options", () =
     effectiveOptions: { temperature: 0.1, maxOutputTokens: 2048 },
     historyPolicy: {
       strategy: "canonical_text_context",
-      adapterVersion: "v1"
+      adapterVersion: "v1",
     },
     contextProjectionHash: "sha256:run-context",
-    capturedAt: "2026-09-05T00:00:00.000Z"
+    capturedAt: "2026-09-05T00:00:00.000Z",
   });
 
   assert.equal(profile.modelId, "qwen-test");
@@ -535,27 +574,33 @@ test("model profile and run snapshot retain effective routing and options", () =
 test("validation records have explicit status, errors, and validator version", () => {
   const record = validationRecordSchema.parse({
     status: "failed",
-    errors: [{
-      code: "FIELD_NOT_FOUND",
-      path: "chartSelection.yField",
-      message: "字段不存在于 Data Snapshot",
-      severity: "error"
-    }],
+    errors: [
+      {
+        code: "FIELD_NOT_FOUND",
+        path: "chartSelection.yField",
+        message: "字段不存在于 Data Snapshot",
+        severity: "error",
+      },
+    ],
     validatorVersion: "plan-validator-v1",
-    checkedAt: "2026-09-05T00:00:00.000Z"
+    checkedAt: "2026-09-05T00:00:00.000Z",
   });
 
   assert.equal(record.status, "failed");
   assert.equal(record.errors[0]?.path, "chartSelection.yField");
-  assert.throws(() => validationRecordSchema.parse({
-    status: "passed",
-    errors: [{
-      code: "FIELD_NOT_FOUND",
-      message: "不应在通过记录中出现错误",
-      severity: "error"
-    }],
-    validatorVersion: "plan-validator-v1"
-  }));
+  assert.throws(() =>
+    validationRecordSchema.parse({
+      status: "passed",
+      errors: [
+        {
+          code: "FIELD_NOT_FOUND",
+          message: "不应在通过记录中出现错误",
+          severity: "error",
+        },
+      ],
+      validatorVersion: "plan-validator-v1",
+    }),
+  );
 });
 
 test("generation validation persists plan and render records as separate facts", () => {
@@ -564,21 +609,23 @@ test("generation validation persists plan and render records as separate facts",
       status: "passed",
       errors: [],
       validatorVersion: "plan-validator-v1",
-      checkedAt: "2026-09-06T00:00:00.000Z"
+      checkedAt: "2026-09-06T00:00:00.000Z",
     },
     renderValidation: {
       status: "pending",
       errors: [],
-      validatorVersion: "flint-render-v1"
-    }
+      validatorVersion: "flint-render-v1",
+    },
   });
 
   assert.equal(record.planValidation.status, "passed");
   assert.equal(record.renderValidation.status, "pending");
-  assert.throws(() => generationValidationSchema.parse({
-    plan: record.planValidation,
-    render: record.renderValidation
-  }));
+  assert.throws(() =>
+    generationValidationSchema.parse({
+      plan: record.planValidation,
+      render: record.renderValidation,
+    }),
+  );
 });
 
 test("model error codes distinguish authentication, throttling, timeout, capability, tool, output, and budget failures", () => {
@@ -589,7 +636,7 @@ test("model error codes distinguish authentication, throttling, timeout, capabil
     "MODEL_CAPABILITY_UNSUPPORTED",
     "MODEL_TOOL_FAILED",
     "MODEL_OUTPUT_INVALID",
-    "MODEL_BUDGET_EXCEEDED"
+    "MODEL_BUDGET_EXCEEDED",
   ] as const;
 
   for (const code of requiredCodes) assert.equal(modelErrorCodeSchema.parse(code), code);

@@ -23,7 +23,14 @@ import {
   users,
   workspaces,
 } from "@langreport/db";
-import { executionAssemblySchema, flintSpecSchema, pluginSnapshotSchema, pluginUsageSchema, resultSummarySchema, validationRecordSchema } from "@langreport/contracts";
+import {
+  executionAssemblySchema,
+  flintSpecSchema,
+  pluginSnapshotSchema,
+  pluginUsageSchema,
+  resultSummarySchema,
+  validationRecordSchema,
+} from "@langreport/contracts";
 import { projectConversationToCanonicalTextContext } from "@langreport/generation";
 import { createUserPreferenceMemory, getMemoryContextForGeneration } from "@langreport/memory";
 import {
@@ -31,9 +38,15 @@ import {
   listBuiltinPluginCatalog,
   resolveProjectPluginContext,
   revokePluginInstallation,
-  setProjectPluginBinding
+  setProjectPluginBinding,
 } from "@langreport/plugins";
-import { conversationUploadObjectKey, deleteObject, getObject, putObject, snapshotSourceObjectKey } from "@langreport/storage";
+import {
+  conversationUploadObjectKey,
+  deleteObject,
+  getObject,
+  putObject,
+  snapshotSourceObjectKey,
+} from "@langreport/storage";
 import type { ColumnProfile, DataRow } from "@langreport/data-engine";
 
 const { processGenerationJob } = await import("../../src/index.js");
@@ -52,13 +65,19 @@ test("real generation and render workers persist plugin usage and historical sna
       usernameKey: userId,
       passwordHash: "integration-test-only",
     });
-    const [workspace] = await db.insert(workspaces).values({ name: `Phase 5 Worker ${suffix}` }).returning();
+    const [workspace] = await db
+      .insert(workspaces)
+      .values({ name: `Phase 5 Worker ${suffix}` })
+      .returning();
     workspaceId = workspace.id;
-    const [project] = await db.insert(projects).values({
-      workspaceId: workspace.id,
-      name: `Phase 5 Worker Project ${suffix}`,
-      slug: `phase5-worker-${suffix.slice(0, 8)}`
-    }).returning();
+    const [project] = await db
+      .insert(projects)
+      .values({
+        workspaceId: workspace.id,
+        name: `Phase 5 Worker Project ${suffix}`,
+        slug: `phase5-worker-${suffix.slice(0, 8)}`,
+      })
+      .returning();
     await db.insert(members).values({ workspaceId: workspace.id, userId, role: "owner" });
     await db.insert(projectMembers).values({ projectId: project.id, userId, role: "editor" });
 
@@ -69,7 +88,7 @@ test("real generation and render workers persist plugin usage and historical sna
       userId,
       manifest: catalogEntry.manifest,
       source: "builtin",
-      idempotencyKey: `worker-install-${suffix}`
+      idempotencyKey: `worker-install-${suffix}`,
     });
     const installation = installationResult.installation;
     const themeRef = {
@@ -77,14 +96,14 @@ test("real generation and render workers persist plugin usage and historical sna
       pluginId: installation.pluginId,
       version: installation.version,
       capabilityId: "sales-brand",
-      contentHash: installation.contentHash
+      contentHash: installation.contentHash,
     };
     await setProjectPluginBinding({
       projectId: project.id,
       installationId: installation.id,
       userId,
       enabled: true,
-      idempotencyKey: `worker-enable-${suffix}`
+      idempotencyKey: `worker-enable-${suffix}`,
     });
     const pluginResolution = await resolveProjectPluginContext({ projectId: project.id, userId, themeRef });
 
@@ -92,12 +111,12 @@ test("real generation and render workers persist plugin usage and historical sna
       { 月份: "2026-01", 区域: "华东", 销售额: 100 },
       { 月份: "2026-02", 区域: "华东", 销售额: 130 },
       { 月份: "2026-01", 区域: "华南", 销售额: 80 },
-      { 月份: "2026-02", 区域: "华南", 销售额: 110 }
+      { 月份: "2026-02", 区域: "华南", 销售额: 110 },
     ];
     const profiles: ColumnProfile[] = [
       { name: "月份", inferredType: "date", nullCount: 0, distinctCount: 2, sampleValues: ["2026-01", "2026-02"] },
       { name: "区域", inferredType: "string", nullCount: 0, distinctCount: 2, sampleValues: ["华东", "华南"] },
-      { name: "销售额", inferredType: "number", nullCount: 0, distinctCount: 4, sampleValues: [100, 130, 80, 110] }
+      { name: "销售额", inferredType: "number", nullCount: 0, distinctCount: 4, sampleValues: [100, 130, 80, 110] },
     ];
     const executionAssembly = executionAssemblySchema.parse({
       version: "v1",
@@ -105,29 +124,35 @@ test("real generation and render workers persist plugin usage and historical sna
         id: "evidence-generation-graph",
         definitionHash: `sha256:${"a".repeat(64)}`,
         runtimeVersion: "@langchain/langgraph@1.4.15",
-        checkpointerMode: "none"
+        checkpointerMode: "none",
       },
       harness: { adapterVersion: "structured-model-harness-v1" },
       structuredOutput: {
         contractId: "chart-plan",
         contractVersion: "v1",
-        contractHash: `sha256:${"b".repeat(64)}`
+        contractHash: `sha256:${"b".repeat(64)}`,
       },
-      modelRoute: { routeSnapshotId: "worker-route-v1" }
+      modelRoute: { routeSnapshotId: "worker-route-v1" },
     });
-    const [conversation] = await db.insert(conversations).values({ projectId: project.id, title: "Phase 5 Worker", createdBy: userId }).returning();
+    const [conversation] = await db
+      .insert(conversations)
+      .values({ projectId: project.id, title: "Phase 5 Worker", createdBy: userId })
+      .returning();
     const assetId = randomUUID();
-    const [asset] = await db.insert(dataAssets).values({
-      id: assetId,
-      projectId: project.id,
-      sourceConversationId: conversation.id,
-      name: "phase5-worker.csv",
-      sourceType: "pasted",
-      mimeType: "text/csv",
-      sizeBytes: 1,
-      status: "ready",
-      createdBy: userId
-    }).returning();
+    const [asset] = await db
+      .insert(dataAssets)
+      .values({
+        id: assetId,
+        projectId: project.id,
+        sourceConversationId: conversation.id,
+        name: "phase5-worker.csv",
+        sourceType: "pasted",
+        mimeType: "text/csv",
+        sizeBytes: 1,
+        status: "ready",
+        createdBy: userId,
+      })
+      .returning();
     const snapshotId = randomUUID();
     const normalizedObjectKey = conversationUploadObjectKey({
       workspaceId: workspace.id,
@@ -135,28 +160,35 @@ test("real generation and render workers persist plugin usage and historical sna
       conversationId: conversation.id,
       assetId: asset.id,
       kind: "normalized",
-      filename: `${snapshotId}.json`
+      filename: `${snapshotId}.json`,
     });
     objectKeys.push(normalizedObjectKey);
-    await putObject({ key: normalizedObjectKey, body: JSON.stringify({ columns: profiles.map((profile) => profile.name), rows }), contentType: "application/json" });
-    const [snapshot] = await db.insert(dataSnapshots).values({
-      id: snapshotId,
-      assetId: asset.id,
-      version: 1,
-      rowCount: rows.length,
-      columnCount: profiles.length,
-      schema: profiles,
-      preview: rows,
-      sourceObjectKey: snapshotSourceObjectKey({
-        workspaceId: workspace.id,
-        projectId: project.id,
-        conversationId: conversation.id,
+    await putObject({
+      key: normalizedObjectKey,
+      body: JSON.stringify({ columns: profiles.map((profile) => profile.name), rows }),
+      contentType: "application/json",
+    });
+    const [snapshot] = await db
+      .insert(dataSnapshots)
+      .values({
+        id: snapshotId,
         assetId: asset.id,
-        snapshotId,
-        filename: "phase5-worker.csv"
-      }),
-      normalizedObjectKey
-    }).returning();
+        version: 1,
+        rowCount: rows.length,
+        columnCount: profiles.length,
+        schema: profiles,
+        preview: rows,
+        sourceObjectKey: snapshotSourceObjectKey({
+          workspaceId: workspace.id,
+          projectId: project.id,
+          conversationId: conversation.id,
+          assetId: asset.id,
+          snapshotId,
+          filename: "phase5-worker.csv",
+        }),
+        normalizedObjectKey,
+      })
+      .returning();
     const memoryContext = await getMemoryContextForGeneration({
       projectId: project.id,
       conversationId: conversation.id,
@@ -211,7 +243,11 @@ test("real generation and render workers persist plugin usage and historical sna
       restoreGenerationLogs();
     }
     const [generatedJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id)).limit(1);
-    assert.equal(generatedJob.status, "rendering", generatedJob.errorMessage ?? generatedJob.errorCode ?? "generation did not enter rendering");
+    assert.equal(
+      generatedJob.status,
+      "rendering",
+      generatedJob.errorMessage ?? generatedJob.errorCode ?? "generation did not enter rendering",
+    );
     const generatedJobPayload = JSON.stringify(generatedJob);
     assert.equal(generatedJobPayload.includes(privatePreference.statement), false);
     assert.equal(generatedJobPayload.includes(privatePreference.id), false);
@@ -227,8 +263,14 @@ test("real generation and render workers persist plugin usage and historical sna
     const usage = pluginUsageSchema.parse(generatedJob.pluginUsage);
     assert.equal(usage.selectedTemplate?.id, "monthly-regional-sales");
     assert.equal(usage.selectedTheme?.source, "plugin");
-    assert.ok(usage.usedCapabilities.some((capability) => capability.kind === "validator" && capability.id === "time-required-for-trend"));
-    assert.ok(usage.usedCapabilities.some((capability) => capability.kind === "semantic-type" && capability.id === "Region"));
+    assert.ok(
+      usage.usedCapabilities.some(
+        (capability) => capability.kind === "validator" && capability.id === "time-required-for-trend",
+      ),
+    );
+    assert.ok(
+      usage.usedCapabilities.some((capability) => capability.kind === "semantic-type" && capability.id === "Region"),
+    );
 
     const restoreRenderLogs = captureConsoleOutput(workerLogs);
     try {
@@ -246,7 +288,10 @@ test("real generation and render workers persist plugin usage and historical sna
     const finalRenderValidation = validationRecordSchema.parse(renderedJob.renderValidation);
     assert.equal(finalRenderValidation.status, "passed");
     assert.match(finalRenderValidation.validatorVersion, /static-svg-html/);
-    assert.deepEqual((renderedJob.generationAudit as { renderValidation?: unknown }).renderValidation, renderedJob.renderValidation);
+    assert.deepEqual(
+      (renderedJob.generationAudit as { renderValidation?: unknown }).renderValidation,
+      renderedJob.renderValidation,
+    );
     const outputs = renderedJob.outputs as { svg?: string; png?: string; html?: string; vegaLite?: string };
     for (const key of [outputs.svg, outputs.png, outputs.html, outputs.vegaLite]) {
       if (typeof key !== "string") throw new Error("render output key is missing");
@@ -262,7 +307,11 @@ test("real generation and render workers persist plugin usage and historical sna
     const vegaLite = JSON.parse((await getObject(outputs.vegaLite as string)).toString("utf8")) as { _theme?: unknown };
     assert.equal(typeof vegaLite._theme, "object");
 
-    const [revision] = await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, job.id)).limit(1);
+    const [revision] = await db
+      .select()
+      .from(chartRevisions)
+      .where(eq(chartRevisions.generationJobId, job.id))
+      .limit(1);
     assert.ok(revision);
     const revisionPayload = JSON.stringify(revision);
     assert.equal(revisionPayload.includes(privatePreference.statement), false);
@@ -284,9 +333,18 @@ test("real generation and render workers persist plugin usage and historical sna
     assert.equal(pluginSnapshot.plugins[0]?.pluginId, installation.pluginId);
     assert.equal(pluginSnapshot.plugins[0]?.contentHash, installation.contentHash);
     assert.equal(pluginSnapshot.resolvedTheme?.ref.source, "plugin");
-    if (pluginSnapshot.resolvedTheme?.ref.source === "plugin") assert.equal(pluginSnapshot.resolvedTheme.ref.capabilityId, "sales-brand");
-    assert.ok(pluginSnapshot.plugins[0]?.capabilities.templates?.some((template) => (template as { id?: string }).id === "monthly-regional-sales"));
-    const [evidence] = await db.select({ id: evidenceBlocks.id, finding: evidenceBlocks.finding, resultSummary: evidenceBlocks.resultSummary }).from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, job.id)).limit(1);
+    if (pluginSnapshot.resolvedTheme?.ref.source === "plugin")
+      assert.equal(pluginSnapshot.resolvedTheme.ref.capabilityId, "sales-brand");
+    assert.ok(
+      pluginSnapshot.plugins[0]?.capabilities.templates?.some(
+        (template) => (template as { id?: string }).id === "monthly-regional-sales",
+      ),
+    );
+    const [evidence] = await db
+      .select({ id: evidenceBlocks.id, finding: evidenceBlocks.finding, resultSummary: evidenceBlocks.resultSummary })
+      .from(evidenceBlocks)
+      .where(eq(evidenceBlocks.generationJobId, job.id))
+      .limit(1);
     assert.ok(evidence);
     assert.deepEqual(resultSummarySchema.parse(evidence.resultSummary), generatedResultSummary);
     assert.match(evidence.finding, /完整变换结果行/);
@@ -296,105 +354,152 @@ test("real generation and render workers persist plugin usage and historical sna
       rationale: "只保留华东订单，按月份聚合后按销售额降序排列。",
       steps: [
         { kind: "filter" as const, column: "区域", operator: "eq" as const, value: "华东" },
-        { kind: "aggregate" as const, groupBy: ["月份"], measures: [{ column: "销售额", operation: "sum" as const, outputColumn: "销售额_sum" }] },
-        { kind: "sort" as const, column: "销售额_sum", direction: "desc" as const }
-      ],
-      expectedColumns: ["月份", "销售额_sum"]
-    };
-    const [editJob] = await db.insert(generationJobs).values({
-      projectId: project.id,
-      conversationId: conversation.id,
-      dataAssetId: asset.id,
-      snapshotId: snapshot.id,
-      prompt: "编辑图表版本 R1",
-      idempotencyKey: `worker-edit-${suffix}`,
-      inputFingerprint: `worker-edit-fingerprint-${suffix}`,
-      renderer: "vega-lite",
-      rendererVersion: "vega-lite-svg-v1",
-      theme: generatedSpec.theme,
-      themeVersion: generatedSpec.themeVersion,
-      themeSource: "revision",
-      themeConfig: generatedSpec.themeConfig,
-      operation: "edit",
-      artifactId: revision.artifactId,
-      baseRevisionId: revision.id,
-      editPatch: {
-        transformPlan: editPlan,
-        encodings: {
-          x: { field: "月份", type: "temporal" },
-          y: { field: "销售额_sum", type: "quantitative" }
+        {
+          kind: "aggregate" as const,
+          groupBy: ["月份"],
+          measures: [{ column: "销售额", operation: "sum" as const, outputColumn: "销售额_sum" }],
         },
-        annotations: [{ text: "仅看华东" }],
-        showValues: true,
-        showLegend: false
-      },
-      transformPlan: editPlan,
-      pluginContext: pluginResolution.context,
-      analysisBriefSnapshot: {},
-      metricDefinitionSnapshot: {},
-      createdBy: userId
-    }).returning();
+        { kind: "sort" as const, column: "销售额_sum", direction: "desc" as const },
+      ],
+      expectedColumns: ["月份", "销售额_sum"],
+    };
+    const [editJob] = await db
+      .insert(generationJobs)
+      .values({
+        projectId: project.id,
+        conversationId: conversation.id,
+        dataAssetId: asset.id,
+        snapshotId: snapshot.id,
+        prompt: "编辑图表版本 R1",
+        idempotencyKey: `worker-edit-${suffix}`,
+        inputFingerprint: `worker-edit-fingerprint-${suffix}`,
+        renderer: "vega-lite",
+        rendererVersion: "vega-lite-svg-v1",
+        theme: generatedSpec.theme,
+        themeVersion: generatedSpec.themeVersion,
+        themeSource: "revision",
+        themeConfig: generatedSpec.themeConfig,
+        operation: "edit",
+        artifactId: revision.artifactId,
+        baseRevisionId: revision.id,
+        editPatch: {
+          transformPlan: editPlan,
+          encodings: {
+            x: { field: "月份", type: "temporal" },
+            y: { field: "销售额_sum", type: "quantitative" },
+          },
+          annotations: [{ text: "仅看华东" }],
+          showValues: true,
+          showLegend: false,
+        },
+        transformPlan: editPlan,
+        pluginContext: pluginResolution.context,
+        analysisBriefSnapshot: {},
+        metricDefinitionSnapshot: {},
+        createdBy: userId,
+      })
+      .returning();
     await processGenerationJob(editJob.id);
-    const [transformedEditJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, editJob.id)).limit(1);
+    const [transformedEditJob] = await db
+      .select()
+      .from(generationJobs)
+      .where(eq(generationJobs.id, editJob.id))
+      .limit(1);
     assert.equal(transformedEditJob.status, "rendering");
     assert.deepEqual(transformedEditJob.transformPlan, editPlan);
     assert.deepEqual((transformedEditJob.previewData as { rows: DataRow[] }).rows, [
       { 月份: "2026-02", 销售额_sum: 130 },
-      { 月份: "2026-01", 销售额_sum: 100 }
+      { 月份: "2026-01", 销售额_sum: 100 },
     ]);
     assert.equal(resultSummarySchema.parse(transformedEditJob.resultSummary).transformedRowCount, 2);
     assert.equal((transformedEditJob.flintSpec as { chartSpec: { showValues?: boolean } }).chartSpec.showValues, true);
     await processRenderJob(editJob.id);
     const [renderedEditJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, editJob.id)).limit(1);
     assert.equal(renderedEditJob.status, "succeeded");
-    const [derivedRevision] = await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, editJob.id)).limit(1);
+    const [derivedRevision] = await db
+      .select()
+      .from(chartRevisions)
+      .where(eq(chartRevisions.generationJobId, editJob.id))
+      .limit(1);
     assert.ok(derivedRevision);
-    assert.deepEqual(resultSummarySchema.parse(derivedRevision.resultSummary), resultSummarySchema.parse(transformedEditJob.resultSummary));
+    assert.deepEqual(
+      resultSummarySchema.parse(derivedRevision.resultSummary),
+      resultSummarySchema.parse(transformedEditJob.resultSummary),
+    );
     assert.equal(derivedRevision.parentRevisionId, revision.id);
     assert.notDeepEqual(derivedRevision.transformPlan, revision.transformPlan);
     assert.equal(revision.revision, 1);
-    assert.equal((derivedRevision.flintSpec as { chartSpec: { annotations?: Array<{ text: string }> } }).chartSpec.annotations?.[0]?.text, "仅看华东");
+    assert.equal(
+      (derivedRevision.flintSpec as { chartSpec: { annotations?: Array<{ text: string }> } }).chartSpec.annotations?.[0]
+        ?.text,
+      "仅看华东",
+    );
 
-    await db.update(generationJobs).set({ status: "failed", errorCode: "RENDER_FAILED", errorMessage: "simulated post-revision failure" }).where(eq(generationJobs.id, job.id));
+    await db
+      .update(generationJobs)
+      .set({ status: "failed", errorCode: "RENDER_FAILED", errorMessage: "simulated post-revision failure" })
+      .where(eq(generationJobs.id, job.id));
     await db.update(generationJobs).set({ status: "rendering" }).where(eq(generationJobs.id, job.id));
     await processRenderJob(job.id);
     const [recoveredJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id)).limit(1);
     assert.equal(recoveredJob.status, "succeeded");
-    assert.equal((await db.select({ id: chartRevisions.id }).from(chartRevisions).where(eq(chartRevisions.generationJobId, job.id))).length, 1);
-    const [recoveredRevision] = await db.select({ executionAssembly: chartRevisions.executionAssembly }).from(chartRevisions).where(eq(chartRevisions.generationJobId, job.id)).limit(1);
+    assert.equal(
+      (
+        await db
+          .select({ id: chartRevisions.id })
+          .from(chartRevisions)
+          .where(eq(chartRevisions.generationJobId, job.id))
+      ).length,
+      1,
+    );
+    const [recoveredRevision] = await db
+      .select({ executionAssembly: chartRevisions.executionAssembly })
+      .from(chartRevisions)
+      .where(eq(chartRevisions.generationJobId, job.id))
+      .limit(1);
     assert.deepEqual(recoveredRevision.executionAssembly, executionAssembly);
 
-    const [leaseJob] = await db.insert(generationJobs).values({
-      projectId: project.id,
-      conversationId: conversation.id,
-      dataAssetId: asset.id,
-      snapshotId: snapshot.id,
-      prompt: "Worker 租约围栏测试",
-      idempotencyKey: `worker-lease-${suffix}`,
-      inputFingerprint: `worker-lease-fingerprint-${suffix}`,
-      renderer: "vega-lite",
-      rendererVersion: "vega-lite-svg-v1",
-      theme: "economist",
-      themeVersion: "v1",
-      themeSource: "request",
-      themeConfig: {},
-      analysisBriefSnapshot: {},
-      metricDefinitionSnapshot: {},
-      createdBy: userId
-    }).returning();
+    const [leaseJob] = await db
+      .insert(generationJobs)
+      .values({
+        projectId: project.id,
+        conversationId: conversation.id,
+        dataAssetId: asset.id,
+        snapshotId: snapshot.id,
+        prompt: "Worker 租约围栏测试",
+        idempotencyKey: `worker-lease-${suffix}`,
+        inputFingerprint: `worker-lease-fingerprint-${suffix}`,
+        renderer: "vega-lite",
+        rendererVersion: "vega-lite-svg-v1",
+        theme: "economist",
+        themeVersion: "v1",
+        themeSource: "request",
+        themeConfig: {},
+        analysisBriefSnapshot: {},
+        metricDefinitionSnapshot: {},
+        createdBy: userId,
+      })
+      .returning();
     const leaseA = await claimGenerationJobLease({
       jobId: leaseJob.id,
       owner: "worker-a",
       currentStatuses: ["queued"],
       nextStatus: "profiling",
       leaseDurationMs: 3_000,
-      incrementAttempt: true
+      incrementAttempt: true,
     });
     assert.ok(leaseA);
     assert.equal(await heartbeatGenerationJobLease(leaseA), true);
-    await db.update(generationJobs).set({ leaseExpiresAt: new Date(Date.now() - 1_000) }).where(eq(generationJobs.id, leaseJob.id));
+    await db
+      .update(generationJobs)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(generationJobs.id, leaseJob.id));
     assert.ok((await recoverExpiredGenerationJobLeases()).includes(leaseJob.id));
-    const [requeuedLeaseJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, leaseJob.id)).limit(1);
+    const [requeuedLeaseJob] = await db
+      .select()
+      .from(generationJobs)
+      .where(eq(generationJobs.id, leaseJob.id))
+      .limit(1);
     assert.equal(requeuedLeaseJob.status, "queued");
     assert.equal(requeuedLeaseJob.leaseOwner, null);
     assert.equal(requeuedLeaseJob.leaseToken, null);
@@ -404,22 +509,28 @@ test("real generation and render workers persist plugin usage and historical sna
       owner: "worker-b",
       currentStatuses: ["queued"],
       nextStatus: "profiling",
-      leaseDurationMs: 3_000
+      leaseDurationMs: 3_000,
     });
     assert.ok(leaseB);
     assert.ok(leaseB.fencingToken > leaseA.fencingToken);
-    assert.equal(await updateGenerationJobUnderLease({
-      lease: leaseA,
-      status: "failed",
-      release: true,
-      values: { errorCode: "STALE_WORKER", errorMessage: "must not persist" }
-    }), false);
-    assert.equal(await updateGenerationJobUnderLease({
-      lease: leaseB,
-      status: "failed",
-      release: true,
-      values: { errorCode: "FRESH_WORKER", errorMessage: "persisted by owner" }
-    }), true);
+    assert.equal(
+      await updateGenerationJobUnderLease({
+        lease: leaseA,
+        status: "failed",
+        release: true,
+        values: { errorCode: "STALE_WORKER", errorMessage: "must not persist" },
+      }),
+      false,
+    );
+    assert.equal(
+      await updateGenerationJobUnderLease({
+        lease: leaseB,
+        status: "failed",
+        release: true,
+        values: { errorCode: "FRESH_WORKER", errorMessage: "persisted by owner" },
+      }),
+      true,
+    );
     const [fencedLeaseJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, leaseJob.id)).limit(1);
     assert.equal(fencedLeaseJob.status, "failed");
     assert.equal(fencedLeaseJob.errorCode, "FRESH_WORKER");
@@ -454,7 +565,11 @@ test("real generation and render workers persist plugin usage and historical sna
     const [failedJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, invalidJob.id)).limit(1);
     assert.equal(failedJob.status, "failed");
     assert.equal(failedJob.errorCode, "PLUGIN_CONTEXT_INVALID");
-    const [failedRevision] = await db.select({ id: chartRevisions.id }).from(chartRevisions).where(eq(chartRevisions.generationJobId, invalidJob.id)).limit(1);
+    const [failedRevision] = await db
+      .select({ id: chartRevisions.id })
+      .from(chartRevisions)
+      .where(eq(chartRevisions.generationJobId, invalidJob.id))
+      .limit(1);
     assert.equal(failedRevision, undefined);
 
     const foreignAssetId = randomUUID();
@@ -468,7 +583,7 @@ test("real generation and render workers persist plugin usage and historical sna
       mimeType: "text/csv",
       sizeBytes: 1,
       status: "ready",
-      createdBy: userId
+      createdBy: userId,
     });
     await db.insert(dataSnapshots).values({
       id: foreignSnapshotId,
@@ -484,7 +599,7 @@ test("real generation and render workers persist plugin usage and historical sna
         conversationId: conversation.id,
         assetId: foreignAssetId,
         snapshotId: foreignSnapshotId,
-        filename: "foreign-snapshot.csv"
+        filename: "foreign-snapshot.csv",
       }),
       normalizedObjectKey: conversationUploadObjectKey({
         workspaceId: workspace.id,
@@ -492,35 +607,54 @@ test("real generation and render workers persist plugin usage and historical sna
         conversationId: conversation.id,
         assetId: foreignAssetId,
         kind: "normalized",
-        filename: `${foreignSnapshotId}.json`
-      })
+        filename: `${foreignSnapshotId}.json`,
+      }),
     });
-    const [invalidSnapshotJob] = await db.insert(generationJobs).values({
-      projectId: project.id,
-      conversationId: conversation.id,
-      dataAssetId: asset.id,
-      snapshotId: foreignSnapshotId,
-      prompt: "快照关系校验测试",
-      idempotencyKey: `worker-invalid-snapshot-${suffix}`,
-      inputFingerprint: `worker-invalid-snapshot-fingerprint-${suffix}`,
-      renderer: "vega-lite",
-      rendererVersion: "vega-lite-svg-v1",
-      theme: "economist",
-      themeVersion: "v1",
-      themeSource: "request",
-      themeConfig: {},
-      analysisBriefSnapshot: {},
-      metricDefinitionSnapshot: {},
-      createdBy: userId
-    }).returning();
+    const [invalidSnapshotJob] = await db
+      .insert(generationJobs)
+      .values({
+        projectId: project.id,
+        conversationId: conversation.id,
+        dataAssetId: asset.id,
+        snapshotId: foreignSnapshotId,
+        prompt: "快照关系校验测试",
+        idempotencyKey: `worker-invalid-snapshot-${suffix}`,
+        inputFingerprint: `worker-invalid-snapshot-fingerprint-${suffix}`,
+        renderer: "vega-lite",
+        rendererVersion: "vega-lite-svg-v1",
+        theme: "economist",
+        themeVersion: "v1",
+        themeSource: "request",
+        themeConfig: {},
+        analysisBriefSnapshot: {},
+        metricDefinitionSnapshot: {},
+        createdBy: userId,
+      })
+      .returning();
     await processGenerationJob(invalidSnapshotJob.id);
-    const [invalidSnapshotResult] = await db.select().from(generationJobs).where(eq(generationJobs.id, invalidSnapshotJob.id)).limit(1);
+    const [invalidSnapshotResult] = await db
+      .select()
+      .from(generationJobs)
+      .where(eq(generationJobs.id, invalidSnapshotJob.id))
+      .limit(1);
     assert.equal(invalidSnapshotResult.status, "failed");
     assert.equal(invalidSnapshotResult.errorCode, "SNAPSHOT_RELATION_INVALID");
 
-    await revokePluginInstallation({ workspaceId: workspace.id, installationId: installation.id, userId, reason: "worker integration" });
-    const [historicalRevision] = await db.select({ pluginSnapshot: chartRevisions.pluginSnapshot }).from(chartRevisions).where(eq(chartRevisions.id, revision.id)).limit(1);
-    assert.equal(pluginSnapshotSchema.parse(historicalRevision.pluginSnapshot).plugins[0]?.contentHash, installation.contentHash);
+    await revokePluginInstallation({
+      workspaceId: workspace.id,
+      installationId: installation.id,
+      userId,
+      reason: "worker integration",
+    });
+    const [historicalRevision] = await db
+      .select({ pluginSnapshot: chartRevisions.pluginSnapshot })
+      .from(chartRevisions)
+      .where(eq(chartRevisions.id, revision.id))
+      .limit(1);
+    assert.equal(
+      pluginSnapshotSchema.parse(historicalRevision.pluginSnapshot).plugins[0]?.contentHash,
+      installation.contentHash,
+    );
     assert.match((await getObject(outputs.svg as string)).toString("utf8"), /#2563EB/);
   } finally {
     for (const key of objectKeys) await deleteObject(key).catch(() => undefined);

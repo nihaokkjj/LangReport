@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 import {
   assertIsolatedIntegrationEnvironment,
-  createIsolatedIntegrationEnvironment
+  createIsolatedIntegrationEnvironment,
 } from "../../scripts/integration-environment.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
@@ -19,35 +19,42 @@ const validEnvironment = {
   S3_ENDPOINT: "http://127.0.0.1:9002",
   S3_ACCESS_KEY: "langreport_test",
   S3_SECRET_KEY: "langreport-test-secret",
-  S3_BUCKET: "langreport-test-0123456789abcdef"
+  S3_BUCKET: "langreport-test-0123456789abcdef",
 };
 
 test("integration resources require the dedicated test database, schema and bucket", () => {
   assert.doesNotThrow(() => assertIsolatedIntegrationEnvironment(validEnvironment));
 
   assert.throws(
-    () => assertIsolatedIntegrationEnvironment({ ...validEnvironment, DATABASE_URL: "postgres://postgres.example/langreport" }),
-    /DATABASE_URL database must end with _test/
+    () =>
+      assertIsolatedIntegrationEnvironment({
+        ...validEnvironment,
+        DATABASE_URL: "postgres://postgres.example/langreport",
+      }),
+    /DATABASE_URL database must end with _test/,
   );
   assert.throws(
     () => assertIsolatedIntegrationEnvironment({ ...validEnvironment, DATABASE_SCHEMA: "public" }),
-    /DATABASE_SCHEMA must not be public/
+    /DATABASE_SCHEMA must not be public/,
   );
   assert.throws(
     () => assertIsolatedIntegrationEnvironment({ ...validEnvironment, S3_BUCKET: "customer-reports" }),
-    /S3_BUCKET must start with langreport-test-/
+    /S3_BUCKET must start with langreport-test-/,
   );
 });
 
 test("integration runner replaces parent database and storage settings with one isolated run", () => {
-  const environment = createIsolatedIntegrationEnvironment({
-    ...validEnvironment,
-    DATABASE_URL: "postgres://production.example/langreport",
-    DATABASE_SCHEMA: "public",
-    S3_BUCKET: "customer-reports",
-    S3_ACCESS_KEY: "production-access-key",
-    S3_SECRET_KEY: "production-secret"
-  }, "0123456789abcdef");
+  const environment = createIsolatedIntegrationEnvironment(
+    {
+      ...validEnvironment,
+      DATABASE_URL: "postgres://production.example/langreport",
+      DATABASE_SCHEMA: "public",
+      S3_BUCKET: "customer-reports",
+      S3_ACCESS_KEY: "production-access-key",
+      S3_SECRET_KEY: "production-secret",
+    },
+    "0123456789abcdef",
+  );
 
   assert.equal(environment.APP_ENV, "test");
   assert.equal(environment.LANGREPORT_INTEGRATION_TEST, "1");

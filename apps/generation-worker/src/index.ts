@@ -1,20 +1,39 @@
 import { and, asc, eq, lt, or } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { GenerationCycle, validateCanonicalTextContextProjection, validateGenerationRevision } from "@langreport/generation";
-import { GenerationJobLeaseLostError, assertGenerationJobLease, claimGenerationJobLease, db, chartRevisions, conversationMessages, conversations, dataAssets, dataSnapshots, generationJobs, memoryExtractionJobs, projects, recoverExpiredGenerationJobLeases, startGenerationJobLeaseHeartbeat, updateGenerationJobUnderLease, workspaceModelCredentials, type GenerationJobLease, type GenerationJobStatus } from "@langreport/db";
+import { validateGenerationRevision } from "@langreport/generation";
+import {
+  GenerationJobLeaseLostError,
+  assertGenerationJobLease,
+  claimGenerationJobLease,
+  db,
+  chartRevisions,
+  conversationMessages,
+  conversations,
+  dataAssets,
+  dataSnapshots,
+  generationJobs,
+  memoryExtractionJobs,
+  projects,
+  recoverExpiredGenerationJobLeases,
+  startGenerationJobLeaseHeartbeat,
+  updateGenerationJobUnderLease,
+  workspaceModelCredentials,
+  type GenerationJobLease,
+  type GenerationJobStatus,
+} from "@langreport/db";
 import { getObject } from "@langreport/storage";
 import { applyRevisionPatch } from "@langreport/chart";
 import { executeTransformPlan, summarizeTransformResult } from "@langreport/data-engine";
-import { chartEditPatchSchema, flintSpecSchema, generationDecisionSchema, memoryContextSchema, modelRouteSnapshotSchema, pluginUsageSchema, themePresetSchema, transformPlanSchema, type ModelRouteSnapshot, type TransformPlan, type ValidationRecord, type ValidationReport } from "@langreport/contracts";
 import {
-  ensureMemoryRevocationReady,
-  getMemoryContextForGeneration,
-  processMemoryExtractionJob,
-} from "@langreport/memory";
-import { createBailianQwenGateway, decryptWorkspaceModelCredential, ModelCredentialEncryptionError, ModelGatewayConfigurationError, resolveModelRouteSnapshot } from "@langreport/model-gateway";
-import { pluginContextSchema } from "@langreport/contracts";
-import { PluginServiceError, resolvePluginContextForWorkspace } from "@langreport/plugins";
-import { resolveThemePayload } from "@langreport/plugin-sdk";
+  chartEditPatchSchema,
+  flintSpecSchema,
+  transformPlanSchema,
+  type ValidationRecord,
+  type ValidationReport,
+} from "@langreport/contracts";
+import { ensureMemoryRevocationReady, processMemoryExtractionJob } from "@langreport/memory";
+import { decryptWorkspaceModelCredential } from "@langreport/model-gateway";
+import { PluginServiceError } from "@langreport/plugins";
 import { EvidenceGenerationWorkflow } from "./evidence-generation-workflow.js";
 import { loadFrozenSnapshot, SnapshotAccessError, type FrozenSnapshotInput } from "./snapshot-access.js";
 
@@ -39,7 +58,7 @@ export async function processGenerationJob(jobId: string): Promise<void> {
     currentStatuses: ["queued"],
     nextStatus: "profiling",
     leaseDurationMs,
-    incrementAttempt: true
+    incrementAttempt: true,
   });
   if (!lease) return;
   const heartbeat = startGenerationJobLeaseHeartbeat(lease);
@@ -72,7 +91,7 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
       job: generationJobs,
       snapshot: dataSnapshots,
       asset: dataAssets,
-      workspaceId: projects.workspaceId
+      workspaceId: projects.workspaceId,
     })
     .from(generationJobs)
     .innerJoin(dataSnapshots, eq(dataSnapshots.id, generationJobs.snapshotId))
@@ -96,12 +115,12 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
           projectId: job.job.projectId,
           conversationId: job.job.conversationId,
           dataAssetId: job.job.dataAssetId,
-          snapshotId: job.job.snapshotId
+          snapshotId: job.job.snapshotId,
         },
         asset: job.asset,
         snapshot: job.snapshot,
         workspaceId: job.workspaceId,
-        readSnapshot: getObject
+        readSnapshot: getObject,
       });
     } catch (error) {
       if (error instanceof SnapshotAccessError) {
@@ -114,7 +133,7 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
     const workflowResult = await new EvidenceGenerationWorkflow(workspaceApiKeyForGeneration).run({
       job: job.job,
       snapshot: frozenSnapshot,
-      workspaceId: job.workspaceId
+      workspaceId: job.workspaceId,
     });
     if (workflowResult.status === "failed") {
       await failJob(jobId, lease, workflowResult.failure.code, workflowResult.failure.message);
@@ -124,133 +143,23 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
     await setStatus(jobId, lease, "planning", { memoryContext });
     if (cycleResult.status === "needs_clarification") {
       await assertGenerationJobLease(lease);
-      await appendAssistantMessage(job.job.conversationId, `需要澄清：${cycleResult.proposal.question}（${cycleResult.proposal.reason}）`);
-      await setStatus(jobId, lease, "needs_clarification", { generationAudit: cycleResult.audit, ...validationFieldsFromAudit(cycleResult.audit), clarificationProposal: cycleResult.proposal, errorCode: "GENERATION_NEEDS_CLARIFICATION", errorMessage: cycleResult.proposal.question }, true);
-      return;
-    }
-    if (cycleResult.status === "failed") { await failJob(jobId, lease, cycleResult.error.code, cycleResult.error.message, undefined, cycleResult.audit); return; }
-    const artifacts = cycleResult.artifacts;
-    const resultSummary = summarizeTransformResult({
-      sourceRowCount: frozenSnapshot.rows.length,
-      transform: artifacts.transform,
-      previewLimit: 500,
-      qualityWarnings: artifacts.validation.issues
-        .filter((issue) => issue.severity === "warning")
-        .map((issue) => `${issue.code}: ${issue.message}`)
-    });
-    await setStatus(jobId, lease, "transforming", { generationAudit: cycleResult.audit, ...validationFieldsFromAudit(cycleResult.audit), intent: artifacts.intent, transformPlan: artifacts.plan, fieldLineage: artifacts.transform.lineage, validation: artifacts.validation, pluginUsage: artifacts.pluginUsage, repairCount: artifacts.repairCount, previewData: { columns: artifacts.transform.columns, rows: artifacts.transform.rows.slice(0, 500), steps: artifacts.transform.steps }, resultSummary });
-    await setStatus(jobId, lease, "compiling", { flintSpec: artifacts.flintSpec });
-    if (!artifacts.validation.valid) { await failJob(jobId, lease, "VALIDATION_FAILED", "Flint Spec 未通过必要校验", artifacts.validation, cycleResult.audit); return; }
-    await setStatus(jobId, lease, "rendering", {}, true);
-    console.log(`${workerName} handed off to render-worker`, { jobId, repairCount: artifacts.repairCount });
-    return;
-    /* Legacy first-generation assembly removed from the executable type surface.
-    if (false) {
-    const snapshotPayload = JSON.parse((await getObject(job.snapshot.normalizedObjectKey)).toString("utf8")) as { rows: DataRow[] };
-    const profiles = job.snapshot.schema as unknown as ColumnProfile[];
-    if (!Array.isArray(snapshotPayload.rows) || !Array.isArray(profiles)) throw new Error("Data Snapshot 内容无效");
-
-    const storedMemoryContext = memoryContextSchema.safeParse(job.job.memoryContext);
-    const memoryContext = storedMemoryContext.success
-      ? storedMemoryContext.data
-      : await getMemoryContextForGeneration({
-        projectId: job.job.projectId,
-        conversationId: job.job.conversationId,
-        userId: job.job.createdBy,
-        prompt: job.job.prompt
-      });
-    let storedConversationProjection;
-    try {
-      storedConversationProjection = readStoredConversationProjection(job.job.conversationProjection);
-    } catch (error) {
-      await failJob(
-        jobId,
-        lease,
-        "CONVERSATION_PROJECTION_INVALID",
-        error instanceof Error ? error.message : "已固化的 Conversation 上下文投影不符合版本化合同"
-      );
-      return;
-    }
-    let pluginManifests = [] as Awaited<ReturnType<typeof resolvePluginContextForWorkspace>>;
-    const pluginContext = pluginContextSchema.safeParse(job.job.pluginContext);
-    if (!pluginContext.success && hasPluginContext(job.job.pluginContext)) {
-      await failJob(jobId, lease, "PLUGIN_CONTEXT_INVALID", "插件上下文不符合已固化的 Schema");
-      return;
-    }
-    if (pluginContext.success) pluginManifests = await resolvePluginContextForWorkspace(job.workspaceId, pluginContext.data);
-    const pluginThemeRef = pluginContext.success && pluginContext.data.themeRef?.source === "plugin" ? pluginContext.data.themeRef : null;
-    const pluginThemeManifest = pluginThemeRef
-      ? pluginManifests.find((manifest) => manifest.pluginId === pluginThemeRef.pluginId && manifest.version === pluginThemeRef.version && manifest.contentHash === pluginThemeRef.contentHash)
-      : undefined;
-    const themeConfig = pluginThemeRef && pluginThemeManifest
-      ? resolveThemePayload(pluginThemeManifest, pluginThemeRef.capabilityId)
-      : asRecord(job.job.themeConfig);
-    let modelRoute: ModelRouteSnapshot;
-    let generationCycle: GenerationCycle;
-    try {
-      modelRoute = readStoredModelRoute(job.job.modelRoute);
-      const workspaceApiKey = modelRoute.generationMode === "llm"
-        ? await workspaceApiKeyForGeneration(job.workspaceId)
-        : undefined;
-      generationCycle = modelRoute.generationMode === "llm"
-        ? new GenerationCycle(createBailianQwenGateway(modelRoute, workspaceApiKey ? { BAILIAN_API_KEY: workspaceApiKey } : process.env))
-        : new GenerationCycle();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "模型路由配置无效";
-      await failJob(jobId, lease, error instanceof ModelCredentialEncryptionError ? "MODEL_CREDENTIAL_UNAVAILABLE" : error instanceof ModelGatewayConfigurationError ? "MODEL_ROUTE_CONFIGURATION_INVALID" : "MODEL_ROUTE_INVALID", message);
-      return;
-    }
-    await setStatus(jobId, lease, "planning", { memoryContext });
-    const theme = themePresetSchema.parse(job.job.theme);
-    const generationDecisionResult = job.job.generationDecision === null || job.job.generationDecision === undefined
-      ? { success: true as const, data: undefined }
-      : generationDecisionSchema.safeParse(job.job.generationDecision);
-    if (!generationDecisionResult.success) {
-      await failJob(jobId, lease, "GENERATION_DECISION_INVALID", "已保存的 Generation Decision 不符合版本化合同");
-      return;
-    }
-    const budget = { deadlineAt: Date.now() + 30_000, maxOutputTokens: 2_000 };
-    const cycleResult = await generationCycle.run({
-      cycle: {
-        workspaceId: job.workspaceId,
-        projectId: job.job.projectId,
-        generationJobId: job.job.id,
-        invocationId: `${job.job.id}:${job.job.attemptCount + 1}`,
-        routeSnapshotId: modelRoute.routeSnapshotId,
-        budget
-      },
-      prompt: job.job.prompt,
-      profiles,
-      rows: snapshotPayload.rows,
-      analysisBriefSnapshot: asRecord(job.job.analysisBriefSnapshot),
-      metricDefinitionSnapshot: asRecord(job.job.metricDefinitionSnapshot),
-      conversationProjection: storedConversationProjection,
-      theme,
-      themeVersion: job.job.themeVersion,
-      themeConfig,
-      pluginThemeRef,
-      memoryContext,
-      pluginManifests,
-      plan: isTransformPlan(job.job.transformPlan) ? job.job.transformPlan : undefined,
-      generationDecision: generationDecisionResult.data,
-      requestedProfile: modelRoute.profileId,
-      effectiveProfile: modelRoute.profileId,
-      requestedOptions: { ...modelRoute.requestedOptions, maxOutputTokens: budget.maxOutputTokens },
-      effectiveOptions: { ...modelRoute.effectiveOptions, maxOutputTokens: budget.maxOutputTokens }
-    });
-    if (cycleResult.status === "needs_clarification") {
-      await assertGenerationJobLease(lease);
       await appendAssistantMessage(
         job.job.conversationId,
-        `需要澄清：${cycleResult.proposal.question}（${cycleResult.proposal.reason}）`
+        `需要澄清：${cycleResult.proposal.question}（${cycleResult.proposal.reason}）`,
       );
-      await setStatus(jobId, lease, "needs_clarification", {
-        generationAudit: cycleResult.audit,
-        ...validationFieldsFromAudit(cycleResult.audit),
-        clarificationProposal: cycleResult.proposal,
-        errorCode: "GENERATION_NEEDS_CLARIFICATION",
-        errorMessage: cycleResult.proposal.question
-      }, true);
+      await setStatus(
+        jobId,
+        lease,
+        "needs_clarification",
+        {
+          generationAudit: cycleResult.audit,
+          ...validationFieldsFromAudit(cycleResult.audit),
+          clarificationProposal: cycleResult.proposal,
+          errorCode: "GENERATION_NEEDS_CLARIFICATION",
+          errorMessage: cycleResult.proposal.question,
+        },
+        true,
+      );
       return;
     }
     if (cycleResult.status === "failed") {
@@ -258,6 +167,14 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
       return;
     }
     const artifacts = cycleResult.artifacts;
+    const resultSummary = summarizeTransformResult({
+      sourceRowCount: frozenSnapshot.rows.length,
+      transform: artifacts.transform,
+      previewLimit: 500,
+      qualityWarnings: artifacts.validation.issues
+        .filter((issue) => issue.severity === "warning")
+        .map((issue) => `${issue.code}: ${issue.message}`),
+    });
     await setStatus(jobId, lease, "transforming", {
       generationAudit: cycleResult.audit,
       ...validationFieldsFromAudit(cycleResult.audit),
@@ -270,20 +187,25 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
       previewData: {
         columns: artifacts.transform.columns,
         rows: artifacts.transform.rows.slice(0, 500),
-        steps: artifacts.transform.steps
-      }
+        steps: artifacts.transform.steps,
+      },
+      resultSummary,
     });
-
     await setStatus(jobId, lease, "compiling", { flintSpec: artifacts.flintSpec });
     if (!artifacts.validation.valid) {
-      await failJob(jobId, lease, "VALIDATION_FAILED", "Flint Spec 未通过必要校验", artifacts.validation, cycleResult.audit);
+      await failJob(
+        jobId,
+        lease,
+        "VALIDATION_FAILED",
+        "Flint Spec 未通过必要校验",
+        artifacts.validation,
+        cycleResult.audit,
+      );
       return;
     }
-
     await setStatus(jobId, lease, "rendering", {}, true);
     console.log(`${workerName} handed off to render-worker`, { jobId, repairCount: artifacts.repairCount });
-    }
-    */
+    return;
   } catch (error) {
     if (error instanceof PluginServiceError) {
       await failJob(jobId, lease, error.code, error.message);
@@ -300,9 +222,7 @@ async function processEditJob(jobId: string, record: GenerationJobRecord, lease:
     return;
   }
   await setStatus(jobId, lease, "planning", { errorCode: null, errorMessage: null });
-  const [source] = await db.select().from(chartRevisions)
-    .where(eq(chartRevisions.id, job.baseRevisionId))
-    .limit(1);
+  const [source] = await db.select().from(chartRevisions).where(eq(chartRevisions.id, job.baseRevisionId)).limit(1);
   if (!source || source.artifactId !== job.artifactId) {
     await failJob(jobId, lease, "EDIT_SOURCE_NOT_FOUND", "基础 Revision 不属于当前图表产物");
     return;
@@ -315,12 +235,12 @@ async function processEditJob(jobId: string, record: GenerationJobRecord, lease:
           projectId: job.projectId,
           conversationId: job.conversationId,
           dataAssetId: job.dataAssetId,
-          snapshotId: job.snapshotId
+          snapshotId: job.snapshotId,
         },
         asset: record.asset,
         snapshot: record.snapshot,
         workspaceId: record.workspaceId,
-        readSnapshot: getObject
+        readSnapshot: getObject,
       });
     } catch (error) {
       if (error instanceof SnapshotAccessError) {
@@ -343,7 +263,7 @@ async function processEditJob(jobId: string, record: GenerationJobRecord, lease:
       previewLimit: 500,
       qualityWarnings: validation.issues
         .filter((issue) => issue.severity === "warning")
-        .map((issue) => `${issue.code}: ${issue.message}`)
+        .map((issue) => `${issue.code}: ${issue.message}`),
     });
     const planValidation = planValidationFromReport(validation);
     const renderValidation = pendingRenderValidation();
@@ -357,9 +277,9 @@ async function processEditJob(jobId: string, record: GenerationJobRecord, lease:
       previewData: {
         columns: transform.columns,
         rows: transform.rows.slice(0, 500),
-        steps: transform.steps
+        steps: transform.steps,
       },
-      resultSummary
+      resultSummary,
     });
     await setStatus(jobId, lease, "compiling", { flintSpec: editedSpec, validation, planValidation, renderValidation });
     if (!validation.valid) {
@@ -375,14 +295,19 @@ async function processEditJob(jobId: string, record: GenerationJobRecord, lease:
 function semanticTypesForEditedSpec(
   sourceTypes: Record<string, string>,
   columns: string[],
-  lineage: Array<{ outputColumn: string; operation: string }>
+  lineage: Array<{ outputColumn: string; operation: string }>,
 ): Record<string, string> {
-  return Object.fromEntries(columns.map((column) => {
-    const existing = sourceTypes[column];
-    if (existing) return [column, existing];
-    const line = lineage.find((item) => item.outputColumn === column);
-    return [column, line?.operation.startsWith("aggregate:") || line?.operation.startsWith("derive:") ? "Quantity" : "Category"];
-  }));
+  return Object.fromEntries(
+    columns.map((column) => {
+      const existing = sourceTypes[column];
+      if (existing) return [column, existing];
+      const line = lineage.find((item) => item.outputColumn === column);
+      return [
+        column,
+        line?.operation.startsWith("aggregate:") || line?.operation.startsWith("derive:") ? "Quantity" : "Category",
+      ];
+    }),
+  );
 }
 
 async function pollOnce(): Promise<void> {
@@ -405,10 +330,12 @@ async function pollOnce(): Promise<void> {
     const extractionQueue = await db
       .select({ id: memoryExtractionJobs.id })
       .from(memoryExtractionJobs)
-      .where(or(
-        eq(memoryExtractionJobs.status, "queued"),
-        and(eq(memoryExtractionJobs.status, "failed"), lt(memoryExtractionJobs.attemptCount, 3))
-      ))
+      .where(
+        or(
+          eq(memoryExtractionJobs.status, "queued"),
+          and(eq(memoryExtractionJobs.status, "failed"), lt(memoryExtractionJobs.attemptCount, 3)),
+        ),
+      )
       .orderBy(asc(memoryExtractionJobs.createdAt))
       .limit(1);
     if (extractionQueue[0]) await processMemoryExtractionJob(extractionQueue[0].id);
@@ -417,28 +344,37 @@ async function pollOnce(): Promise<void> {
   }
 }
 
-async function setStatus(jobId: string, lease: GenerationJobLease, status: GenerationJobStatus, values: Record<string, unknown> = {}, release = false): Promise<void> {
+async function setStatus(
+  jobId: string,
+  lease: GenerationJobLease,
+  status: GenerationJobStatus,
+  values: Record<string, unknown> = {},
+  release = false,
+): Promise<void> {
   await assertGenerationJobLease(lease);
   const updated = await updateGenerationJobUnderLease({ lease, status, values, release });
   if (!updated) throw new GenerationJobLeaseLostError(jobId);
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-async function failJob(jobId: string, lease: GenerationJobLease, errorCode: string, errorMessage: string, validation?: unknown, generationAudit?: unknown): Promise<void> {
+async function failJob(
+  jobId: string,
+  lease: GenerationJobLease,
+  errorCode: string,
+  errorMessage: string,
+  validation?: unknown,
+  generationAudit?: unknown,
+): Promise<void> {
   const updated = await updateGenerationJobUnderLease({
     lease,
     status: "failed",
     release: true,
     values: {
-    errorCode,
-    errorMessage,
-    ...(validation ? { validation } : {}),
-    ...(generationAudit ? { generationAudit } : {}),
-    ...validationFieldsFromAudit(generationAudit)
-    }
+      errorCode,
+      errorMessage,
+      ...(validation ? { validation } : {}),
+      ...(generationAudit ? { generationAudit } : {}),
+      ...validationFieldsFromAudit(generationAudit),
+    },
   });
   if (!updated) throw new GenerationJobLeaseLostError(jobId);
 }
@@ -448,32 +384,8 @@ async function appendAssistantMessage(conversationId: string, content: string): 
   await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, conversationId));
 }
 
-function isTransformPlan(value: unknown): value is TransformPlan {
-  return typeof value === "object" && value !== null && "version" in value && "steps" in value && "expectedColumns" in value;
-}
-
-function hasPluginContext(value: unknown): boolean {
-  return hasRecordValues(value);
-}
-
 function hasRecordValues(value: unknown): boolean {
   return typeof value === "object" && value !== null && !Array.isArray(value) && Object.keys(value).length > 0;
-}
-
-function readStoredConversationProjection(value: unknown) {
-  if (!hasRecordValues(value)) return undefined;
-  return validateCanonicalTextContextProjection(value);
-}
-
-function readStoredModelRoute(value: unknown): ModelRouteSnapshot {
-  if (!hasRecordValues(value)) {
-    // Only pre-M1 Jobs have an empty default. They are deliberately kept on
-    // the offline path rather than inheriting whatever llm route is live now.
-    return resolveModelRouteSnapshot({ GENERATION_MODE: "deterministic" });
-  }
-  const parsed = modelRouteSnapshotSchema.safeParse(value);
-  if (!parsed.success) throw new Error("已冻结的模型路由不符合版本化合同");
-  return parsed.data;
 }
 
 /**
@@ -482,7 +394,8 @@ function readStoredModelRoute(value: unknown): ModelRouteSnapshot {
  * no Job, audit, log or model-route snapshot receives it.
  */
 async function workspaceApiKeyForGeneration(workspaceId: string): Promise<string | undefined> {
-  const [credential] = await db.select({ encryptedApiKey: workspaceModelCredentials.encryptedApiKey })
+  const [credential] = await db
+    .select({ encryptedApiKey: workspaceModelCredentials.encryptedApiKey })
     .from(workspaceModelCredentials)
     .where(eq(workspaceModelCredentials.workspaceId, workspaceId))
     .limit(1);
@@ -495,7 +408,7 @@ function validationFieldsFromAudit(generationAudit: unknown): Record<string, unk
   const audit = generationAudit as Record<string, unknown>;
   return {
     ...(audit.planValidation ? { planValidation: audit.planValidation } : {}),
-    ...(audit.renderValidation ? { renderValidation: audit.renderValidation } : {})
+    ...(audit.renderValidation ? { renderValidation: audit.renderValidation } : {}),
   };
 }
 
@@ -506,10 +419,10 @@ function planValidationFromReport(validation: ValidationReport): ValidationRecor
       code: issue.code,
       ...(issue.field ? { path: issue.field } : {}),
       message: issue.message,
-      severity: issue.severity
+      severity: issue.severity,
     })),
     validatorVersion: "plan-validator-v1",
-    checkedAt: new Date().toISOString()
+    checkedAt: new Date().toISOString(),
   };
 }
 
