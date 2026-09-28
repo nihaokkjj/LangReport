@@ -930,6 +930,17 @@
   padding: 8px 9px;
 }
 
+.memoryPrivacyNote {
+  margin: 0 0 18px;
+  border-left: 3px solid var(--primary);
+  background: var(--surface);
+  padding: 12px 15px;
+  color: var(--body);
+}
+
+.memoryPrivacyNote strong { color: var(--ink); font-size: 14px; }
+.memoryPrivacyNote p { max-width: 880px; margin: 5px 0 0; font-size: 13px; line-height: 1.55; }
+
 .requestPanel {
   border-bottom: 1px solid var(--border);
 }

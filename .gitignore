@@ -8,6 +8,7 @@ coverage/
 **/test-results/
 **/playwright-report/
 .turbo/
+/.local/memory-revocations/
 drizzle/
 # Every executable migration must be versioned. Keep generated metadata snapshots allowlisted.
 !packages/db/

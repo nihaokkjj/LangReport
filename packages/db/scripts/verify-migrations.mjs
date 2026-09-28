@@ -17,10 +17,7 @@ function migrationNumber(name) {
 }
 
 async function readMigrations() {
-  const [fileNames, journalText] = await Promise.all([
-    readdir(migrationDirectory),
-    readFile(journalPath, "utf8")
-  ]);
+  const [fileNames, journalText] = await Promise.all([readdir(migrationDirectory), readFile(journalPath, "utf8")]);
   const files = fileNames
     .filter((name) => name.endsWith(".sql"))
     .sort((left, right) => migrationNumber(left) - migrationNumber(right));
@@ -30,7 +27,10 @@ async function readMigrations() {
   assert.equal(new Set(files.map(migrationNumber)).size, files.length, "migration numbers must be unique");
   assert.ok(files.includes("0007_lush_starbolt.sql"), "the Phase 5 migration must remain in the chain");
   assert.ok(files.includes("0010_plugin_usage.sql"), "the plugin usage migration must remain in the chain");
-  assert.ok(files.includes("0016_workspace_model_credentials.sql"), "the Workspace model credential migration must remain in the chain");
+  assert.ok(
+    files.includes("0016_workspace_model_credentials.sql"),
+    "the Workspace model credential migration must remain in the chain",
+  );
   return files;
 }
 
@@ -50,11 +50,51 @@ async function run() {
 
       for (const migration of migrations) {
         const source = await readFile(resolve(migrationDirectory, migration), "utf8");
-        for (const statement of source.split("--> statement-breakpoint")) {
-          const query = schemaSql(statement.trim(), schemaName);
-          if (query) await transaction.unsafe(query);
+        if (migration === "0029_memory_identity_private_scope.sql") {
+          const preflight = source.split("--> statement-breakpoint", 1)[0];
+          let blockedDuplicateHead = false;
+          try {
+            await transaction.savepoint("memory_ambiguity_preflight", async (savepoint) => {
+              await savepoint.unsafe(`
+                INSERT INTO "memories" (
+                  "id", "workspace_id", "project_id", "scope", "memory_key", "memory_type", "statement",
+                  "value", "status", "version", "source_message_ids", "confidence", "created_by", "updated_by"
+                ) VALUES (
+                  '00000000-0000-0000-0000-00000000000f',
+                  '00000000-0000-0000-0000-000000000001',
+                  '00000000-0000-0000-0000-000000000002', 'project', 'metric.revenue.calculation',
+                  'metric_definition', 'Synthetic ambiguous duplicate', '{}'::jsonb, 'active', 3,
+                  '[]'::jsonb, 1, 'historical-user', 'historical-user'
+                )
+              `);
+              await savepoint.unsafe(preflight);
+            });
+          } catch (error) {
+            blockedDuplicateHead = error instanceof Error && error.message.includes("duplicate active heads");
+          }
+          const [rolledBackFixture] = await transaction.unsafe(
+            `SELECT count(*)::integer AS count FROM "memories" WHERE "id" = '00000000-0000-0000-0000-00000000000f'`,
+          );
+          assert.equal(rolledBackFixture.count, 0, "preflight rollback must remove the synthetic duplicate head");
+          assert.equal(
+            blockedDuplicateHead,
+            true,
+            "ambiguous active heads must stop migration before choosing a winner",
+          );
         }
 
+        for (const [statementIndex, statement] of source.split("--> statement-breakpoint").entries()) {
+          const query = schemaSql(statement.trim(), schemaName);
+          if (query) {
+            try {
+              await transaction.unsafe(query);
+            } catch (error) {
+              throw new Error(`Failed ${migration} statement ${statementIndex + 1}: ${query.slice(0, 100)}`, {
+                cause: error,
+              });
+            }
+          }
+        }
         if (migration === "0006_cooing_sage.sql") {
           // These rows model data created before the Phase 5 plugin columns existed.
           await transaction.unsafe(`
@@ -87,7 +127,152 @@ async function run() {
             VALUES ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-000000000009', 1, 2, 1, '[{"name":"sales","type":"number"}]'::jsonb, '[{"sales":10}]'::jsonb, 'historical-snapshot-v1.json');
           `);
         }
+
+        if (migration === "0028_database_user_accounts.sql") {
+          await transaction.unsafe(`
+            INSERT INTO "users" ("id", "username", "username_key", "password_hash")
+            VALUES ('historical-user', 'memory-fixture', 'memory-fixture', 'synthetic-only');
+            INSERT INTO "memory_candidates" (
+              "id", "workspace_id", "project_id", "conversation_id", "candidate_fingerprint",
+              "memory_key", "memory_type", "statement", "scope_hint", "confidence",
+              "extractor_version", "status", "reviewed_by", "reviewed_at"
+            ) VALUES (
+              '00000000-0000-0000-0000-00000000000b',
+              '00000000-0000-0000-0000-000000000001',
+              '00000000-0000-0000-0000-000000000002',
+              '00000000-0000-0000-0000-000000000005',
+              'synthetic-memory-fingerprint', 'metric.revenue.calculation', 'metric_definition',
+              '合成历史口径', 'project', 1, 'migration-fixture', 'accepted', 'historical-user',
+              '2026-01-02T03:04:05.000Z'
+            );
+            INSERT INTO "memories" (
+              "id", "workspace_id", "project_id", "scope", "memory_key", "memory_type", "statement",
+              "value", "status", "version", "source_candidate_id", "source_conversation_id",
+              "source_message_ids", "confidence", "created_by", "updated_by", "created_at", "updated_at", "superseded_by"
+            ) VALUES
+            (
+              '00000000-0000-0000-0000-00000000000c',
+              '00000000-0000-0000-0000-000000000001',
+              '00000000-0000-0000-0000-000000000002', 'project', 'metric.revenue.calculation',
+              'metric_definition', '合成旧版本', '{"taxIncluded":false}'::jsonb, 'superseded', 1,
+              NULL, '00000000-0000-0000-0000-000000000005', '[]'::jsonb, 1, 'historical-user',
+              'historical-user', '2026-01-01T00:00:00.000Z', '2026-01-02T03:04:05.000Z',
+              '00000000-0000-0000-0000-00000000000d'
+            ),
+            (
+              '00000000-0000-0000-0000-00000000000d',
+              '00000000-0000-0000-0000-000000000001',
+              '00000000-0000-0000-0000-000000000002', 'project', 'metric.revenue.calculation',
+              'metric_definition', '合成当前版本', '{"taxIncluded":true}'::jsonb, 'active', 2,
+              '00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-000000000005',
+              '[]'::jsonb, 1, 'historical-user', 'historical-user',
+              '2026-01-02T03:04:05.000Z', '2026-01-02T03:04:05.000Z', NULL
+            ),
+            (
+              '00000000-0000-0000-0000-00000000000e',
+              '00000000-0000-0000-0000-000000000001', NULL, 'workspace', 'legacy.workspace.keep',
+              'business_rule', '合成 Workspace 历史行', '{}'::jsonb, 'active', 1, NULL, NULL,
+              '[]'::jsonb, 1, 'historical-user', 'historical-user',
+              '2026-01-02T03:04:05.000Z', '2026-01-02T03:04:05.000Z', NULL
+            );
+          `);
+        }
       }
+
+      const memoryVersions = Array.from(
+        await transaction.unsafe(`
+          SELECT id, logical_memory_id, version, status, confirmed_at, effective_from
+          FROM "memories"
+          WHERE "project_id" = '00000000-0000-0000-0000-000000000002'
+            AND "memory_key" = 'metric.revenue.calculation'
+          ORDER BY version
+        `),
+      );
+      assert.equal(memoryVersions.length, 2, "legacy memory versions must both survive identity backfill");
+      assert.equal(
+        memoryVersions[0].logical_memory_id,
+        memoryVersions[1].logical_memory_id,
+        "legacy key versions must share one logical memory ID",
+      );
+      assert.equal(memoryVersions[0].confirmed_at, null, "unknown legacy confirmation time must remain unknown");
+      assert.equal(memoryVersions[0].effective_from, null, "unknown legacy effective time must remain unknown");
+      assert.equal(
+        memoryVersions[1].confirmed_at.toISOString(),
+        "2026-01-02T03:04:05.000Z",
+        "accepted candidate review time supplies confirmedAt",
+      );
+      assert.equal(
+        memoryVersions[1].effective_from.toISOString(),
+        "2026-01-02T03:04:05.000Z",
+        "accepted candidate review time supplies effectiveFrom",
+      );
+
+      const [retainedWorkspaceRows] = await transaction.unsafe(`
+        SELECT count(*)::integer AS count
+        FROM "memories"
+        WHERE "scope" = 'workspace' AND "memory_key" = 'legacy.workspace.keep'
+      `);
+      assert.equal(retainedWorkspaceRows.count, 1, "legacy Workspace Memory rows must be retained");
+
+      const privatePreferenceOwnerColumn = Array.from(
+        await transaction.unsafe(`
+          SELECT data_type
+          FROM information_schema.columns
+          WHERE table_schema = '${schemaName}'
+            AND table_name = 'user_preference_memories'
+            AND column_name = 'owner_id'
+        `),
+      );
+      assert.deepEqual(
+        privatePreferenceOwnerColumn,
+        [{ data_type: "text" }],
+        "private preference owner must match users.id text type",
+      );
+
+      await transaction.unsafe(`
+        INSERT INTO "user_preference_memories" (
+          "logical_memory_id", "owner_id", "category", "memory_key", "statement", "value",
+          "source_message_ids", "version", "confirmed_at", "effective_from"
+        ) VALUES (
+          '00000000-0000-0000-0000-000000000010', 'historical-user', 'language',
+          'user.preference.language', '合成偏好', '{"language":"en"}'::jsonb,
+          '[]'::jsonb, 1, '2026-02-01T00:00:00.000Z', '2026-02-01T00:00:00.000Z'
+        )
+      `);
+      const [privatePreference] = await transaction.unsafe(`
+        SELECT "owner_id", "statement"
+        FROM "user_preference_memories"
+        WHERE "logical_memory_id" = '00000000-0000-0000-0000-000000000010'
+      `);
+      assert.deepEqual(
+        privatePreference,
+        { owner_id: "historical-user", statement: "合成偏好" },
+        "preference body must live in the owner-scoped table",
+      );
+
+      const [sharedPreferenceColumns] = await transaction.unsafe(`
+        SELECT count(*)::integer AS count
+        FROM information_schema.columns
+        WHERE table_schema = '${schemaName}'
+          AND table_name IN ('generation_jobs', 'chart_revisions')
+          AND column_name ILIKE '%preference%'
+      `);
+      assert.equal(sharedPreferenceColumns.count, 0, "shared Job and Revision tables must have no preference columns");
+
+      const revocationColumns = Array.from(
+        await transaction.unsafe(`
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_schema = '${schemaName}'
+            AND table_name = 'user_preference_memory_revocations'
+          ORDER BY ordinal_position
+        `),
+      );
+      assert.deepEqual(
+        revocationColumns.map((column) => column.column_name),
+        ["owner_id", "logical_memory_id", "revoked_at"],
+        "private revocation tombstones must retain no preference body or digest",
+      );
 
       const [historical] = await transaction.unsafe(`
         SELECT
@@ -106,7 +291,11 @@ async function run() {
         JOIN "project_themes" t ON t."project_id" = j."project_id"
         WHERE j."id" = '00000000-0000-0000-0000-000000000006'
       `);
-      assert.equal(historical, undefined, "legacy project-scoped Data Asset records must be cleaned before source becomes required");
+      assert.equal(
+        historical,
+        undefined,
+        "legacy project-scoped Data Asset records must be cleaned before source becomes required",
+      );
 
       const [legacyAssets] = await transaction.unsafe(`
         SELECT count(*)::integer AS count
@@ -122,8 +311,8 @@ async function run() {
       `);
       assert.equal(
         sourceKey.source_object_key,
-        'workspaces/00000000-0000-0000-0000-000000000001/projects/00000000-0000-0000-0000-000000000002/conversations/00000000-0000-0000-0000-000000000005/user-data/uploads/00000000-0000-0000-0000-000000000009/source/historical-v1.csv',
-        "historical source object keys must be moved to their Data Snapshot"
+        "workspaces/00000000-0000-0000-0000-000000000001/projects/00000000-0000-0000-0000-000000000002/conversations/00000000-0000-0000-0000-000000000005/user-data/uploads/00000000-0000-0000-0000-000000000009/source/historical-v1.csv",
+        "historical source object keys must be moved to their Data Snapshot",
       );
 
       const [legacyObjectColumn] = await transaction.unsafe(`
@@ -153,23 +342,25 @@ async function run() {
       `);
       assert.equal(sourceColumn.is_nullable, "NO", "Data Asset provenance must be non-null");
 
-      const snapshotSourceColumns = Array.from(await transaction.unsafe(`
+      const snapshotSourceColumns = Array.from(
+        await transaction.unsafe(`
         SELECT column_name, is_nullable
         FROM information_schema.columns
         WHERE table_schema = '${schemaName}'
           AND table_name = 'data_snapshots'
           AND column_name IN ('source_name', 'source_type', 'mime_type', 'size_bytes')
         ORDER BY column_name
-      `));
+      `),
+      );
       assert.deepEqual(
         snapshotSourceColumns,
         [
-          { column_name: 'mime_type', is_nullable: 'YES' },
-          { column_name: 'size_bytes', is_nullable: 'YES' },
-          { column_name: 'source_name', is_nullable: 'YES' },
-          { column_name: 'source_type', is_nullable: 'YES' }
+          { column_name: "mime_type", is_nullable: "YES" },
+          { column_name: "size_bytes", is_nullable: "YES" },
+          { column_name: "source_name", is_nullable: "YES" },
+          { column_name: "source_type", is_nullable: "YES" },
         ],
-        "Data Snapshot source metadata must be nullable for historical records"
+        "Data Snapshot source metadata must be nullable for historical records",
       );
 
       const [legacySnapshotMetadata] = await transaction.unsafe(`
@@ -180,7 +371,7 @@ async function run() {
       assert.deepEqual(
         legacySnapshotMetadata,
         { source_name: null, source_type: null, mime_type: null, size_bytes: null },
-        "historical Snapshot source metadata must not be backfilled"
+        "historical Snapshot source metadata must not be backfilled",
       );
 
       const [errorCodeColumn] = await transaction.unsafe(`
@@ -232,6 +423,7 @@ async function run() {
           )
       `);
       assert.equal(indexes.length, 3, "Phase 5 uniqueness indexes must be present");
+
       const [usersTable] = await transaction.unsafe(`
         SELECT count(*)::integer AS count
         FROM information_schema.tables

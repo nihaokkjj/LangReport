@@ -27,24 +27,35 @@ import {
   type TransformPlan,
   type ValidationIssue,
   type ValidationRecord,
-  type ValidationReport
+  type ValidationReport,
 } from "@langreport/contracts";
 import { executeTransformPlan, type ColumnProfile, type DataRow, type TransformResult } from "@langreport/data-engine";
 import { evaluatePluginValidators, type ParsedPluginManifest, type ResolvedCapability } from "@langreport/plugin-sdk";
-import { CANONICAL_TEXT_CONTEXT_VERSION, projectConversationToCanonicalTextContext, validateCanonicalTextContextProjection } from "./context-projection.js";
+import {
+  CANONICAL_TEXT_CONTEXT_VERSION,
+  projectConversationToCanonicalTextContext,
+  validateCanonicalTextContextProjection,
+} from "./context-projection.js";
 import { runEvidenceGenerationGraph } from "./evidence-generation-graph/graph.js";
 import type { EvidenceGenerationGraphPort, EvidenceGenerationGraphState } from "./evidence-generation-graph/state.js";
 import { evaluateGenerationReadiness, type GenerationReadinessStage } from "./readiness-gate.js";
 
 class GenerationReadinessError extends Error {
-  constructor(readonly code: string, message: string) {
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
     super(message);
     this.name = "GenerationReadinessError";
   }
 }
 
 export { evaluateGenerationReadiness } from "./readiness-gate.js";
-export type { GenerationReadinessInput, GenerationReadinessResult, GenerationReadinessStage } from "./readiness-gate.js";
+export type {
+  GenerationReadinessInput,
+  GenerationReadinessResult,
+  GenerationReadinessStage,
+} from "./readiness-gate.js";
 
 export {
   CANONICAL_TEXT_CONTEXT_VERSION,
@@ -52,7 +63,7 @@ export {
   MAX_CANONICAL_TEXT_MESSAGE_LENGTH,
   projectConversationToCanonicalTextContext,
   validateCanonicalTextContextProjection,
-  type ConversationMessageForProjection
+  type ConversationMessageForProjection,
 } from "./context-projection.js";
 
 export type GenerationInput = {
@@ -60,6 +71,8 @@ export type GenerationInput = {
   profiles: ColumnProfile[];
   rows: DataRow[];
   memoryContext?: MemoryContext;
+  /** Owner-private text for this invocation. It is never copied to Job or Revision records. */
+  userPreferences?: string[];
   theme?: FlintSpec["theme"];
   themeVersion?: string;
   themeConfig?: Record<string, unknown>;
@@ -78,14 +91,44 @@ export type GenerationArtifacts = {
 };
 
 const DATE_NAME_HINTS = ["日期", "时间", "月份", "月", "季度", "年份", "年", "date", "month", "time", "year"];
-const DIMENSION_NAME_HINTS = ["区域", "地区", "城市", "省", "国家", "渠道", "产品", "类别", "类型", "region", "area", "city", "category", "product"];
-const MEASURE_NAME_HINTS = ["销售", "收入", "金额", "数量", "利润", "成本", "营收", "revenue", "sales", "amount", "quantity", "profit", "cost"];
+const DIMENSION_NAME_HINTS = [
+  "区域",
+  "地区",
+  "城市",
+  "省",
+  "国家",
+  "渠道",
+  "产品",
+  "类别",
+  "类型",
+  "region",
+  "area",
+  "city",
+  "category",
+  "product",
+];
+const MEASURE_NAME_HINTS = [
+  "销售",
+  "收入",
+  "金额",
+  "数量",
+  "利润",
+  "成本",
+  "营收",
+  "revenue",
+  "sales",
+  "amount",
+  "quantity",
+  "profit",
+  "cost",
+];
 
 function parseConversationIntent(prompt: string, profiles: ColumnProfile[]): ConversationIntent {
   const normalizedPrompt = prompt.trim();
   const timeProfile = findProfile(profiles, DATE_NAME_HINTS, (profile) => profile.inferredType === "date");
   const numericProfiles = profiles.filter((profile) => profile.inferredType === "number");
-  const measureProfile = numericProfiles.find((profile) => includesHint(profile.name, MEASURE_NAME_HINTS)) ?? numericProfiles[0];
+  const measureProfile =
+    numericProfiles.find((profile) => includesHint(profile.name, MEASURE_NAME_HINTS)) ?? numericProfiles[0];
   const dimensions = profiles
     .filter((profile) => profile.name !== timeProfile?.name && profile.name !== measureProfile?.name)
     .filter((profile) => profile.inferredType !== "number" && profile.inferredType !== "null")
@@ -105,10 +148,10 @@ function parseConversationIntent(prompt: string, profiles: ColumnProfile[]): Con
       ? "area"
       : "line";
   const timeGrain = timeProfile ? inferTimeGrain(timeProfile, normalizedPrompt) : undefined;
-  const confidence = Math.min(0.99, 0.55
-    + (timeProfile ? 0.18 : 0)
-    + (measureProfile ? 0.18 : 0)
-    + (dimensions.length > 0 ? 0.08 : 0));
+  const confidence = Math.min(
+    0.99,
+    0.55 + (timeProfile ? 0.18 : 0) + (measureProfile ? 0.18 : 0) + (dimensions.length > 0 ? 0.08 : 0),
+  );
 
   return conversationIntentSchema.parse({
     version: "v1",
@@ -121,7 +164,7 @@ function parseConversationIntent(prompt: string, profiles: ColumnProfile[]): Con
     measureColumns: measureProfile ? [measureProfile.name] : [],
     comparison,
     title: titleForPrompt(normalizedPrompt),
-    confidence
+    confidence,
   });
 }
 
@@ -132,20 +175,25 @@ function generateTransformPlan(intentInput: ConversationIntent, profiles: Column
   if (!measure || !availableColumns.has(measure)) {
     throw new Error("无法从数据画像中识别数值指标");
   }
-  const groupBy = [...new Set([
-    intent.timeColumn,
-    ...intent.dimensionColumns
-  ].filter((column): column is string => typeof column === "string" && availableColumns.has(column)))];
+  const groupBy = [
+    ...new Set(
+      [intent.timeColumn, ...intent.dimensionColumns].filter(
+        (column): column is string => typeof column === "string" && availableColumns.has(column),
+      ),
+    ),
+  ];
   const fallbackGroup = profiles.find((profile) => profile.name !== measure && profile.inferredType !== "number")?.name;
   if (groupBy.length === 0 && fallbackGroup) groupBy.push(fallbackGroup);
   if (groupBy.length === 0) throw new Error("至少需要一个分组字段才能生成图表");
 
   const aggregateColumn = `${measure}_sum`;
-  const steps: TransformPlan["steps"] = [{
-    kind: "aggregate",
-    groupBy,
-    measures: [{ column: measure, operation: "sum", outputColumn: aggregateColumn }]
-  }];
+  const steps: TransformPlan["steps"] = [
+    {
+      kind: "aggregate",
+      groupBy,
+      measures: [{ column: measure, operation: "sum", outputColumn: aggregateColumn }],
+    },
+  ];
   const expectedColumns = [...groupBy, aggregateColumn];
   if (intent.comparison !== "none") {
     const comparisonColumn = `${measure}_${intent.comparison}`;
@@ -157,7 +205,7 @@ function generateTransformPlan(intentInput: ConversationIntent, profiles: Column
       partitionBy: intent.dimensionColumns.filter((column) => column !== intent.timeColumn),
       orderBy: intent.timeColumn,
       periodColumn: intent.timeColumn,
-      periodOffset: intent.comparison === "yoy" ? 12 : 1
+      periodOffset: intent.comparison === "yoy" ? 12 : 1,
     });
     expectedColumns.push(comparisonColumn);
   }
@@ -168,7 +216,7 @@ function generateTransformPlan(intentInput: ConversationIntent, profiles: Column
     version: "v1",
     rationale: `识别到${intent.timeColumn ? `${intent.timeGrain ?? "时间"}字段 ${intent.timeColumn}` : "分组字段"}，对${measure}按${groupBy.join("、")}聚合${intent.comparison === "none" ? "" : `并计算${intent.comparison === "yoy" ? "同比" : "环比"}`}。`,
     steps,
-    expectedColumns
+    expectedColumns,
   });
 }
 
@@ -185,15 +233,21 @@ function generateFlintSpec(input: {
   if (!measure) throw new Error("缺少图表指标");
   const valueColumn = transform.columns.includes(`${measure}_sum`)
     ? `${measure}_sum`
-    : transform.columns.find((column) => column !== intent.timeColumn && column !== intent.dimensionColumns[0] && transform.rows.some((row) => typeof row[column] === "number"));
+    : transform.columns.find(
+        (column) =>
+          column !== intent.timeColumn &&
+          column !== intent.dimensionColumns[0] &&
+          transform.rows.some((row) => typeof row[column] === "number"),
+      );
   if (!valueColumn) throw new Error("变换结果没有可视化指标");
   const dimension = intent.dimensionColumns[0];
   const xColumn = intent.timeColumn ?? dimension ?? transform.columns.find((column) => column !== valueColumn);
-  if (!xColumn || !transform.columns.includes(xColumn)) throw new GenerationReadinessError("MISSING_X_FIELD", "缺少图表横轴字段");
+  if (!xColumn || !transform.columns.includes(xColumn))
+    throw new GenerationReadinessError("MISSING_X_FIELD", "缺少图表横轴字段");
   const comparisonColumn = intent.comparison === "none" ? undefined : `${measure}_${intent.comparison}`;
   const encodings: FlintSpec["chartSpec"]["encodings"] = {
     x: { field: xColumn, type: intent.timeColumn ? "temporal" : "nominal" },
-    y: { field: valueColumn, type: "quantitative" }
+    y: { field: valueColumn, type: "quantitative" },
   };
   if (dimension && dimension !== xColumn && transform.columns.includes(dimension)) {
     encodings.color = { field: dimension, type: "nominal" };
@@ -201,7 +255,9 @@ function generateFlintSpec(input: {
   if (comparisonColumn && transform.columns.includes(comparisonColumn)) {
     encodings.tooltip = { field: comparisonColumn, type: "quantitative" };
   }
-  const chartType = input.chartTypeOverride ?? (intent.chartType === "bar" ? "Bar Chart" : intent.chartType === "area" ? "Area Chart" : "Line Chart");
+  const chartType =
+    input.chartTypeOverride ??
+    (intent.chartType === "bar" ? "Bar Chart" : intent.chartType === "area" ? "Area Chart" : "Line Chart");
   return flintSpecSchema.parse({
     version: "v1",
     data: { values: transform.rows },
@@ -209,13 +265,15 @@ function generateFlintSpec(input: {
     chartSpec: {
       chartType,
       title: intent.title,
-      subtitle: comparisonColumn ? `${measure}与${intent.comparison === "yoy" ? "同比" : "环比"}变化` : `按${xColumn}查看${measure}`,
+      subtitle: comparisonColumn
+        ? `${measure}与${intent.comparison === "yoy" ? "同比" : "环比"}变化`
+        : `按${xColumn}查看${measure}`,
       encodings,
-      baseSize: { width: 920, height: 520 }
+      baseSize: { width: 920, height: 520 },
     },
     theme: input.theme ?? "economist",
     themeVersion: input.themeVersion ?? "v1",
-    themeConfig: input.themeConfig ?? {}
+    themeConfig: input.themeConfig ?? {},
   });
 }
 
@@ -229,53 +287,87 @@ function validateFlintSpec(specInput: unknown): ValidationReport {
   }
   const spec = parsed.data;
   const encodings = spec.chartSpec.encodings;
-  const semanticsValid = Boolean(encodings.x && encodings.y)
-    && (encodings.y.type === "quantitative" || encodings.y.type === "temporal")
-    && Boolean(spec.semanticTypes[encodings.x.field] && spec.semanticTypes[encodings.y.field]);
-  if (!semanticsValid) issues.push({ code: "SEMANTIC_MAPPING_INVALID", message: "图表必须有可解释的横轴和数值纵轴", severity: "error" });
+  const semanticsValid =
+    Boolean(encodings.x && encodings.y) &&
+    (encodings.y.type === "quantitative" || encodings.y.type === "temporal") &&
+    Boolean(spec.semanticTypes[encodings.x.field] && spec.semanticTypes[encodings.y.field]);
+  if (!semanticsValid)
+    issues.push({ code: "SEMANTIC_MAPPING_INVALID", message: "图表必须有可解释的横轴和数值纵轴", severity: "error" });
 
   const encodedFields = Object.values(encodings).map((encoding) => encoding.field);
-  const dataFieldsValid = encodedFields.every((field) => spec.data.values.some((row) => Object.prototype.hasOwnProperty.call(row, field)));
-  if (!dataFieldsValid) issues.push({ code: "DATA_FIELD_MISSING", message: "Flint Spec 引用的数据字段不存在", severity: "error" });
+  const dataFieldsValid = encodedFields.every((field) =>
+    spec.data.values.some((row) => Object.prototype.hasOwnProperty.call(row, field)),
+  );
+  if (!dataFieldsValid)
+    issues.push({ code: "DATA_FIELD_MISSING", message: "Flint Spec 引用的数据字段不存在", severity: "error" });
 
   const numericY = spec.data.values.filter((row) => typeof row[encodings.y?.field ?? ""] === "number").length;
   const xCardinality = new Set(spec.data.values.map((row) => String(row[encodings.x?.field ?? ""]))).size;
-  const colorCardinality = encodings.color ? new Set(spec.data.values.map((row) => String(row[encodings.color?.field ?? ""]))).size : 0;
-  const visualValid = Boolean(spec.chartSpec.title.trim())
-    && spec.data.values.length > 0
-    && numericY > 0
-    && xCardinality <= 500
-    && colorCardinality <= 50;
-  if (!visualValid) issues.push({ code: "VISUAL_RULE_FAILED", message: "图表数据为空、指标不可视化或类别过多", severity: "error" });
+  const colorCardinality = encodings.color
+    ? new Set(spec.data.values.map((row) => String(row[encodings.color?.field ?? ""]))).size
+    : 0;
+  const visualValid =
+    Boolean(spec.chartSpec.title.trim()) &&
+    spec.data.values.length > 0 &&
+    numericY > 0 &&
+    xCardinality <= 500 &&
+    colorCardinality <= 50;
+  if (!visualValid)
+    issues.push({ code: "VISUAL_RULE_FAILED", message: "图表数据为空、指标不可视化或类别过多", severity: "error" });
 
-  return report(issues, { schema: schemaValid, semantics: semanticsValid, dataFields: dataFieldsValid, visual: visualValid });
+  return report(issues, {
+    schema: schemaValid,
+    semantics: semanticsValid,
+    dataFields: dataFieldsValid,
+    visual: visualValid,
+  });
 }
 
 /** Materialize a validated Chart Plan decision through the internal deterministic modules. */
-function materializeArtifacts(input: GenerationInput & { plan?: TransformPlan }, decision: Extract<ChartPlanDecision, { decision: "ready" }>): GenerationArtifacts {
+function materializeArtifacts(
+  input: GenerationInput & { plan?: TransformPlan },
+  decision: Extract<ChartPlanDecision, { decision: "ready" }>,
+): GenerationArtifacts {
   const intent = decision.intent;
   const pluginManifests = input.pluginManifests ?? [];
   const pluginTemplate = selectPluginTemplate(input.prompt, pluginManifests, "vega-lite");
   const pluginTemplateId = pluginTemplate?.id;
   const pluginChartType = pluginTemplate?.payload.chartType;
-  const chartTypeOverride = pluginChartType === "Line Chart" || pluginChartType === "Bar Chart" || pluginChartType === "Area Chart" ? pluginChartType : undefined;
+  const chartTypeOverride =
+    pluginChartType === "Line Chart" || pluginChartType === "Bar Chart" || pluginChartType === "Area Chart"
+      ? pluginChartType
+      : undefined;
   let plan = input.plan ? transformPlanSchema.parse(input.plan) : decision.plan;
   let repairCount = 0;
   let transform = executeTransformPlan(plan, input.rows);
   const themeConfig = input.themeConfig ?? {};
-  let flintSpec = generateFlintSpec({ intent, transform, theme: input.theme, themeVersion: input.themeVersion, themeConfig, chartTypeOverride });
+  let flintSpec = generateFlintSpec({
+    intent,
+    transform,
+    theme: input.theme,
+    themeVersion: input.themeVersion,
+    themeConfig,
+    chartTypeOverride,
+  });
   let validation = validateFlintSpec(flintSpec);
   while (!validation.valid && repairCount < 2) {
     repairCount += 1;
     plan = repairPlan(plan, validation, input.profiles);
     transform = executeTransformPlan(plan, input.rows);
-    flintSpec = generateFlintSpec({ intent, transform, theme: input.theme, themeVersion: input.themeVersion, themeConfig, chartTypeOverride });
+    flintSpec = generateFlintSpec({
+      intent,
+      transform,
+      theme: input.theme,
+      themeVersion: input.themeVersion,
+      themeConfig,
+      chartTypeOverride,
+    });
     validation = validateFlintSpec(flintSpec);
   }
   const pluginSemanticTypes = semanticTypesFromPlugins(input.profiles, pluginManifests);
   flintSpec = {
     ...flintSpec,
-    semanticTypes: { ...flintSpec.semanticTypes, ...pluginSemanticTypes }
+    semanticTypes: { ...flintSpec.semanticTypes, ...pluginSemanticTypes },
   };
   validation = applyPluginValidation(validation, pluginManifests, {
     templateId: pluginTemplateId,
@@ -283,28 +375,38 @@ function materializeArtifacts(input: GenerationInput & { plan?: TransformPlan },
     columns: input.profiles.map((profile) => profile.name),
     roles: { ...rolesForIntent(intent), [flintSpec.chartSpec.encodings.y.field]: "measure" },
     semanticTypes: flintSpec.semanticTypes,
-    nullRates: Object.fromEntries(input.profiles.map((profile) => [profile.name, input.rows.length ? profile.nullCount / input.rows.length : 0])),
-    cardinalities: Object.fromEntries(input.profiles.map((profile) => [profile.name, profile.distinctCount]))
+    nullRates: Object.fromEntries(
+      input.profiles.map((profile) => [profile.name, input.rows.length ? profile.nullCount / input.rows.length : 0]),
+    ),
+    cardinalities: Object.fromEntries(input.profiles.map((profile) => [profile.name, profile.distinctCount])),
   });
   const pluginUsage = buildPluginUsage({
     manifests: pluginManifests,
     template: pluginTemplate,
     themeRef: input.pluginThemeRef ?? null,
     semanticTypes: pluginSemanticTypes,
-    renderer: "vega-lite"
+    renderer: "vega-lite",
   });
   return { intent, plan, transform, flintSpec, validation, repairCount, pluginUsage };
 }
 
-function selectPluginTemplate(prompt: string, manifests: ParsedPluginManifest[], renderer: string): ParsedPluginManifest["manifest"]["templates"][number] | undefined {
+function selectPluginTemplate(
+  prompt: string,
+  manifests: ParsedPluginManifest[],
+  renderer: string,
+): ParsedPluginManifest["manifest"]["templates"][number] | undefined {
   const normalized = prompt.toLocaleLowerCase();
   const compact = normalized.replace(/[额]/g, "");
   for (const manifest of manifests) {
-    const template = manifest.manifest.templates.find((candidate) => candidate.intentHints.some((hint) => {
-      const normalizedHint = hint.toLocaleLowerCase();
-      return (normalized.includes(normalizedHint) || compact.includes(normalizedHint.replace(/[额]/g, "")))
-        && (candidate.allowedRenderers.length === 0 || candidate.allowedRenderers.includes(renderer));
-    }));
+    const template = manifest.manifest.templates.find((candidate) =>
+      candidate.intentHints.some((hint) => {
+        const normalizedHint = hint.toLocaleLowerCase();
+        return (
+          (normalized.includes(normalizedHint) || compact.includes(normalizedHint.replace(/[额]/g, ""))) &&
+          (candidate.allowedRenderers.length === 0 || candidate.allowedRenderers.includes(renderer))
+        );
+      }),
+    );
     if (template) return template;
   }
   return undefined;
@@ -321,39 +423,66 @@ function rolesForIntent(intent: ConversationIntent): Record<string, string> {
 function applyPluginValidation(
   base: ValidationReport,
   manifests: ParsedPluginManifest[],
-  context: Parameters<typeof evaluatePluginValidators>[1]
+  context: Parameters<typeof evaluatePluginValidators>[1],
 ): ValidationReport {
   if (manifests.length === 0) return base;
   const template = context.templateId
-    ? manifests.flatMap((manifest) => manifest.manifest.templates).find((candidate) => candidate.id === context.templateId)
+    ? manifests
+        .flatMap((manifest) => manifest.manifest.templates)
+        .find((candidate) => candidate.id === context.templateId)
     : undefined;
-  const requirementIssues: ValidationIssue[] = template?.requiredFields.flatMap((required) => {
-    const matching = Object.entries(context.roles ?? {}).some(([field, role]) => role === required.role && required.semanticTypes.some((type) => context.semanticTypes?.[field] === type));
-    return matching ? [] : [{ code: "PLUGIN_TEMPLATE_REQUIRED_FIELD_MISSING", message: `模板 ${template.name} 缺少 ${required.role} 角色或匹配的语义类型（${required.semanticTypes.join("、")}）`, severity: "error" as const, field: required.role }];
-  }) ?? [];
+  const requirementIssues: ValidationIssue[] =
+    template?.requiredFields.flatMap((required) => {
+      const matching = Object.entries(context.roles ?? {}).some(
+        ([field, role]) =>
+          role === required.role && required.semanticTypes.some((type) => context.semanticTypes?.[field] === type),
+      );
+      return matching
+        ? []
+        : [
+            {
+              code: "PLUGIN_TEMPLATE_REQUIRED_FIELD_MISSING",
+              message: `模板 ${template.name} 缺少 ${required.role} 角色或匹配的语义类型（${required.semanticTypes.join("、")}）`,
+              severity: "error" as const,
+              field: required.role,
+            },
+          ];
+    }) ?? [];
   const pluginIssues = manifests.flatMap((manifest) => evaluatePluginValidators(manifest, context));
   if (pluginIssues.length === 0 && requirementIssues.length === 0) return base;
-  const issues: ValidationIssue[] = [...requirementIssues, ...pluginIssues.map((issue) => ({
-    code: issue.code,
-    message: `[${issue.pluginId}@${issue.pluginVersion}/${issue.validatorId}] ${issue.message}`,
-    severity: issue.severity,
-    field: issue.field
-  }))];
+  const issues: ValidationIssue[] = [
+    ...requirementIssues,
+    ...pluginIssues.map((issue) => ({
+      code: issue.code,
+      message: `[${issue.pluginId}@${issue.pluginVersion}/${issue.validatorId}] ${issue.message}`,
+      severity: issue.severity,
+      field: issue.field,
+    })),
+  ];
   return {
     ...base,
-    valid: base.valid && !requirementIssues.some((issue) => issue.severity === "error") && !pluginIssues.some((issue) => issue.severity === "error"),
-    issues: [...base.issues, ...issues]
+    valid:
+      base.valid &&
+      !requirementIssues.some((issue) => issue.severity === "error") &&
+      !pluginIssues.some((issue) => issue.severity === "error"),
+    issues: [...base.issues, ...issues],
   };
 }
 
-function semanticTypesFromPlugins(profiles: ColumnProfile[], manifests: ParsedPluginManifest[]): Record<string, string> {
+function semanticTypesFromPlugins(
+  profiles: ColumnProfile[],
+  manifests: ParsedPluginManifest[],
+): Record<string, string> {
   const declarations = manifests.flatMap((manifest) => manifest.manifest.semanticTypes);
   const result: Record<string, string> = {};
   for (const profile of profiles) {
     const matched = declarations.find((declaration) => {
       const field = profile.name.toLocaleLowerCase();
-      return declaration.examples.some((example) => profile.sampleValues.some((value) => String(value ?? "").toLocaleLowerCase() === example.toLocaleLowerCase()))
-        || field.includes(declaration.id.toLocaleLowerCase());
+      return (
+        declaration.examples.some((example) =>
+          profile.sampleValues.some((value) => String(value ?? "").toLocaleLowerCase() === example.toLocaleLowerCase()),
+        ) || field.includes(declaration.id.toLocaleLowerCase())
+      );
     });
     if (matched) result[profile.name] = matched.id;
   }
@@ -378,27 +507,40 @@ function buildPluginUsage(input: {
   }
   for (const manifest of input.manifests) {
     for (const validator of manifest.manifest.validators) {
-      if (!validator.when?.templateId || validator.when.templateId === input.template?.id) usedKeys.add(`validator:${validator.id}`);
+      if (!validator.when?.templateId || validator.when.templateId === input.template?.id)
+        usedKeys.add(`validator:${validator.id}`);
     }
     if (manifest.manifest.compatibility.renderers.includes(input.renderer)) usedKeys.add(`renderer:${input.renderer}`);
   }
-  const usedCapabilities = all.filter((capability) => usedKeys.has(capability.capabilityKey)).map(toCapabilityReference);
+  const usedCapabilities = all
+    .filter((capability) => usedKeys.has(capability.capabilityKey))
+    .map(toCapabilityReference);
   return {
     version: "v1",
     selectedTemplate,
     selectedTheme,
     usedCapabilities,
-    unusedCapabilities: all.filter((capability) => !usedKeys.has(capability.capabilityKey)).map(toCapabilityReference)
+    unusedCapabilities: all.filter((capability) => !usedKeys.has(capability.capabilityKey)).map(toCapabilityReference),
   };
 }
 
-function capabilityRefFor(capabilities: ResolvedCapability[], kind: ResolvedCapability["kind"], id: string): PluginUsage["usedCapabilities"][number] | null {
+function capabilityRefFor(
+  capabilities: ResolvedCapability[],
+  kind: ResolvedCapability["kind"],
+  id: string,
+): PluginUsage["usedCapabilities"][number] | null {
   const capability = capabilities.find((candidate) => candidate.kind === kind && candidate.id === id);
   return capability ? toCapabilityReference(capability) : null;
 }
 
 function toCapabilityReference(capability: ResolvedCapability): PluginUsage["usedCapabilities"][number] {
-  return { kind: capability.kind, id: capability.id, pluginId: capability.pluginId, version: capability.version, contentHash: capability.contentHash };
+  return {
+    kind: capability.kind,
+    id: capability.id,
+    pluginId: capability.pluginId,
+    version: capability.version,
+    contentHash: capability.contentHash,
+  };
 }
 
 function repairPlan(plan: TransformPlan, validation: ValidationReport, profiles: ColumnProfile[]): TransformPlan {
@@ -412,21 +554,42 @@ function repairPlan(plan: TransformPlan, validation: ValidationReport, profiles:
 }
 
 function validateReports(issues: ValidationIssue[], checks: ValidationReport["checks"]): ValidationReport {
-  return { valid: checks.schema && checks.semantics && checks.dataFields && checks.visual && !issues.some((issue) => issue.severity === "error"), issues, checks };
+  return {
+    valid:
+      checks.schema &&
+      checks.semantics &&
+      checks.dataFields &&
+      checks.visual &&
+      !issues.some((issue) => issue.severity === "error"),
+    issues,
+    checks,
+  };
 }
 
 function report(issues: ValidationIssue[], checks: ValidationReport["checks"]): ValidationReport {
   return validateReports(issues, checks);
 }
 
-function semanticTypesFor(columns: string[], intent: ConversationIntent, valueColumn: string, comparisonColumn?: string): Record<string, string> {
+function semanticTypesFor(
+  columns: string[],
+  intent: ConversationIntent,
+  valueColumn: string,
+  comparisonColumn?: string,
+): Record<string, string> {
   const semantics: Record<string, string> = {};
   for (const column of columns) {
-    semantics[column] = column === intent.timeColumn
-      ? intent.timeGrain === "year" ? "Year" : intent.timeGrain === "quarter" ? "Quarter" : "Month"
-      : column === valueColumn ? "Quantity"
-        : column === comparisonColumn ? "Percentage"
-          : "Category";
+    semantics[column] =
+      column === intent.timeColumn
+        ? intent.timeGrain === "year"
+          ? "Year"
+          : intent.timeGrain === "quarter"
+            ? "Quarter"
+            : "Month"
+        : column === valueColumn
+          ? "Quantity"
+          : column === comparisonColumn
+            ? "Percentage"
+            : "Category";
   }
   return semantics;
 }
@@ -435,12 +598,22 @@ function inferTimeGrain(profile: ColumnProfile, prompt: string): "day" | "month"
   if (/季度|quarter/i.test(prompt)) return "quarter";
   if (/按年|年度|year/i.test(prompt)) return "year";
   if (/按日|日期|day/i.test(prompt)) return "day";
-  if (/月份|按月|month/i.test(prompt) || profile.sampleValues.some((value) => typeof value === "string" && /^\d{4}[-/]\d{1,2}/.test(value))) return "month";
+  if (
+    /月份|按月|month/i.test(prompt) ||
+    profile.sampleValues.some((value) => typeof value === "string" && /^\d{4}[-/]\d{1,2}/.test(value))
+  )
+    return "month";
   return "month";
 }
 
-function findProfile(profiles: ColumnProfile[], hints: string[], predicate: (profile: ColumnProfile) => boolean): ColumnProfile | undefined {
-  return profiles.find((profile) => predicate(profile) && includesHint(profile.name, hints)) ?? profiles.find(predicate);
+function findProfile(
+  profiles: ColumnProfile[],
+  hints: string[],
+  predicate: (profile: ColumnProfile) => boolean,
+): ColumnProfile | undefined {
+  return (
+    profiles.find((profile) => predicate(profile) && includesHint(profile.name, hints)) ?? profiles.find(predicate)
+  );
 }
 
 function includesHint(value: string, hints: string[]): boolean {
@@ -496,7 +669,8 @@ export type GenerationCycleAudit = {
   readinessProposal: GenerationClarificationProposal | null;
 };
 
-type GenerationCycleFailureCode = ModelErrorCode
+type GenerationCycleFailureCode =
+  | ModelErrorCode
   | "GENERATION_CONTEXT_INVALID"
   | "GENERATION_TRANSFORM_FAILED"
   | "GENERATION_COMPILATION_FAILED"
@@ -505,12 +679,17 @@ type GenerationCycleFailureCode = ModelErrorCode
 
 export type GenerationCycleResult =
   | { status: "drafted"; artifacts: GenerationArtifacts; audit: GenerationCycleAudit }
-  | { status: "needs_clarification"; diagnostic: GenerationDiagnostic; proposal: GenerationClarificationProposal; audit: GenerationCycleAudit }
   | {
-    status: "failed";
-    error: { code: GenerationCycleFailureCode; message: string; retryable: boolean; invocationId: string };
-    audit: GenerationCycleAudit;
-  };
+      status: "needs_clarification";
+      diagnostic: GenerationDiagnostic;
+      proposal: GenerationClarificationProposal;
+      audit: GenerationCycleAudit;
+    }
+  | {
+      status: "failed";
+      error: { code: GenerationCycleFailureCode; message: string; retryable: boolean; invocationId: string };
+      audit: GenerationCycleAudit;
+    };
 
 type PreparedGenerationModelContext = {
   context: PreparedModelContext;
@@ -640,7 +819,10 @@ export class GenerationCycle {
   }
 }
 //模型规划
-async function runGenerationCycleGraph(input: GenerationCycleInput, gateway: ModelGateway): Promise<GenerationCycleResult> {
+async function runGenerationCycleGraph(
+  input: GenerationCycleInput,
+  gateway: ModelGateway,
+): Promise<GenerationCycleResult> {
   let prepared: PreparedGenerationModelContext | undefined;
   let transform: TransformResult | undefined;
   let flintSpec: FlintSpec | undefined;
@@ -649,63 +831,171 @@ async function runGenerationCycleGraph(input: GenerationCycleInput, gateway: Mod
   const pluginManifests = input.pluginManifests ?? [];
   const pluginTemplate = selectPluginTemplate(input.prompt, pluginManifests, "vega-lite");
   const pluginChartType = pluginTemplate?.payload.chartType;
-  const chartTypeOverride = pluginChartType === "Line Chart" || pluginChartType === "Bar Chart" || pluginChartType === "Area Chart" ? pluginChartType : undefined;
-  const fail = (audit: GenerationCycleAudit, code: GenerationCycleFailureCode, message: string, retryable: boolean, stage: GenerationCycleStageName): Partial<EvidenceGenerationGraphState> => {
+  const chartTypeOverride =
+    pluginChartType === "Line Chart" || pluginChartType === "Bar Chart" || pluginChartType === "Area Chart"
+      ? pluginChartType
+      : undefined;
+  const fail = (
+    audit: GenerationCycleAudit,
+    code: GenerationCycleFailureCode,
+    message: string,
+    retryable: boolean,
+    stage: GenerationCycleStageName,
+  ): Partial<EvidenceGenerationGraphState> => {
     const result = failedResult(audit, input, code, message, retryable, stage);
     return { audit: result.audit, terminal: "failed", failure: result.error };
   };
   const port: EvidenceGenerationGraphPort = {
     async prepare() {
-      try { prepared = buildPreparedModelContext(input); } catch (error) { return fail(createAudit(input), "GENERATION_CONTEXT_INVALID", errorMessage(error, "模型上下文无效"), false, "planning"); }
+      try {
+        prepared = buildPreparedModelContext(input);
+      } catch (error) {
+        return fail(
+          createAudit(input),
+          "GENERATION_CONTEXT_INVALID",
+          errorMessage(error, "模型上下文无效"),
+          false,
+          "planning",
+        );
+      }
       const audit = createAudit(input, prepared);
       const conflicts = input.memoryContext?.conflicts.filter((conflict) => conflict.requiresDecision) ?? [];
       if (conflicts.length) {
         const proposal = memoryConflictProposal(conflicts[0]!.memoryKey);
-        return { audit: { ...setStage(audit, "planning", "succeeded"), readinessDiagnostic: proposal.diagnostic, readinessProposal: proposal }, terminal: "needs_clarification", diagnostic: proposal.diagnostic, proposal };
+        return {
+          audit: {
+            ...setStage(audit, "planning", "succeeded"),
+            readinessDiagnostic: proposal.diagnostic,
+            readinessProposal: proposal,
+          },
+          terminal: "needs_clarification",
+          diagnostic: proposal.diagnostic,
+          proposal,
+        };
       }
-      if (Date.now() >= input.cycle.budget.deadlineAt) return fail(audit, "MODEL_BUDGET_EXCEEDED", "Generation Cycle 在模型调用前已超过截止时间预算", false, "planning");
+      if (Date.now() >= input.cycle.budget.deadlineAt)
+        return fail(
+          audit,
+          "MODEL_BUDGET_EXCEEDED",
+          "Generation Cycle 在模型调用前已超过截止时间预算",
+          false,
+          "planning",
+        );
       return { audit };
     },
     async plan(state) {
       const audit = state.audit as GenerationCycleAudit;
       const deadline = createDeadlineAbortController(input.cycle.budget.deadlineAt);
       let modelResult: ModelResult<ChartPlanDecision>;
-      try { modelResult = await gateway.generateStructured({ version: "v1", workspaceId: input.cycle.workspaceId, projectId: input.cycle.projectId, generationJobId: input.cycle.generationJobId, invocationId: input.cycle.invocationId, task: "chart-plan", routeSnapshotId: input.cycle.routeSnapshotId, context: prepared!.context, output: { ...createChartPlanOutputDescriptor(), parse: (value) => chartPlanDecisionSchema.parse(value) }, budget: input.cycle.budget, signal: deadline.signal }); }
-      catch (error) { const timedOut = deadline.signal.aborted || Date.now() >= input.cycle.budget.deadlineAt; return fail(audit, timedOut ? "MODEL_TIMEOUT" : "GENERATION_UNEXPECTED", errorMessage(error, timedOut ? "Model Gateway 在截止时间内未完成" : "Model Gateway 调用失败"), timedOut, "planning"); }
-      finally { deadline.dispose(); }
+      try {
+        modelResult = await gateway.generateStructured({
+          version: "v1",
+          workspaceId: input.cycle.workspaceId,
+          projectId: input.cycle.projectId,
+          generationJobId: input.cycle.generationJobId,
+          invocationId: input.cycle.invocationId,
+          task: "chart-plan",
+          routeSnapshotId: input.cycle.routeSnapshotId,
+          context: prepared!.context,
+          output: { ...createChartPlanOutputDescriptor(), parse: (value) => chartPlanDecisionSchema.parse(value) },
+          budget: input.cycle.budget,
+          signal: deadline.signal,
+        });
+      } catch (error) {
+        const gateFailure = generationGateFailure(error);
+        const timedOut = deadline.signal.aborted || Date.now() >= input.cycle.budget.deadlineAt;
+        return fail(
+          audit,
+          gateFailure?.code ?? (timedOut ? "MODEL_TIMEOUT" : "GENERATION_UNEXPECTED"),
+          gateFailure?.message ??
+            errorMessage(error, timedOut ? "Model Gateway 在截止时间内未完成" : "Model Gateway 调用失败"),
+          gateFailure ? false : timedOut,
+          "planning",
+        );
+      } finally {
+        deadline.dispose();
+      }
       let nextAudit = setStage(audit, "planning", "succeeded");
       const envelope = modelResultSchema.safeParse(modelResult);
-      if (!envelope.success) return fail(nextAudit, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的结果 envelope 不符合版本化合同", false, "planning");
+      if (!envelope.success)
+        return fail(
+          nextAudit,
+          "MODEL_OUTPUT_INVALID",
+          "Model Gateway 返回的结果 envelope 不符合版本化合同",
+          false,
+          "planning",
+        );
       nextAudit = { ...nextAudit, modelInvocation: envelope.data.invocation ?? null };
-      if (modelResult.status === "error") return fail(nextAudit, modelResult.code, modelResult.message, modelResult.retryable, "planning");
+      if (modelResult.status === "error")
+        return fail(nextAudit, modelResult.code, modelResult.message, modelResult.retryable, "planning");
       const parsed = chartPlanDecisionSchema.safeParse(modelResult.data);
-      if (!parsed.success) return fail(nextAudit, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的 chart-plan 不符合版本化合同", false, "planning");
+      if (!parsed.success)
+        return fail(
+          nextAudit,
+          "MODEL_OUTPUT_INVALID",
+          "Model Gateway 返回的 chart-plan 不符合版本化合同",
+          false,
+          "planning",
+        );
       if (parsed.data.decision === "needs_clarification") {
         const proposal = parsed.data.proposal;
-        return { audit: { ...nextAudit, readinessDiagnostic: proposal.diagnostic, readinessProposal: proposal }, terminal: "needs_clarification", diagnostic: proposal.diagnostic, proposal };
+        return {
+          audit: { ...nextAudit, readinessDiagnostic: proposal.diagnostic, readinessProposal: proposal },
+          terminal: "needs_clarification",
+          diagnostic: proposal.diagnostic,
+          proposal,
+        };
       }
       decision = applyGenerationDecision(parsed.data, input.generationDecision, input.profiles);
-      return { audit: nextAudit, decision, transformPlan: input.plan && !input.generationDecision ? transformPlanSchema.parse(input.plan) : decision.plan };
+      return {
+        audit: nextAudit,
+        decision,
+        transformPlan: input.plan && !input.generationDecision ? transformPlanSchema.parse(input.plan) : decision.plan,
+      };
     },
     async transform(state) {
       const audit = state.audit as GenerationCycleAudit;
-      try { transform = executeTransformPlan(state.transformPlan!, input.rows); return { audit: setStage(audit, "transforming", "succeeded") }; }
-      catch (error) { return fail(audit, "GENERATION_TRANSFORM_FAILED", errorMessage(error, "生成阶段失败"), false, "transforming"); }
+      try {
+        transform = executeTransformPlan(state.transformPlan!, input.rows);
+        return { audit: setStage(audit, "transforming", "succeeded") };
+      } catch (error) {
+        return fail(audit, "GENERATION_TRANSFORM_FAILED", errorMessage(error, "生成阶段失败"), false, "transforming");
+      }
     },
     async compile(state) {
       const audit = state.audit as GenerationCycleAudit;
-      try { flintSpec = generateFlintSpec({ intent: decision!.intent, transform: transform!, theme: input.theme, themeVersion: input.themeVersion, themeConfig: input.themeConfig ?? {}, chartTypeOverride }); return { audit: setStage(audit, "compiling", "succeeded"), compiledFlintSpec: flintSpec }; }
-      catch (error) {
+      try {
+        flintSpec = generateFlintSpec({
+          intent: decision!.intent,
+          transform: transform!,
+          theme: input.theme,
+          themeVersion: input.themeVersion,
+          themeConfig: input.themeConfig ?? {},
+          chartTypeOverride,
+        });
+        return { audit: setStage(audit, "compiling", "succeeded"), compiledFlintSpec: flintSpec };
+      } catch (error) {
         const message = errorMessage(error, "生成阶段失败");
-        const readiness = evaluateGenerationReadiness({ stage: "compiling", profiles: input.profiles, intent: decision!.intent, transform, error });
+        const readiness = evaluateGenerationReadiness({
+          stage: "compiling",
+          profiles: input.profiles,
+          intent: decision!.intent,
+          transform,
+          error,
+        });
         if (readiness.decision === "needs_clarification") {
           const nextAudit = {
             ...setStage(audit, "compiling", "needs_clarification", readiness.diagnostic.code),
             readinessDiagnostic: readiness.diagnostic,
             readinessProposal: readiness.proposal,
-            planValidation: validationRecordFromError(readiness.diagnostic.code, message)
+            planValidation: validationRecordFromError(readiness.diagnostic.code, message),
           };
-          return { audit: nextAudit, terminal: "needs_clarification", diagnostic: readiness.diagnostic, proposal: readiness.proposal };
+          return {
+            audit: nextAudit,
+            terminal: "needs_clarification",
+            diagnostic: readiness.diagnostic,
+            proposal: readiness.proposal,
+          };
         }
         return fail(audit, "GENERATION_COMPILATION_FAILED", message, false, "compiling");
       }
@@ -714,24 +1004,89 @@ async function runGenerationCycleGraph(input: GenerationCycleInput, gateway: Mod
       const audit = state.audit as GenerationCycleAudit;
       const semanticTypes = semanticTypesFromPlugins(input.profiles, pluginManifests);
       flintSpec = { ...flintSpec!, semanticTypes: { ...flintSpec!.semanticTypes, ...semanticTypes } };
-      validation = applyPluginValidation(validateFlintSpec(flintSpec), pluginManifests, { templateId: pluginTemplate?.id, renderer: "vega-lite", columns: input.profiles.map((profile) => profile.name), roles: { ...rolesForIntent(decision!.intent), [flintSpec.chartSpec.encodings.y.field]: "measure" }, semanticTypes: flintSpec.semanticTypes, nullRates: Object.fromEntries(input.profiles.map((profile) => [profile.name, input.rows.length ? profile.nullCount / input.rows.length : 0])), cardinalities: Object.fromEntries(input.profiles.map((profile) => [profile.name, profile.distinctCount])) });
-      const nextAudit = { ...setStage(audit, "validating", "succeeded"), planValidation: validationRecordFromReport(validation), repairCount: state.repairCount };
-      if (validation.valid) return { audit: nextAudit, validation, compiledFlintSpec: flintSpec, terminal: "ready_for_render" };
-      if (state.repairCount >= 2) return fail(nextAudit, "MODEL_BUDGET_EXCEEDED", "生成修复预算已耗尽，Flint Spec 仍未通过校验", false, "validating");
+      validation = applyPluginValidation(validateFlintSpec(flintSpec), pluginManifests, {
+        templateId: pluginTemplate?.id,
+        renderer: "vega-lite",
+        columns: input.profiles.map((profile) => profile.name),
+        roles: { ...rolesForIntent(decision!.intent), [flintSpec.chartSpec.encodings.y.field]: "measure" },
+        semanticTypes: flintSpec.semanticTypes,
+        nullRates: Object.fromEntries(
+          input.profiles.map((profile) => [
+            profile.name,
+            input.rows.length ? profile.nullCount / input.rows.length : 0,
+          ]),
+        ),
+        cardinalities: Object.fromEntries(input.profiles.map((profile) => [profile.name, profile.distinctCount])),
+      });
+      const nextAudit = {
+        ...setStage(audit, "validating", "succeeded"),
+        planValidation: validationRecordFromReport(validation),
+        repairCount: state.repairCount,
+      };
+      if (validation.valid)
+        return { audit: nextAudit, validation, compiledFlintSpec: flintSpec, terminal: "ready_for_render" };
+      if (state.repairCount >= 2)
+        return fail(
+          nextAudit,
+          "MODEL_BUDGET_EXCEEDED",
+          "生成修复预算已耗尽，Flint Spec 仍未通过校验",
+          false,
+          "validating",
+        );
       return { audit: nextAudit, validation, compiledFlintSpec: flintSpec };
     },
     async repair(state) {
       const audit = state.audit as GenerationCycleAudit;
-      try { return { audit, transformPlan: repairPlan(state.transformPlan!, state.validation!, input.profiles), repairCount: state.repairCount + 1 }; }
-      catch (error) { return fail(audit, "GENERATION_TRANSFORM_FAILED", errorMessage(error, "生成修复失败"), false, "transforming"); }
-    }
+      try {
+        return {
+          audit,
+          transformPlan: repairPlan(state.transformPlan!, state.validation!, input.profiles),
+          repairCount: state.repairCount + 1,
+        };
+      } catch (error) {
+        return fail(audit, "GENERATION_TRANSFORM_FAILED", errorMessage(error, "生成修复失败"), false, "transforming");
+      }
+    },
   };
   const state = await runEvidenceGenerationGraph(port);
   const audit = state.audit as GenerationCycleAudit;
-  if (state.terminal === "needs_clarification" && state.diagnostic && state.proposal) return { status: "needs_clarification", diagnostic: state.diagnostic, proposal: state.proposal, audit };
-  if (state.terminal === "failed") return { status: "failed", error: state.failure as Extract<GenerationCycleResult, { status: "failed" }>["error"], audit };
+  if (state.terminal === "needs_clarification" && state.diagnostic && state.proposal)
+    return { status: "needs_clarification", diagnostic: state.diagnostic, proposal: state.proposal, audit };
+  if (state.terminal === "failed")
+    return {
+      status: "failed",
+      error: state.failure as Extract<GenerationCycleResult, { status: "failed" }>["error"],
+      audit,
+    };
   const pluginSemanticTypes = semanticTypesFromPlugins(input.profiles, pluginManifests);
-  return { status: "drafted", artifacts: { intent: decision!.intent, plan: state.transformPlan!, transform: transform!, flintSpec: flintSpec!, validation: validation!, repairCount: state.repairCount, pluginUsage: buildPluginUsage({ manifests: pluginManifests, template: pluginTemplate, themeRef: input.pluginThemeRef ?? null, semanticTypes: pluginSemanticTypes, renderer: "vega-lite" }) }, audit };
+  return {
+    status: "drafted",
+    artifacts: {
+      intent: decision!.intent,
+      plan: state.transformPlan!,
+      transform: transform!,
+      flintSpec: flintSpec!,
+      validation: validation!,
+      repairCount: state.repairCount,
+      pluginUsage: buildPluginUsage({
+        manifests: pluginManifests,
+        template: pluginTemplate,
+        themeRef: input.pluginThemeRef ?? null,
+        semanticTypes: pluginSemanticTypes,
+        renderer: "vega-lite",
+      }),
+    },
+    audit,
+  };
+}
+
+function generationGateFailure(
+  error: unknown,
+): { code: "MODEL_BUDGET_EXCEEDED" | "MEMORY_CONTEXT_REVOKED"; message: string } | null {
+  if (typeof error !== "object" || error === null || !("code" in error) || !("message" in error)) return null;
+  const code = (error as { code?: unknown }).code;
+  if (code !== "MODEL_BUDGET_EXCEEDED" && code !== "MEMORY_CONTEXT_REVOKED") return null;
+  return { code, message: String((error as { message: unknown }).message) };
 }
 
 /** Keep revision validation behind the Generation public seam for edit jobs. */
@@ -753,15 +1108,23 @@ class DeterministicModelGateway implements ModelGateway {
             intent: null,
             plan: null,
             chartSelection: null,
-            proposal: modelClarificationProposal({ code: "measure_missing", target: "metric", question: "请确认需要分析的数值指标", reason: "当前 Data Snapshot 没有可聚合的数值字段" })
+            proposal: modelClarificationProposal({
+              code: "measure_missing",
+              target: "metric",
+              question: "请确认需要分析的数值指标",
+              reason: "当前 Data Snapshot 没有可聚合的数值字段",
+            }),
           }),
-          invocationId: request.invocationId
+          invocationId: request.invocationId,
         };
       }
       const intent = parseConversationIntent(context.brief.businessQuestion, profiles);
       const plan = generateTransformPlan(intent, profiles);
       const measure = intent.measureColumns[0];
-      const xField = intent.timeColumn ?? intent.dimensionColumns[0] ?? plan.steps.find((step) => step.kind === "aggregate")?.groupBy[0];
+      const xField =
+        intent.timeColumn ??
+        intent.dimensionColumns[0] ??
+        plan.steps.find((step) => step.kind === "aggregate")?.groupBy[0];
       if (!measure || !xField) {
         return {
           status: "ok",
@@ -770,9 +1133,14 @@ class DeterministicModelGateway implements ModelGateway {
             intent,
             plan: null,
             chartSelection: null,
-            proposal: modelClarificationProposal({ code: "grouping_field_missing", target: "x_field", question: "请确认图表的横轴或分组字段", reason: "当前 Data Snapshot 无法确定图表分组方式" })
+            proposal: modelClarificationProposal({
+              code: "grouping_field_missing",
+              target: "x_field",
+              question: "请确认图表的横轴或分组字段",
+              reason: "当前 Data Snapshot 无法确定图表分组方式",
+            }),
           }),
-          invocationId: request.invocationId
+          invocationId: request.invocationId,
         };
       }
       const comparisonField = intent.comparison === "none" ? undefined : `${measure}_${intent.comparison}`;
@@ -787,11 +1155,11 @@ class DeterministicModelGateway implements ModelGateway {
             xField,
             yField: `${measure}_sum`,
             seriesField: intent.timeColumn && intent.dimensionColumns[0] ? intent.dimensionColumns[0] : null,
-            tooltipFields: comparisonField ? [comparisonField] : []
+            tooltipFields: comparisonField ? [comparisonField] : [],
           },
-          proposal: null
+          proposal: null,
         }),
-        invocationId: request.invocationId
+        invocationId: request.invocationId,
       };
     } catch (error) {
       return {
@@ -799,7 +1167,7 @@ class DeterministicModelGateway implements ModelGateway {
         code: "MODEL_OUTPUT_INVALID",
         message: errorMessage(error, "确定性 chart-plan adapter 无法产出合法结果"),
         retryable: false,
-        invocationId: request.invocationId
+        invocationId: request.invocationId,
       };
     }
   }
@@ -815,7 +1183,7 @@ function buildPreparedModelContext(input: GenerationCycleInput): PreparedGenerat
     : projectConversationToCanonicalTextContext([{ role: "user", content: input.prompt }]);
   const samples = input.rows.slice(0, 5).map((row, index) => ({
     label: `row-${index + 1}`,
-    text: JSON.stringify(row) || "{}"
+    text: JSON.stringify(row) || "{}",
   }));
   return {
     context: preparedModelContextSchema.parse({
@@ -827,7 +1195,7 @@ function buildPreparedModelContext(input: GenerationCycleInput): PreparedGenerat
         audience: contextText(brief.audience, "客户汇报"),
         timeRange: nullableContextText(brief.timeRange),
         timeGrain: nullableContextText(brief.timeGrain),
-        outputFormat: contextText(brief.outputFormat, "evidence_block")
+        outputFormat: contextText(brief.outputFormat, "evidence_block"),
       },
       metricDefinition: {
         name: contextText(metric.name, numericProfile?.name ?? "待确认指标"),
@@ -835,42 +1203,60 @@ function buildPreparedModelContext(input: GenerationCycleInput): PreparedGenerat
         formula: contextText(metric.formula, `sum(${numericProfile?.name ?? "待确认字段"})`),
         unit: contextText(metric.unit, "未指定"),
         timeRule: contextText(metric.timeRule, "按请求指定的时间粒度统计"),
-        filterRule: nullableContextText(metric.filterRule)
+        filterRule: nullableContextText(metric.filterRule),
       },
-      memories: [...(input.memoryContext?.project ?? []), ...(input.memoryContext?.workspace ?? [])]
+      memories: (input.memoryContext?.project ?? [])
+        .filter((record) => record.scope === "project" && record.status === "active")
         .slice(0, 32)
-        .map((record) => ({ scope: record.scope, statement: contextText(record.statement, record.memoryKey) })),
+        .map((record) => ({
+          scope: record.scope,
+          memoryKey: record.memoryKey,
+          statement: contextText(record.statement, record.memoryKey),
+        })),
+      userPreferences: (input.userPreferences ?? []).slice(0, 5).map((value) => contextText(value, "")),
       fieldProfiles: input.profiles.map((profile) => ({
         name: profile.name,
         inferredType: profile.inferredType,
         nullCount: profile.nullCount,
         distinctCount: profile.distinctCount,
-        sampleValues: profile.sampleValues.slice(0, 16)
+        sampleValues: profile.sampleValues.slice(0, 16),
       })),
-      statistics: input.profiles.flatMap((profile) => [
-        { name: `${profile.name}.nullRate`, value: input.rows.length ? profile.nullCount / input.rows.length : 0, unit: "ratio" },
-        { name: `${profile.name}.distinctCount`, value: profile.distinctCount, unit: "count" }
-      ]).slice(0, 128),
+      statistics: input.profiles
+        .flatMap((profile) => [
+          {
+            name: `${profile.name}.nullRate`,
+            value: input.rows.length ? profile.nullCount / input.rows.length : 0,
+            unit: "ratio",
+          },
+          { name: `${profile.name}.distinctCount`, value: profile.distinctCount, unit: "count" },
+        ])
+        .slice(0, 128),
       samples,
       allowedOperations: ["filter", "derive", "aggregate", "sort", "limit"],
       allowedChartTypes: ["line", "bar", "area"],
       templateConstraints: {
         templateId: selectedTemplate?.id ?? "builtin-default",
         templateVersion: input.themeVersion ?? "v1",
-        requirements: selectedTemplate?.requiredFields.map((field) => `${field.role}:${field.semanticTypes.join("|")}`) ?? []
-      }
+        requirements:
+          selectedTemplate?.requiredFields.map((field) => `${field.role}:${field.semanticTypes.join("|")}`) ?? [],
+      },
     }),
     conversationProjection,
-    contextFallbacks: input.conversationProjection ? [] : ["legacy-prompt-projection-v1"]
+    contextFallbacks: input.conversationProjection ? [] : ["legacy-prompt-projection-v1"],
   };
 }
 
 function applyGenerationDecision(
   decision: Extract<ChartPlanDecision, { decision: "ready" }>,
   generationDecision: GenerationDecision | undefined,
-  profiles: ColumnProfile[]
+  profiles: ColumnProfile[],
 ): Extract<ChartPlanDecision, { decision: "ready" }> {
-  if (!generationDecision || generationDecision.action === "adjust_direction" || generationDecision.target !== "x_field") return decision;
+  if (
+    !generationDecision ||
+    generationDecision.action === "adjust_direction" ||
+    generationDecision.target !== "x_field"
+  )
+    return decision;
   const selectedProfile = profiles.find((profile) => profile.name === generationDecision.selectedValue);
   if (!selectedProfile) return decision;
   if (selectedProfile.inferredType !== "date" && decision.intent.comparison !== "none") return decision;
@@ -881,14 +1267,14 @@ function applyGenerationDecision(
     timeGrain: selectedIsTime ? inferTimeGrain(selectedProfile, decision.intent.originalPrompt) : undefined,
     dimensionColumns: selectedIsTime
       ? decision.intent.dimensionColumns
-      : [selectedProfile.name, ...decision.intent.dimensionColumns.filter((column) => column !== selectedProfile.name)]
+      : [selectedProfile.name, ...decision.intent.dimensionColumns.filter((column) => column !== selectedProfile.name)],
   });
   const plan = generateTransformPlan(intent, profiles);
   return {
     ...decision,
     intent,
     plan,
-    chartSelection: { ...decision.chartSelection, xField: selectedProfile.name }
+    chartSelection: { ...decision.chartSelection, xField: selectedProfile.name },
   };
 }
 
@@ -909,7 +1295,7 @@ function modelClarificationProposal(input: {
     source: "model_output",
     message: input.question,
     field: input.field ?? null,
-    evidence: input.evidence ?? []
+    evidence: input.evidence ?? [],
   };
   return {
     version: "v1",
@@ -923,7 +1309,7 @@ function modelClarificationProposal(input: {
     field: input.field ?? null,
     candidates: [],
     recommendedCandidate: null,
-    requiresUserDecision: true
+    requiresUserDecision: true,
   };
 }
 
@@ -936,7 +1322,7 @@ function memoryConflictProposal(memoryKey: string): GenerationClarificationPropo
     source: "memory_context",
     message: `Memory「${memoryKey}」存在冲突`,
     field: memoryKey,
-    evidence: []
+    evidence: [],
   };
   return {
     version: "v1",
@@ -950,11 +1336,14 @@ function memoryConflictProposal(memoryKey: string): GenerationClarificationPropo
     field: memoryKey,
     candidates: [],
     recommendedCandidate: null,
-    requiresUserDecision: true
+    requiresUserDecision: true,
   };
 }
 
-function createAudit(input: GenerationCycleInput, preparedContext?: PreparedGenerationModelContext): GenerationCycleAudit {
+function createAudit(
+  input: GenerationCycleInput,
+  preparedContext?: PreparedGenerationModelContext,
+): GenerationCycleAudit {
   const contextProjectionHash = preparedContext?.conversationProjection.hash ?? "unavailable";
   const requestedProfile = input.requestedProfile ?? "deterministic-offline";
   const effectiveProfile = input.effectiveProfile ?? requestedProfile;
@@ -972,17 +1361,17 @@ function createAudit(input: GenerationCycleInput, preparedContext?: PreparedGene
       effectiveOptions: input.effectiveOptions ?? input.requestedOptions ?? {},
       historyPolicy: {
         strategy: "canonical_text_context",
-        adapterVersion: preparedContext?.conversationProjection.version ?? CANONICAL_TEXT_CONTEXT_VERSION
+        adapterVersion: preparedContext?.conversationProjection.version ?? CANONICAL_TEXT_CONTEXT_VERSION,
       },
       contextProjectionHash,
-      capturedAt: new Date().toISOString()
+      capturedAt: new Date().toISOString(),
     },
     modelInvocation: null,
     stages: [
       { name: "planning", status: "pending" },
       { name: "transforming", status: "pending" },
       { name: "compiling", status: "pending" },
-      { name: "validating", status: "pending" }
+      { name: "validating", status: "pending" },
     ],
     planValidation: pendingValidationRecord("plan-validator-v1"),
     renderValidation: pendingValidationRecord("flint-render-v1"),
@@ -990,16 +1379,19 @@ function createAudit(input: GenerationCycleInput, preparedContext?: PreparedGene
     contextFallbacks: preparedContext?.contextFallbacks ?? [],
     generationDecision: input.generationDecision ?? null,
     readinessDiagnostic: null,
-    readinessProposal: null
+    readinessProposal: null,
   };
 }
 
 function createDeadlineAbortController(deadlineAt: number): { signal: AbortSignal; dispose: () => void } {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new Error("Generation Cycle deadline exceeded")), Math.max(0, deadlineAt - Date.now()));
+  const timer = setTimeout(
+    () => controller.abort(new Error("Generation Cycle deadline exceeded")),
+    Math.max(0, deadlineAt - Date.now()),
+  );
   return {
     signal: controller.signal,
-    dispose: () => clearTimeout(timer)
+    dispose: () => clearTimeout(timer),
   };
 }
 
@@ -1009,7 +1401,7 @@ function failedResult(
   code: GenerationCycleFailureCode,
   message: string,
   retryable: boolean,
-  stage: GenerationCycleStageName
+  stage: GenerationCycleStageName,
 ): Extract<GenerationCycleResult, { status: "failed" }> {
   const nextAudit = setStage(audit, stage, "failed", code);
   return {
@@ -1017,17 +1409,25 @@ function failedResult(
     error: { code, message, retryable, invocationId: input.cycle.invocationId },
     audit: {
       ...nextAudit,
-      planValidation: nextAudit.planValidation.status === "pending"
-        ? validationRecordFromError(code, message)
-        : nextAudit.planValidation
-    }
+      planValidation:
+        nextAudit.planValidation.status === "pending"
+          ? validationRecordFromError(code, message)
+          : nextAudit.planValidation,
+    },
   };
 }
 
-function setStage(audit: GenerationCycleAudit, name: GenerationCycleStageName, status: GenerationCycleStageStatus, errorCode?: string): GenerationCycleAudit {
+function setStage(
+  audit: GenerationCycleAudit,
+  name: GenerationCycleStageName,
+  status: GenerationCycleStageStatus,
+  errorCode?: string,
+): GenerationCycleAudit {
   return {
     ...audit,
-    stages: audit.stages.map((stage) => stage.name === name ? { ...stage, status, ...(errorCode ? { errorCode } : {}) } : stage)
+    stages: audit.stages.map((stage) =>
+      stage.name === name ? { ...stage, status, ...(errorCode ? { errorCode } : {}) } : stage,
+    ),
   };
 }
 
@@ -1038,9 +1438,14 @@ function pendingValidationRecord(validatorVersion: string): ValidationRecord {
 function validationRecordFromReport(validation: ValidationReport): ValidationRecord {
   return {
     status: validation.valid ? "passed" : "failed",
-    errors: validation.issues.map((issue) => ({ code: issue.code, path: issue.field, message: issue.message, severity: issue.severity })),
+    errors: validation.issues.map((issue) => ({
+      code: issue.code,
+      path: issue.field,
+      message: issue.message,
+      severity: issue.severity,
+    })),
     validatorVersion: "plan-validator-v1",
-    checkedAt: new Date().toISOString()
+    checkedAt: new Date().toISOString(),
   };
 }
 
@@ -1049,7 +1454,7 @@ function validationRecordFromError(code: string, message: string): ValidationRec
     status: "failed",
     errors: [{ code, message, severity: "error" }],
     validatorVersion: "plan-validator-v1",
-    checkedAt: new Date().toISOString()
+    checkedAt: new Date().toISOString(),
   };
 }
 
@@ -1063,7 +1468,7 @@ function nullableContextText(value: unknown): string | null {
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 function errorMessage(error: unknown, fallback: string): string {

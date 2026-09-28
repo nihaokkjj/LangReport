@@ -81,21 +81,21 @@ const validPreparedModelContext = {
   version: "v1" as const,
   historyPolicy: {
     strategy: "canonical_text_context" as const,
-    adapterVersion: "canonical-text-context-v1"
+    adapterVersion: "canonical-text-context-v1",
   },
   conversation: {
     version: "canonical-text-context-v1" as const,
     messages: [{ role: "user" as const, content: "按月份展示销售额" }],
     omittedMessageCount: 0,
     truncatedMessageCount: 0,
-    hash: `sha256:${"a".repeat(64)}`
+    hash: `sha256:${"a".repeat(64)}`,
   },
   brief: {
     businessQuestion: "按月份展示各区域销售额和同比变化",
     audience: "客户汇报",
     timeRange: "2025-01 至 2026-03",
     timeGrain: "month",
-    outputFormat: "evidence_block"
+    outputFormat: "evidence_block",
   },
   metricDefinition: {
     name: "销售额同比",
@@ -103,41 +103,52 @@ const validPreparedModelContext = {
     formula: "(本月销售额 - 上年同月销售额) / ABS(上年同月销售额)",
     unit: "%",
     timeRule: "按自然月分组；同比匹配前 12 个月；缺少基期时返回空值",
-    filterRule: null
+    filterRule: null,
   },
-  memories: [{
-    scope: "project" as const,
-    statement: "客户汇报优先使用中文标题和直接标注单位"
-  }],
-  fieldProfiles: [{
-    name: "月份",
-    inferredType: "date" as const,
-    nullCount: 0,
-    distinctCount: 6,
-    sampleValues: ["2025-01", "2025-02"]
-  }, {
-    name: "销售额",
-    inferredType: "number" as const,
-    nullCount: 0,
-    distinctCount: 15,
-    sampleValues: [60, 40]
-  }],
-  statistics: [{
-    name: "row_count",
-    value: 24,
-    unit: "rows"
-  }],
-  samples: [{
-    label: "2026-01 / 华东",
-    text: "月份=2026-01；区域=华东；销售额=125"
-  }],
+  memories: [
+    {
+      scope: "project" as const,
+      memoryKey: "language.default",
+      statement: "客户汇报优先使用中文标题和直接标注单位",
+    },
+  ],
+  userPreferences: [],
+  fieldProfiles: [
+    {
+      name: "月份",
+      inferredType: "date" as const,
+      nullCount: 0,
+      distinctCount: 6,
+      sampleValues: ["2025-01", "2025-02"],
+    },
+    {
+      name: "销售额",
+      inferredType: "number" as const,
+      nullCount: 0,
+      distinctCount: 15,
+      sampleValues: [60, 40],
+    },
+  ],
+  statistics: [
+    {
+      name: "row_count",
+      value: 24,
+      unit: "rows",
+    },
+  ],
+  samples: [
+    {
+      label: "2026-01 / 华东",
+      text: "月份=2026-01；区域=华东；销售额=125",
+    },
+  ],
   allowedOperations: ["aggregate" as const, "derive" as const, "sort" as const],
   allowedChartTypes: ["line" as const, "bar" as const, "area" as const],
   templateConstraints: {
     templateId: "consulting-evidence-v1",
     templateVersion: "v1",
-    requirements: ["必须展示单位", "必须保留数据限制说明"]
-  }
+    requirements: ["必须展示单位", "必须保留数据限制说明"],
+  },
 };
 
 test("chart-plan ready decision contains a plan and chart selection", () => {

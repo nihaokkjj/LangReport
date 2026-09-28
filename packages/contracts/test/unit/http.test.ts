@@ -1,4 +1,3 @@
-
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -6,9 +5,14 @@ import {
   createOpenApiDocument,
   getRouteContract,
   routeContracts,
-  routeSchema
+  routeSchema,
 } from "../../src/http.js";
-import { chartRevisionCommandSchema, createConversationMessageRequestSchema, createProjectRequestSchema, pasteDataRequestSchema } from "../../src/index.js";
+import {
+  chartRevisionCommandSchema,
+  createConversationMessageRequestSchema,
+  createProjectRequestSchema,
+  pasteDataRequestSchema,
+} from "../../src/index.js";
 
 const expectedRoutes = [
   "GET /health",
@@ -60,8 +64,20 @@ const expectedRoutes = [
   "POST /api/v1/memory-candidates/:candidateId/accept",
   "POST /api/v1/memory-candidates/:candidateId/reject",
   "GET /api/v1/projects/:projectId/memories",
+  "POST /api/v1/projects/:projectId/memories",
+  "PATCH /api/v1/projects/:projectId/memories/:memoryId",
+  "PATCH /api/v1/projects/:projectId/memories/:memoryId/conflict",
+  "GET /api/v1/projects/:projectId/memories/:logicalMemoryId/history",
+  "GET /api/v1/projects/:projectId/memories/:logicalMemoryId/as-of",
+  "GET /api/v1/projects/:projectId/memory-usage",
+  "DELETE /api/v1/projects/:projectId/memories/:memoryId",
   "GET /api/v1/workspaces/:workspaceId/memories",
   "DELETE /api/v1/memories/:memoryId",
+  "GET /api/v1/me/preferences",
+  "POST /api/v1/me/preferences",
+  "PATCH /api/v1/me/preferences/:preferenceId",
+  "DELETE /api/v1/me/preferences/:preferenceId",
+  "GET /api/v1/me/memory-usage",
   "GET /api/v1/chart-revisions/:revisionId/memory-context",
   "GET /api/v1/generation-jobs/:jobId",
   "GET /api/v1/generation-jobs/:jobId/status",
@@ -87,7 +103,7 @@ const expectedRoutes = [
   "POST /api/v1/chart-revisions/:revisionId/shares",
   "GET /api/v1/chart-shares/:shareId",
   "POST /api/v1/chart-shares/:shareId/revoke",
-  "GET /api/v1/chart-revisions/:revisionId/outputs/:format"
+  "GET /api/v1/chart-revisions/:revisionId/outputs/:format",
 ];
 
 function key(method: string, path: string): string {
@@ -98,12 +114,9 @@ test("route contract registry covers every current route exactly once", () => {
   assert.equal(routeContracts.length, expectedRoutes.length);
   assert.deepEqual(
     routeContracts.map((contract) => key(contract.method, contract.path)).sort(),
-    [...expectedRoutes].sort()
+    [...expectedRoutes].sort(),
   );
-  assert.equal(
-    new Set(routeContracts.map((contract) => contract.operationId)).size,
-    routeContracts.length
-  );
+  assert.equal(new Set(routeContracts.map((contract) => contract.operationId)).size, routeContracts.length);
 });
 
 test("every route contract has metadata, response schemas, and complete path parameters", () => {
@@ -119,7 +132,8 @@ test("every route contract has metadata, response schemas, and complete path par
     assert.ok(Object.keys(contract.responses).length > 0);
 
     const pathParams = [...contract.path.matchAll(/:([A-Za-z0-9_]+)/g)].map((match) => match[1]);
-    const params = contract.request?.params as { properties?: Record<string, unknown>; required?: string[] } | undefined;
+    const params = contract.request?.params as
+      { properties?: Record<string, unknown>; required?: string[] } | undefined;
     assert.deepEqual(Object.keys(params?.properties ?? {}).sort(), [...pathParams].sort());
     assert.deepEqual([...(params?.required ?? [])].sort(), [...pathParams].sort());
 
@@ -138,7 +152,8 @@ test("every route contract has metadata, response schemas, and complete path par
     assert.ok(schema.response);
     assert.equal(schema.headers?.properties?.["x-user-id"], undefined);
     for (const status of ["400", "403", "404", "409", "413", "422", "500", "503"]) {
-      const errorSchema = schema.response?.[status] as { properties?: Record<string, unknown>; required?: string[] } | undefined;
+      const errorSchema = schema.response?.[status] as
+        { properties?: Record<string, unknown>; required?: string[] } | undefined;
       assert.deepEqual(errorSchema?.properties, errorResponseSchema.properties);
       assert.deepEqual(errorSchema?.required, errorResponseSchema.required);
     }
@@ -146,7 +161,10 @@ test("every route contract has metadata, response schemas, and complete path par
 });
 
 test("route lookup is stable and marks bootstrap as internal", () => {
-  assert.equal(getRouteContract("GET", "/api/v1/projects"), routeContracts.find((item) => item.operationId === "listProjects"));
+  assert.equal(
+    getRouteContract("GET", "/api/v1/projects"),
+    routeContracts.find((item) => item.operationId === "listProjects"),
+  );
   assert.equal(getRouteContract("POST", "/api/v1/dev/bootstrap")?.internal, true);
   assert.equal(getRouteContract("GET", "/missing"), undefined);
 });
@@ -155,7 +173,7 @@ test("generation message contract carries the single-send inputs and allows prec
   const request = createConversationMessageRequestSchema.parse({
     content: "按月份展示各区域销售额",
     generate: true,
-    clientRequestId: "request-1"
+    clientRequestId: "request-1",
   });
   assert.equal(request.generate, true);
   assert.equal(request.renderer, "vega-lite");
@@ -168,11 +186,20 @@ test("generation message contract carries the single-send inputs and allows prec
 
 test("data uploads require a Conversation source", () => {
   assert.throws(() => pasteDataRequestSchema.parse({ name: "sales.csv", content: "a,b\n1,2" }));
-  assert.deepEqual(pasteDataRequestSchema.parse({ name: "sales.csv", content: "a,b\n1,2", conversationId: "00000000-0000-4000-8000-000000000001" }).conversationId, "00000000-0000-4000-8000-000000000001");
+  assert.deepEqual(
+    pasteDataRequestSchema.parse({
+      name: "sales.csv",
+      content: "a,b\n1,2",
+      conversationId: "00000000-0000-4000-8000-000000000001",
+    }).conversationId,
+    "00000000-0000-4000-8000-000000000001",
+  );
 
   const contract = getRouteContract("POST", "/api/v1/projects/:projectId/data-assets/paste");
   assert.ok(contract);
-  const assetSchema = (contract.responses[201] as { properties: { asset: { required: string[]; properties: Record<string, unknown> } } }).properties.asset;
+  const assetSchema = (
+    contract.responses[201] as { properties: { asset: { required: string[]; properties: Record<string, unknown> } } }
+  ).properties.asset;
   assert.ok(assetSchema.required.includes("sourceConversationId"));
   assert.ok(assetSchema.required.includes("sourceConversationDeleted"));
   assert.ok(assetSchema.required.includes("errorCode"));
@@ -186,8 +213,12 @@ test("Snapshot preview contracts keep list summaries light and detail provenance
   assert.ok(listContract);
   assert.ok(detailContract);
 
-  const listSnapshot = ((listContract.responses[200] as { properties: { snapshots: { items: { properties: Record<string, unknown> } } } }).properties.snapshots.items);
-  const detailSnapshot = ((detailContract.responses[200] as { properties: { snapshot: { properties: Record<string, unknown> } } }).properties.snapshot);
+  const listSnapshot = (
+    listContract.responses[200] as { properties: { snapshots: { items: { properties: Record<string, unknown> } } } }
+  ).properties.snapshots.items;
+  const detailSnapshot = (
+    detailContract.responses[200] as { properties: { snapshot: { properties: Record<string, unknown> } } }
+  ).properties.snapshot;
   assert.equal(listSnapshot.properties.schema, undefined);
   assert.equal(listSnapshot.properties.preview, undefined);
   assert.ok("sourceName" in listSnapshot.properties);
@@ -205,25 +236,30 @@ test("Project creation contract requires auditable onboarding context", () => {
     clientName: "海岚消费",
     objective: "识别区域销售增长机会，形成客户汇报证据。",
     audience: "client_presentation",
-    visualTemplate: "consulting-insight"
+    visualTemplate: "consulting-insight",
   });
   assert.equal(request.audience, "client_presentation");
   assert.equal(request.visualTemplate, "consulting-insight");
   assert.throws(() => createProjectRequestSchema.parse({ name: "只有名称" }));
-  assert.throws(() => createProjectRequestSchema.parse({
-    name: "项目",
-    clientName: "客户",
-    objective: "目标",
-    audience: "unknown",
-    visualTemplate: "arbitrary-theme"
-  }));
+  assert.throws(() =>
+    createProjectRequestSchema.parse({
+      name: "项目",
+      clientName: "客户",
+      objective: "目标",
+      audience: "unknown",
+      visualTemplate: "arbitrary-theme",
+    }),
+  );
 
   const document = createOpenApiDocument({ serverUrl: "http://localhost:4000" });
   const operation = document.paths["/api/v1/projects"]?.post as Record<string, any>;
   const schema = operation.requestBody.content["application/json"].schema;
   assert.deepEqual(schema.required, ["name", "clientName", "objective", "audience", "visualTemplate"]);
   assert.equal(schema.properties.audience.enum.join(","), "internal_analysis,client_presentation,management");
-  assert.equal(schema.properties.visualTemplate.enum.join(","), "consulting-neutral,consulting-insight,consulting-research");
+  assert.equal(
+    schema.properties.visualTemplate.enum.join(","),
+    "consulting-neutral,consulting-insight,consulting-research",
+  );
 });
 
 test("Chart edit contract keeps data logic and display annotations explicit", () => {
@@ -236,15 +272,19 @@ test("Chart edit contract keeps data logic and display annotations explicit", ()
         rationale: "先筛选有效订单，再按月份聚合并按结果降序排列。",
         steps: [
           { kind: "filter", column: "订单状态", operator: "eq", value: "有效" },
-          { kind: "aggregate", groupBy: ["月份"], measures: [{ column: "销售额", operation: "sum", outputColumn: "销售额_sum" }] },
-          { kind: "sort", column: "销售额_sum", direction: "desc" }
+          {
+            kind: "aggregate",
+            groupBy: ["月份"],
+            measures: [{ column: "销售额", operation: "sum", outputColumn: "销售额_sum" }],
+          },
+          { kind: "sort", column: "销售额_sum", direction: "desc" },
         ],
-        expectedColumns: ["月份", "销售额_sum"]
+        expectedColumns: ["月份", "销售额_sum"],
       },
       annotations: [{ text: "重点关注：华东" }],
       showValues: true,
-      showLegend: false
-    }
+      showLegend: false,
+    },
   });
   assert.equal(command.operation, "edit");
   if (command.operation !== "edit") throw new Error("expected edit command");
@@ -252,11 +292,20 @@ test("Chart edit contract keeps data logic and display annotations explicit", ()
   assert.deepEqual(command.patch.annotations, [{ text: "重点关注：华东" }]);
   assert.equal(command.patch.showValues, true);
   assert.equal(command.patch.showLegend, false);
-  assert.throws(() => chartRevisionCommandSchema.parse({
-    operation: "edit",
-    baseRevisionId: "00000000-0000-4000-8000-000000000001",
-    patch: { transformPlan: { version: "v1", rationale: "任意查询", steps: [{ kind: "sql", query: "select *" }], expectedColumns: ["x"] } }
-  }));
+  assert.throws(() =>
+    chartRevisionCommandSchema.parse({
+      operation: "edit",
+      baseRevisionId: "00000000-0000-4000-8000-000000000001",
+      patch: {
+        transformPlan: {
+          version: "v1",
+          rationale: "任意查询",
+          steps: [{ kind: "sql", query: "select *" }],
+          expectedColumns: ["x"],
+        },
+      },
+    }),
+  );
 });
 
 test("OpenAPI document is generated from the route contracts", () => {
@@ -288,7 +337,10 @@ test("OpenAPI document is generated from the route contracts", () => {
   assert.equal(document.paths["/docs"], undefined);
   assert.equal(document.paths["/openapi.json"], undefined);
   assertSchemaIsOpenApiSafe(document);
-  assert.doesNotMatch(JSON.stringify(document), /DATABASE_URL|POSTGRES_PASSWORD|S3_SECRET_KEY|AUTH_JWT_SECRET|API_KEY/i);
+  assert.doesNotMatch(
+    JSON.stringify(document),
+    /DATABASE_URL|POSTGRES_PASSWORD|S3_SECRET_KEY|AUTH_JWT_SECRET|API_KEY/i,
+  );
 
   const loginOperation = document.paths["/api/v1/auth/login"]?.post as Record<string, any>;
   assert.deepEqual(loginOperation.requestBody.content["application/json"].schema.required, ["username", "password"]);
@@ -299,13 +351,23 @@ test("OpenAPI document is generated from the route contracts", () => {
   const pasteOperation = document.paths["/api/v1/projects/{projectId}/data-assets/paste"]?.post as Record<string, any>;
   assert.equal(pasteOperation.requestBody.content["application/json"].schema.type, "object");
   assert.ok(pasteOperation.requestBody.content["application/json"].schema.required.includes("conversationId"));
-  assert.ok(pasteOperation.parameters.some((parameter: any) => parameter.name === "projectId" && parameter.in === "path" && parameter.required === true));
+  assert.ok(
+    pasteOperation.parameters.some(
+      (parameter: any) => parameter.name === "projectId" && parameter.in === "path" && parameter.required === true,
+    ),
+  );
   assert.ok(pasteOperation.responses["400"].content["application/json"].schema.properties.error);
 
-  const uploadOperation = document.paths["/api/v1/projects/{projectId}/data-assets/upload"]?.post as Record<string, any>;
+  const uploadOperation = document.paths["/api/v1/projects/{projectId}/data-assets/upload"]?.post as Record<
+    string,
+    any
+  >;
   assert.ok(uploadOperation.requestBody.content["multipart/form-data"]);
   assert.equal(uploadOperation.requestBody.content["multipart/form-data"].schema.properties.file.format, "binary");
-  assert.deepEqual(uploadOperation.requestBody.content["multipart/form-data"].schema.required, ["file", "conversationId"]);
+  assert.deepEqual(uploadOperation.requestBody.content["multipart/form-data"].schema.required, [
+    "file",
+    "conversationId",
+  ]);
 
   for (const pathItem of Object.values(document.paths)) {
     for (const operation of Object.values(pathItem)) {

@@ -8,8 +8,15 @@ import { registerRoutes } from "./routes.js";
 import { attachRequestId, sendHttpError } from "./http-errors.js";
 import { attachRouteContracts, isInternalSurfaceAllowed } from "./http-contracts.js";
 import { swaggerUiHtml } from "./swagger.js";
+import {
+  AuthenticationError,
+  configureAuth,
+  createJwtAuthProvider,
+  type AuthProvider,
+  type AuthenticatedUser,
+} from "./auth.js";
 import { createDatabaseAuthAccountStore, type AuthAccountStore } from "./user-account-store.js";
-import { AuthenticationError, configureAuth, createJwtAuthProvider, type AuthProvider, type AuthenticatedUser } from "./auth.js";
+import { ensureMemoryRevocationReady } from "@langreport/memory";
 
 export type { AuthProvider, AuthenticatedUser } from "./auth.js";
 
@@ -30,21 +37,21 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     requestIdHeader: "x-request-id",
     trustProxy: environment.TRUST_PROXY === "true",
     ajv: {
-      customOptions: { useDefaults: false }
-    }
+      customOptions: { useDefaults: false },
+    },
   });
 
   await app.register(cors, {
     origin: environment.WEB_ORIGIN ?? "http://localhost:3000",
     credentials: true,
-    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 
   await app.register(multipart, {
     limits: {
       fileSize: 50 * 1024 * 1024,
-      files: 1
-    }
+      files: 1,
+    },
   });
 
   if (authProvider) {
@@ -61,14 +68,26 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
 
   attachRouteContracts(app);
   attachRequestId(app);
+  app.addHook("onRequest", async (request, reply) => {
+    const pathname = request.url.split("?", 1)[0];
+    if (pathname === "/health") return;
+    try {
+      await ensureMemoryRevocationReady();
+    } catch {
+      app.log.error({ requestId: request.id }, "memory revocation readiness check failed");
+      return sendHttpError(reply, 503, "记忆撤销状态暂不可确认", "MEMORY_REVOCATION_UNAVAILABLE");
+    }
+  });
   await registerRoutes(app, environment, accountStore);
 
   app.get("/openapi.json", async (_request, reply) => {
     if (!isInternalSurfaceAllowed(environment)) return sendHttpError(reply, 404, "资源不存在", "NOT_FOUND");
-    return reply.type("application/json").send(createOpenApiDocument({
-      includeInternal: true,
-      serverUrl: environment.API_PUBLIC_URL ?? environment.API_URL
-    }));
+    return reply.type("application/json").send(
+      createOpenApiDocument({
+        includeInternal: true,
+        serverUrl: environment.API_PUBLIC_URL ?? environment.API_URL,
+      }),
+    );
   });
 
   app.get("/docs", async (_request, reply) => {
@@ -78,22 +97,35 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
 
   app.get("/health", async () => ({
     status: "ok",
-    service: "api"
+    service: "api",
   }));
 
   app.get("/ready", async (request, reply) => {
     try {
+      await ensureMemoryRevocationReady();
       await db.execute(sql`select 1`);
-      return { status: "ready", database: "ok" };
+      return { status: "ready", database: "ok", memoryRevocations: "ok" };
     } catch (error) {
       app.log.error({ err: error, requestId: request.id }, "readiness check failed");
+      if (error instanceof Error && "code" in error && error.code === "MEMORY_REVOCATION_UNAVAILABLE") {
+        return reply.code(503).send({
+          status: "not_ready",
+          database: "unchecked",
+          memoryRevocations: "unavailable",
+          error: "记忆撤销状态暂不可确认",
+          code: "MEMORY_REVOCATION_UNAVAILABLE",
+          requestId: request.id,
+          details: {},
+        });
+      }
       return reply.code(503).send({
         status: "not_ready",
         database: "unavailable",
+        memoryRevocations: "unchecked",
         error: "数据库不可用",
         code: "DATABASE_UNAVAILABLE",
         requestId: request.id,
-        details: {}
+        details: {},
       });
     }
   });
@@ -104,26 +136,32 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
 
   app.setErrorHandler((error, request, reply) => {
     app.log.error({ err: error, requestId: request.id }, "request failed");
-    const statusCode = typeof error === "object" && error !== null && "statusCode" in error && typeof error.statusCode === "number" && error.statusCode >= 400
-      ? error.statusCode
-      : 500;
-    const code = statusCode === 400
-      ? "INVALID_INPUT"
-      : statusCode === 401
-        ? "UNAUTHENTICATED"
-        : statusCode === 403
-          ? "FORBIDDEN"
-          : statusCode === 404
-            ? "NOT_FOUND"
-            : statusCode === 409
-              ? "CONFLICT"
-              : statusCode === 413
-                ? "DATA_ASSET_TOO_LARGE"
-                : statusCode === 422
-                  ? "VALIDATION_FAILED"
-                  : statusCode >= 500
-                    ? "INTERNAL_ERROR"
-                    : "REQUEST_FAILED";
+    const statusCode =
+      typeof error === "object" &&
+      error !== null &&
+      "statusCode" in error &&
+      typeof error.statusCode === "number" &&
+      error.statusCode >= 400
+        ? error.statusCode
+        : 500;
+    const code =
+      statusCode === 400
+        ? "INVALID_INPUT"
+        : statusCode === 401
+          ? "UNAUTHENTICATED"
+          : statusCode === 403
+            ? "FORBIDDEN"
+            : statusCode === 404
+              ? "NOT_FOUND"
+              : statusCode === 409
+                ? "CONFLICT"
+                : statusCode === 413
+                  ? "DATA_ASSET_TOO_LARGE"
+                  : statusCode === 422
+                    ? "VALIDATION_FAILED"
+                    : statusCode >= 500
+                      ? "INTERNAL_ERROR"
+                      : "REQUEST_FAILED";
     const message = statusCode >= 500 ? "服务器处理失败" : error instanceof Error ? error.message : "请求处理失败";
     const details = typeof error === "object" && error !== null && "validation" in error ? error.validation : undefined;
     return sendHttpError(reply, statusCode, message, code, details);

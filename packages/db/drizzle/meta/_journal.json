@@ -197,6 +197,20 @@
       "when": 1790417129501,
       "tag": "0028_database_user_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790467200000,
+      "tag": "0029_memory_identity_private_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790467200001,
+      "tag": "0030_memory_revocation_replay_state",
+      "breakpoints": true
     }
   ]
 }

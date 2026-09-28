@@ -13,6 +13,7 @@
     "@langreport/chart": "workspace:*",
     "@langreport/db": "workspace:*",
     "@langreport/flint-adapter": "workspace:*",
+    "@langreport/memory": "workspace:*",
     "@langreport/plugins": "workspace:*",
     "@langreport/storage": "workspace:*",
     "drizzle-orm": "0.45.2"

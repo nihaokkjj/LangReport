@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { mkdir, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createIsolatedIntegrationEnvironment } from "./integration-environment.mjs";
@@ -8,6 +9,8 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const runId = randomUUID().replaceAll("-", "");
 const environment = createIsolatedIntegrationEnvironment(process.env, runId);
+const ledgerDirectory = resolve(environment.MEMORY_REVOCATION_LEDGER_DIR);
+await mkdir(ledgerDirectory, { recursive: false });
 
 function run(args) {
   const result = spawnSync(pnpmCommand, args, {
@@ -25,7 +28,7 @@ function run(args) {
 
 let schemaAttempted = false;
 let bucketPrepared = false;
-let status = 0;
+let status;
 try {
   schemaAttempted = true;
   status = run(["--filter", "@langreport/db", "exec", "node", "scripts/prepare-integration-schema.mjs"]);
@@ -33,6 +36,8 @@ try {
     status = run(["--filter", "@langreport/storage", "exec", "node", "scripts/prepare-integration-bucket.mjs"]);
     bucketPrepared = status === 0;
   }
+  if (status === 0)
+    status = run(["--filter", "@langreport/memory", "exec", "tsx", "scripts/init-revocation-ledger.ts"]);
   if (status === 0)
     status = run([
       "--filter",
@@ -42,6 +47,8 @@ try {
       "--test",
       "--test-concurrency=1",
       "test/integration/database-user-accounts.integration.test.ts",
+      "test/integration/memory-management.integration.test.ts",
+      "test/integration/memory-revocation-recovery.integration.test.ts",
       "test/integration/message-generation.integration.test.ts",
       "test/integration/plugins.integration.test.ts",
       "test/integration/data-assets.integration.test.ts",
@@ -55,6 +62,7 @@ try {
       "tsx",
       "--test",
       "test/integration/worker.integration.test.ts",
+      "test/integration/memory-revocation.integration.test.ts",
     ]);
 } finally {
   if (
@@ -67,6 +75,7 @@ try {
     run(["--filter", "@langreport/db", "exec", "node", "scripts/cleanup-integration-schema.mjs"]) !== 0
   )
     status = 1;
+  await rm(ledgerDirectory, { recursive: true, force: true });
 }
 
 process.exitCode = status;

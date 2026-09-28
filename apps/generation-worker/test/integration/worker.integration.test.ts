@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
+  auditEvents,
   chartRevisions,
   claimGenerationJobLease,
   closeDatabase,
@@ -17,10 +18,14 @@ import {
   projects,
   recoverExpiredGenerationJobLeases,
   heartbeatGenerationJobLease,
+  privateGenerationMemoryContexts,
   updateGenerationJobUnderLease,
-  workspaces
+  users,
+  workspaces,
 } from "@langreport/db";
 import { executionAssemblySchema, flintSpecSchema, pluginSnapshotSchema, pluginUsageSchema, resultSummarySchema, validationRecordSchema } from "@langreport/contracts";
+import { projectConversationToCanonicalTextContext } from "@langreport/generation";
+import { createUserPreferenceMemory, getMemoryContextForGeneration } from "@langreport/memory";
 import {
   installPlugin,
   listBuiltinPluginCatalog,
@@ -41,6 +46,12 @@ test("real generation and render workers persist plugin usage and historical sna
   const objectKeys: string[] = [];
 
   try {
+    await db.insert(users).values({
+      id: userId,
+      username: userId,
+      usernameKey: userId,
+      passwordHash: "integration-test-only",
+    });
     const [workspace] = await db.insert(workspaces).values({ name: `Phase 5 Worker ${suffix}` }).returning();
     workspaceId = workspace.id;
     const [project] = await db.insert(projects).values({
@@ -146,30 +157,65 @@ test("real generation and render workers persist plugin usage and historical sna
       }),
       normalizedObjectKey
     }).returning();
-    const [job] = await db.insert(generationJobs).values({
+    const memoryContext = await getMemoryContextForGeneration({
       projectId: project.id,
       conversationId: conversation.id,
-      dataAssetId: asset.id,
-      snapshotId: snapshot.id,
+      userId,
       prompt: "按月份展示各区域销售额趋势",
-      idempotencyKey: `worker-job-${suffix}`,
-      inputFingerprint: `worker-fingerprint-${suffix}`,
-      renderer: "vega-lite",
-      rendererVersion: "vega-lite-svg-v1",
-      theme: "economist",
-      themeVersion: "project-v1",
-      themeSource: "project",
-      themeConfig: {},
-      executionAssembly,
-      pluginContext: pluginResolution.context,
-      analysisBriefSnapshot: {},
-      metricDefinitionSnapshot: {},
-      createdBy: userId
-    }).returning();
+    });
+    const privatePreference = await createUserPreferenceMemory({
+      ownerId: userId,
+      category: "tone",
+      statement: `Synthetic private preference ${suffix}`,
+      value: {},
+    });
+    const conversationProjection = projectConversationToCanonicalTextContext([
+      { role: "user", content: "请基于已上传的数据识别主要趋势" },
+    ]);
+    const [job] = await db
+      .insert(generationJobs)
+      .values({
+        projectId: project.id,
+        conversationId: conversation.id,
+        dataAssetId: asset.id,
+        snapshotId: snapshot.id,
+        prompt: "按月份展示各区域销售额趋势",
+        idempotencyKey: `worker-job-${suffix}`,
+        inputFingerprint: `worker-fingerprint-${suffix}`,
+        renderer: "vega-lite",
+        rendererVersion: "vega-lite-svg-v1",
+        theme: "economist",
+        themeVersion: "project-v1",
+        themeSource: "project",
+        themeConfig: {},
+        memoryContext,
+        conversationProjection,
+        executionAssembly,
+        pluginContext: pluginResolution.context,
+        analysisBriefSnapshot: {},
+        metricDefinitionSnapshot: {},
+        createdBy: userId,
+      })
+      .returning();
+    await db.insert(privateGenerationMemoryContexts).values({
+      generationJobId: job.id,
+      ownerId: userId,
+      preferenceVersionIds: [privatePreference.id],
+    });
 
-    await processGenerationJob(job.id);
+    const workerLogs: string[] = [];
+    const restoreGenerationLogs = captureConsoleOutput(workerLogs);
+    try {
+      await processGenerationJob(job.id);
+    } finally {
+      restoreGenerationLogs();
+    }
     const [generatedJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id)).limit(1);
-    assert.equal(generatedJob.status, "rendering");
+    assert.equal(generatedJob.status, "rendering", generatedJob.errorMessage ?? generatedJob.errorCode ?? "generation did not enter rendering");
+    const generatedJobPayload = JSON.stringify(generatedJob);
+    assert.equal(generatedJobPayload.includes(privatePreference.statement), false);
+    assert.equal(generatedJobPayload.includes(privatePreference.id), false);
+    assert.equal(generatedJobPayload.includes(privatePreference.logicalMemoryId), false);
     assert.equal(validationRecordSchema.parse(generatedJob.planValidation).status, "passed");
     assert.equal(validationRecordSchema.parse(generatedJob.renderValidation).status, "pending");
     const generatedResultSummary = resultSummarySchema.parse(generatedJob.resultSummary);
@@ -184,7 +230,12 @@ test("real generation and render workers persist plugin usage and historical sna
     assert.ok(usage.usedCapabilities.some((capability) => capability.kind === "validator" && capability.id === "time-required-for-trend"));
     assert.ok(usage.usedCapabilities.some((capability) => capability.kind === "semantic-type" && capability.id === "Region"));
 
-    await Promise.all([processRenderJob(job.id), processRenderJob(job.id)]);
+    const restoreRenderLogs = captureConsoleOutput(workerLogs);
+    try {
+      await Promise.all([processRenderJob(job.id), processRenderJob(job.id)]);
+    } finally {
+      restoreRenderLogs();
+    }
     const [renderedJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id)).limit(1);
     assert.equal(renderedJob.status, "succeeded");
     assert.equal(renderedJob.leaseOwner, null);
@@ -213,6 +264,20 @@ test("real generation and render workers persist plugin usage and historical sna
 
     const [revision] = await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, job.id)).limit(1);
     assert.ok(revision);
+    const revisionPayload = JSON.stringify(revision);
+    assert.equal(revisionPayload.includes(privatePreference.statement), false);
+    assert.equal(revisionPayload.includes(privatePreference.id), false);
+    assert.equal(revisionPayload.includes(privatePreference.logicalMemoryId), false);
+    const auditPayload = JSON.stringify(
+      await db.select().from(auditEvents).where(eq(auditEvents.workspaceId, workspace.id)),
+    );
+    assert.equal(auditPayload.includes(privatePreference.statement), false);
+    assert.equal(auditPayload.includes(privatePreference.id), false);
+    assert.equal(auditPayload.includes(privatePreference.logicalMemoryId), false);
+    const workerLogPayload = workerLogs.join("\n");
+    assert.equal(workerLogPayload.includes(privatePreference.statement), false);
+    assert.equal(workerLogPayload.includes(privatePreference.id), false);
+    assert.equal(workerLogPayload.includes(privatePreference.logicalMemoryId), false);
     assert.deepEqual(revision.executionAssembly, executionAssembly);
     assert.deepEqual(resultSummarySchema.parse(revision.resultSummary), generatedResultSummary);
     const pluginSnapshot = pluginSnapshotSchema.parse(revision.pluginSnapshot);
@@ -361,25 +426,30 @@ test("real generation and render workers persist plugin usage and historical sna
     assert.equal(fencedLeaseJob.leaseOwner, null);
     assert.equal(fencedLeaseJob.leaseToken, null);
 
-    const [invalidJob] = await db.insert(generationJobs).values({
-      projectId: project.id,
-      conversationId: conversation.id,
-      dataAssetId: asset.id,
-      snapshotId: snapshot.id,
-      prompt: "无效插件上下文测试",
-      idempotencyKey: `worker-invalid-${suffix}`,
-      inputFingerprint: `worker-invalid-fingerprint-${suffix}`,
-      renderer: "vega-lite",
-      rendererVersion: "vega-lite-svg-v1",
-      theme: "economist",
-      themeVersion: "v1",
-      themeSource: "request",
-      themeConfig: {},
-      pluginContext: { invalid: true },
-      analysisBriefSnapshot: {},
-      metricDefinitionSnapshot: {},
-      createdBy: userId
-    }).returning();
+    const [invalidJob] = await db
+      .insert(generationJobs)
+      .values({
+        projectId: project.id,
+        conversationId: conversation.id,
+        dataAssetId: asset.id,
+        snapshotId: snapshot.id,
+        prompt: "无效插件上下文测试",
+        idempotencyKey: `worker-invalid-${suffix}`,
+        inputFingerprint: `worker-invalid-fingerprint-${suffix}`,
+        renderer: "vega-lite",
+        rendererVersion: "vega-lite-svg-v1",
+        theme: "economist",
+        themeVersion: "v1",
+        themeSource: "request",
+        themeConfig: {},
+        memoryContext,
+        conversationProjection,
+        pluginContext: { invalid: true },
+        analysisBriefSnapshot: {},
+        metricDefinitionSnapshot: {},
+        createdBy: userId,
+      })
+      .returning();
     await processGenerationJob(invalidJob.id);
     const [failedJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, invalidJob.id)).limit(1);
     assert.equal(failedJob.status, "failed");
@@ -455,6 +525,26 @@ test("real generation and render workers persist plugin usage and historical sna
   } finally {
     for (const key of objectKeys) await deleteObject(key).catch(() => undefined);
     if (workspaceId) await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    await db.delete(users).where(eq(users.id, userId));
     await closeDatabase();
   }
 });
+
+function captureConsoleOutput(target: string[]): () => void {
+  const originalLog = console.log;
+  const originalWarn = console.warn;
+  const originalError = console.error;
+  const capture = (...values: unknown[]) => {
+    target.push(
+      values.map((value) => (typeof value === "string" ? value : (JSON.stringify(value) ?? String(value)))).join(" "),
+    );
+  };
+  console.log = capture;
+  console.warn = capture;
+  console.error = capture;
+  return () => {
+    console.log = originalLog;
+    console.warn = originalWarn;
+    console.error = originalError;
+  };
+}

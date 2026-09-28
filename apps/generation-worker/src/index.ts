@@ -6,7 +6,11 @@ import { getObject } from "@langreport/storage";
 import { applyRevisionPatch } from "@langreport/chart";
 import { executeTransformPlan, summarizeTransformResult } from "@langreport/data-engine";
 import { chartEditPatchSchema, flintSpecSchema, generationDecisionSchema, memoryContextSchema, modelRouteSnapshotSchema, pluginUsageSchema, themePresetSchema, transformPlanSchema, type ModelRouteSnapshot, type TransformPlan, type ValidationRecord, type ValidationReport } from "@langreport/contracts";
-import { getMemoryContextForGeneration, processMemoryExtractionJob } from "@langreport/memory";
+import {
+  ensureMemoryRevocationReady,
+  getMemoryContextForGeneration,
+  processMemoryExtractionJob,
+} from "@langreport/memory";
 import { createBailianQwenGateway, decryptWorkspaceModelCredential, ModelCredentialEncryptionError, ModelGatewayConfigurationError, resolveModelRouteSnapshot } from "@langreport/model-gateway";
 import { pluginContextSchema } from "@langreport/contracts";
 import { PluginServiceError, resolvePluginContextForWorkspace } from "@langreport/plugins";
@@ -28,6 +32,7 @@ type GenerationJobRecord = {
 };
 
 export async function processGenerationJob(jobId: string): Promise<void> {
+  await ensureMemoryRevocationReady();
   const lease = await claimGenerationJobLease({
     jobId,
     owner: workerInstanceId,
@@ -384,6 +389,7 @@ async function pollOnce(): Promise<void> {
   if (polling) return;
   polling = true;
   try {
+    await ensureMemoryRevocationReady();
     await recoverExpiredGenerationJobLeases();
     const queued = await db
       .select({ id: generationJobs.id })
@@ -512,6 +518,7 @@ function pendingRenderValidation(): ValidationRecord {
 }
 
 if (process.env.LANGREPORT_WORKER_TEST !== "1") {
+  await ensureMemoryRevocationReady();
   console.log(`${workerName} ready; polling PostgreSQL-backed Generation Jobs.`);
   void pollOnce().catch((error) => console.error(`${workerName} initial poll failed`, error));
   setInterval(() => {

@@ -1,6 +1,10 @@
+import { tmpdir } from "node:os";
+import { isAbsolute, join, relative, resolve } from "node:path";
+
 const integrationServiceKeys = [
   "DATABASE_URL",
   "DATABASE_SCHEMA",
+  "MEMORY_REVOCATION_LEDGER_DIR",
   "S3_ENDPOINT",
   "S3_ACCESS_KEY",
   "S3_SECRET_KEY",
@@ -55,6 +59,14 @@ export function assertIsolatedIntegrationEnvironment(environment) {
   if (!/^langreport_test_[a-z0-9]+$/.test(schema))
     throw new Error("DATABASE_SCHEMA must identify one generated test run");
 
+  const ledgerDirectory = resolve(requireString(environment, "MEMORY_REVOCATION_LEDGER_DIR"));
+  const ledgerRelativePath = relative(tmpdir(), ledgerDirectory);
+  if (
+    !isAbsolute(ledgerDirectory) ||
+    !/^langreport-memory-revocation-[a-z0-9]+$/iu.test(ledgerRelativePath.replaceAll("\\", "/"))
+  )
+    throw new Error("MEMORY_REVOCATION_LEDGER_DIR must stay under the isolated temporary directory");
+
   const endpoint = requireString(environment, "S3_ENDPOINT");
   if (endpoint !== "http://127.0.0.1:9002") throw new Error("S3_ENDPOINT must target the test Compose MinIO endpoint");
   const bucket = requireString(environment, "S3_BUCKET");
@@ -76,6 +88,7 @@ export function createIsolatedIntegrationEnvironment(parentEnvironment, runId) {
     GENERATION_MODE: "deterministic",
     DATABASE_URL: "postgres://langreport_test:langreport_test@127.0.0.1:54330/langreport_integration_test",
     DATABASE_SCHEMA: `langreport_test_${runId}`,
+    MEMORY_REVOCATION_LEDGER_DIR: join(tmpdir(), `langreport-memory-revocation-${runId}`),
     S3_ENDPOINT: "http://127.0.0.1:9002",
     S3_ACCESS_KEY: "langreport_test",
     S3_SECRET_KEY: "langreport-test-secret",

@@ -6,11 +6,13 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "memory:revocation:init": "tsx scripts/init-revocation-ledger.ts",
+    "memory:revocation:replay": "tsx scripts/replay-revocations.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
     "build": "tsc --noEmit -p tsconfig.json",
-    "test": "tsx --test test/unit/index.test.ts",
-    "test:coverage": "tsx --test --experimental-test-coverage test/unit/index.test.ts"
+    "test": "tsx --test test/unit/index.test.ts test/unit/revocation-ledger.test.ts",
+    "test:coverage": "tsx --test --experimental-test-coverage test/unit/index.test.ts test/unit/revocation-ledger.test.ts"
   },
   "dependencies": {
     "@langreport/chart": "workspace:*",

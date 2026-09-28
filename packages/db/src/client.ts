@@ -83,6 +83,24 @@ export async function withAdvisoryLock<T>(key: string, callback: () => Promise<T
   }
 }
 
+export async function withBlockingAdvisoryLock<T>(key: string, callback: () => Promise<T>): Promise<T> {
+  const lockClient = postgres(databaseUrl, {
+    max: 1,
+    prepare: false,
+    ...(integrationSchema ? { connection: { search_path: integrationSchema } } : {}),
+  });
+  try {
+    await lockClient`select pg_advisory_lock(hashtextextended(${key}, 0))`;
+    try {
+      return await callback();
+    } finally {
+      await lockClient`select pg_advisory_unlock(hashtextextended(${key}, 0))`;
+    }
+  } finally {
+    await lockClient.end();
+  }
+}
+
 export async function closeDatabase(): Promise<void> {
   await client.end();
 }

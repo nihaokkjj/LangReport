@@ -6,6 +6,7 @@ import { buildEvidenceFinding, createDerivedRevision, createInitialRevision } fr
 import { createStaticSvgHtml, resolveRendererAdapter, FLINT_VERSION, RENDERER_VERSION, validateStaticSvgHtml } from "@langreport/flint-adapter";
 import { buildPluginSnapshot, PluginServiceError } from "@langreport/plugins";
 import { getObject, putObject, renderOutputObjectKey } from "@langreport/storage";
+import { ensureMemoryRevocationReady } from "@langreport/memory";
 
 const workerName = "render-worker";
 const pollIntervalMs = Number(process.env.RENDER_POLL_INTERVAL_MS ?? 1000);
@@ -14,6 +15,7 @@ const workerInstanceId = process.env.RENDER_WORKER_ID?.trim() || `${workerName}:
 let polling = false;
 
 export async function processRenderJob(jobId: string): Promise<void> {
+  await ensureMemoryRevocationReady();
   await withAdvisoryLock(`generation-render:${jobId}`, async () => {
     const lease = await claimGenerationJobLease({
       jobId,
@@ -429,6 +431,7 @@ async function pollOnce(): Promise<void> {
   if (polling) return;
   polling = true;
   try {
+    await ensureMemoryRevocationReady();
     await recoverExpiredGenerationJobLeases();
     const queued = await db
       .select({ id: generationJobs.id })
@@ -540,6 +543,7 @@ function hasPluginContext(value: unknown): boolean {
 }
 
 if (process.env.LANGREPORT_WORKER_TEST !== "1") {
+  await ensureMemoryRevocationReady();
   console.log(`${workerName} ready; polling rendering Generation Jobs.`);
   void pollOnce().catch((error) => console.error(`${workerName} initial poll failed`, error));
   setInterval(() => {

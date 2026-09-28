@@ -205,14 +205,26 @@ class ScenarioRequestError extends Error {
   constructor(
     public readonly status: number,
     public readonly requestId: string | null,
-    public readonly payload: Record<string, unknown>
+    public readonly payload: Record<string, unknown>,
   ) {
     super(typeof payload.error === "string" ? payload.error : `请求失败（HTTP ${status}）`);
     this.name = "ScenarioRequestError";
   }
 }
 
-const scenarioPipeline = ["queued", "profiling", "planning", "transforming", "compiling", "validating", "needs_clarification", "rendering", "succeeded", "failed", "cancelled"] as const;
+const scenarioPipeline = [
+  "queued",
+  "profiling",
+  "planning",
+  "transforming",
+  "compiling",
+  "validating",
+  "needs_clarification",
+  "rendering",
+  "succeeded",
+  "failed",
+  "cancelled",
+] as const;
 
 const scenarioStepDefinitions: Array<Pick<ScenarioStep, "id" | "label">> = [
   { id: "health", label: "健康检查" },
@@ -225,7 +237,7 @@ const scenarioStepDefinitions: Array<Pick<ScenarioStep, "id" | "label">> = [
   { id: "idempotency-conflict", label: "幂等冲突" },
   { id: "result", label: "Evidence 追溯" },
   { id: "invalid", label: "错误输入" },
-  { id: "clarification", label: "澄清提案" }
+  { id: "clarification", label: "澄清提案" },
 ];
 
 const scenarioSalesCsv = [
@@ -237,14 +249,12 @@ const scenarioSalesCsv = [
   "2025-03,华东,152",
   "2025-03,华南,109",
   "2025-04,华东,148",
-  "2025-04,华南,117"
+  "2025-04,华南,117",
 ].join("\n");
 
-const scenarioClarificationCsv = [
-  "月份,区域,备注",
-  "2025-01,华东,缺少数值字段",
-  "2025-02,华南,缺少数值字段"
-].join("\n");
+const scenarioClarificationCsv = ["月份,区域,备注", "2025-01,华东,缺少数值字段", "2025-02,华南,缺少数值字段"].join(
+  "\n",
+);
 
 const terminalScenarioStatuses = new Set(["succeeded", "failed", "needs_clarification", "cancelled"]);
 
@@ -259,7 +269,7 @@ function initialScenarioState(): ScenarioState {
     requestIds: [],
     statusHistory: [],
     clarificationStatusHistory: [],
-    error: null
+    error: null,
   };
 }
 
@@ -279,11 +289,11 @@ const tagDisplayNames: Record<string, string> = {
   "Chart Revisions": "图表版本 / Chart Revisions",
   Reviews: "审核 / Reviews",
   Themes: "主题 / Themes",
-  Shares: "分享 / Shares"
+  Shares: "分享 / Shares",
 };
 
 function displayTag(tag: string): string {
-  return tag === "ALL" ? "全部标签" : tagDisplayNames[tag] ?? `接口 / ${tag}`;
+  return tag === "ALL" ? "全部标签" : (tagDisplayNames[tag] ?? `接口 / ${tag}`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -301,7 +311,7 @@ function openApiEndpoint(): string {
 
 function schemaType(schema?: JsonSchema): string {
   if (!schema?.type) return "object";
-  return Array.isArray(schema.type) ? schema.type.find((type) => type !== "null") ?? "object" : schema.type;
+  return Array.isArray(schema.type) ? (schema.type.find((type) => type !== "null") ?? "object") : schema.type;
 }
 
 function schemaTypeLabel(schema?: JsonSchema): string {
@@ -327,7 +337,9 @@ function schemaExample(schema?: JsonSchema): unknown {
   const selectedSchema = preferredSchema(schema);
   if (selectedSchema !== schema) return schemaExample(selectedSchema);
   if (schema.properties) {
-    return Object.fromEntries(Object.entries(schema.properties).map(([name, property]) => [name, schemaExample(property)]));
+    return Object.fromEntries(
+      Object.entries(schema.properties).map(([name, property]) => [name, schemaExample(property)]),
+    );
   }
   if (schemaType(schema) === "array") return schema.items ? [schemaExample(schema.items)] : [];
   if (schemaType(schema) === "boolean") return false;
@@ -352,12 +364,18 @@ function collectSchemaFields(schema?: JsonSchema, prefix = "", required = false,
     return Object.entries(selectedSchema.properties).flatMap(([name, property]) => {
       const path = name;
       const isRequired = selectedSchema.required?.includes(name) ?? false;
-      return [{ path, schema: property, required: isRequired, depth }, ...collectSchemaFields(property, path, isRequired, depth + 1)];
+      return [
+        { path, schema: property, required: isRequired, depth },
+        ...collectSchemaFields(property, path, isRequired, depth + 1),
+      ];
     });
   }
 
   if (!prefix && selectedSchema.items) {
-    return [{ path: "[]", schema: selectedSchema.items, required, depth }, ...collectSchemaFields(selectedSchema.items, "[]", required, depth + 1)];
+    return [
+      { path: "[]", schema: selectedSchema.items, required, depth },
+      ...collectSchemaFields(selectedSchema.items, "[]", required, depth + 1),
+    ];
   }
 
   if (!prefix) return [{ path: "body", schema: selectedSchema, required, depth }];
@@ -366,12 +384,18 @@ function collectSchemaFields(schema?: JsonSchema, prefix = "", required = false,
     return Object.entries(selectedSchema.properties).flatMap(([name, property]) => {
       const path = `${prefix}.${name}`;
       const isRequired = selectedSchema.required?.includes(name) ?? false;
-      return [{ path, schema: property, required: isRequired, depth }, ...collectSchemaFields(property, path, isRequired, depth + 1)];
+      return [
+        { path, schema: property, required: isRequired, depth },
+        ...collectSchemaFields(property, path, isRequired, depth + 1),
+      ];
     });
   }
 
   if (selectedSchema.items) {
-    return [{ path: `${prefix}[]`, schema: selectedSchema.items, required, depth }, ...collectSchemaFields(selectedSchema.items, `${prefix}[]`, required, depth + 1)];
+    return [
+      { path: `${prefix}[]`, schema: selectedSchema.items, required, depth },
+      ...collectSchemaFields(selectedSchema.items, `${prefix}[]`, required, depth + 1),
+    ];
   }
 
   return [];
@@ -387,23 +411,32 @@ function responseStatusSort([left]: [string, OpenApiResponse], [right]: [string,
 }
 
 function responseExampleEntries(operation?: OpenApiOperation): ResponseExample[] {
-  return Object.entries(operation?.responses ?? {}).sort(responseStatusSort).flatMap(([status, response]): ResponseExample[] => {
-    const contentEntries = Object.entries(response.content ?? {});
-    if (contentEntries.length === 0) {
-      return [{
+  return Object.entries(operation?.responses ?? {})
+    .sort(responseStatusSort)
+    .flatMap(([status, response]): ResponseExample[] => {
+      const contentEntries = Object.entries(response.content ?? {});
+      if (contentEntries.length === 0) {
+        return [
+          {
+            status,
+            description: response.description ?? "未提供响应描述",
+            contentType: null,
+            example: null,
+          },
+        ];
+      }
+      return contentEntries.map(([contentType, mediaType]) => ({
         status,
         description: response.description ?? "未提供响应描述",
-        contentType: null,
-        example: null
-      }];
-    }
-    return contentEntries.map(([contentType, mediaType]) => ({
-      status,
-      description: response.description ?? "未提供响应描述",
-      contentType,
-      example: mediaType.example !== undefined ? mediaType.example : mediaType.schema ? schemaExample(mediaType.schema) : null
-    }));
-  });
+        contentType,
+        example:
+          mediaType.example !== undefined
+            ? mediaType.example
+            : mediaType.schema
+              ? schemaExample(mediaType.schema)
+              : null,
+      }));
+    });
 }
 
 function exampleText(value: unknown): string {
@@ -465,14 +498,16 @@ function buildEntries(document: OpenApiDocument): OperationEntry[] {
   return Object.entries(document.paths ?? {}).flatMap(([path, pathItem]) =>
     Object.entries(pathItem).flatMap(([method, operation]) => {
       if (!operation || !["get", "post", "put", "patch", "delete"].includes(method)) return [];
-      return [{
-        key: `${method.toUpperCase()} ${path}`,
-        method: method.toUpperCase(),
-        path,
-        tag: operation.tags?.[0] ?? "Other",
-        operation
-      }];
-    })
+      return [
+        {
+          key: `${method.toUpperCase()} ${path}`,
+          method: method.toUpperCase(),
+          path,
+          tag: operation.tags?.[0] ?? "Other",
+          operation,
+        },
+      ];
+    }),
   );
 }
 
@@ -550,11 +585,13 @@ function sanitizeStoredHistoryState(state: RequestState): RequestState {
 }
 
 function sanitizeHistoryState(state: RequestState, operation: OpenApiOperation): RequestState {
-  const parameterValues = Object.fromEntries((operation.parameters ?? []).flatMap((parameter) => {
-    const value = state.parameterValues[parameterKey(parameter)];
-    if (value === undefined || (parameter.in === "header" && isSensitiveHeader(parameter.name))) return [];
-    return [[parameterKey(parameter), value]];
-  }));
+  const parameterValues = Object.fromEntries(
+    (operation.parameters ?? []).flatMap((parameter) => {
+      const value = state.parameterValues[parameterKey(parameter)];
+      if (value === undefined || (parameter.in === "header" && isSensitiveHeader(parameter.name))) return [];
+      return [[parameterKey(parameter), value]];
+    }),
+  );
   return {
     parameterValues: Object.fromEntries(
       Object.entries(parameterValues).filter(([name]) => !isSensitiveCredentialName(name)),
@@ -595,11 +632,7 @@ function replacePathParameters(path: string, parameters: OpenApiParameter[], val
   });
 }
 
-function buildRequest(
-  entry: OperationEntry,
-  state: RequestState,
-  file: File | null
-): BuiltRequest {
+function buildRequest(entry: OperationEntry, state: RequestState, file: File | null): BuiltRequest {
   const parameters = entry.operation.parameters ?? [];
   const path = replacePathParameters(entry.path, parameters, state.parameterValues);
   const query = new URLSearchParams();
@@ -607,7 +640,8 @@ function buildRequest(
 
   for (const parameter of parameters) {
     const value = state.parameterValues[parameterKey(parameter)] ?? "";
-    if (parameter.required && !value.trim() && parameter.in !== "path") throw new Error(`请填写${parameter.in === "query" ? "查询" : "请求头"}参数 ${parameter.name}`);
+    if (parameter.required && !value.trim() && parameter.in !== "path")
+      throw new Error(`请填写${parameter.in === "query" ? "查询" : "请求头"}参数 ${parameter.name}`);
     if (!value.trim()) continue;
     if (parameter.in === "query") query.set(parameter.name, value);
     if (parameter.in === "header") headers[parameter.name] = value;
@@ -663,38 +697,51 @@ function buildScenarioRequest(
   entries: OperationEntry[],
   operationId: string,
   pathValues: Record<string, string | number> = {},
-  body?: Record<string, unknown>
+  body?: Record<string, unknown>,
 ): BuiltRequest {
   const entry = entries.find((candidate) => candidate.operation.operationId === operationId);
   if (!entry) throw new Error(`OpenAPI 中缺少 ${operationId}`);
   const parameterValues = {
     ...seedParameterValues(entry.operation),
-    ...Object.fromEntries((entry.operation.parameters ?? [])
-      .filter((parameter) => (parameter.in === "path" || parameter.in === "query") && pathValues[parameter.name] !== undefined)
-      .map((parameter) => [parameterKey(parameter), String(pathValues[parameter.name])]))
+    ...Object.fromEntries(
+      (entry.operation.parameters ?? [])
+        .filter(
+          (parameter) =>
+            (parameter.in === "path" || parameter.in === "query") && pathValues[parameter.name] !== undefined,
+        )
+        .map((parameter) => [parameterKey(parameter), String(pathValues[parameter.name])]),
+    ),
   };
-  const contentType = body === undefined ? "" : bodyContentTypes(entry.operation)[0] ?? "application/json";
-  return buildRequest(entry, {
-    parameterValues,
-    contentType,
-    bodyText: body === undefined ? "" : formatJson(body),
-    bodyFields: {}
-  }, null);
+  const contentType = body === undefined ? "" : (bodyContentTypes(entry.operation)[0] ?? "application/json");
+  return buildRequest(
+    entry,
+    {
+      parameterValues,
+      contentType,
+      bodyText: body === undefined ? "" : formatJson(body),
+      bodyFields: {},
+    },
+    null,
+  );
 }
 
 async function requestScenario(
   entries: OperationEntry[],
   operationId: string,
   pathValues: Record<string, string | number> = {},
-  body?: Record<string, unknown>
+  body?: Record<string, unknown>,
 ): Promise<ScenarioHttpResult> {
   const request = buildScenarioRequest(entries, operationId, pathValues, body);
-  const result = await apiRequest<Record<string, unknown>>(request.url, {
-    method: request.method,
-    headers: request.headers,
-    body: request.body,
-  }, { unauthorized: "none", throwOnError: false });
-  const payload = Object.keys(result.payload).length > 0 ? result.payload : (result.raw ? { raw: result.raw } : {});
+  const result = await apiRequest<Record<string, unknown>>(
+    request.url,
+    {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+    },
+    { unauthorized: "none", throwOnError: false },
+  );
+  const payload = Object.keys(result.payload).length > 0 ? result.payload : result.raw ? { raw: result.raw } : {};
   const requestId = result.requestId ?? (typeof payload.requestId === "string" ? payload.requestId : null);
   if (!result.response.ok) throw new ScenarioRequestError(result.response.status, requestId, payload);
   return { status: result.response.status, requestId, payload };
@@ -752,7 +799,7 @@ function responseFromFetch(response: Response, raw: string, duration: number, re
     requestPreview,
     bodyPreview: request.bodyPreview,
     errorCode: typeof payload.code === "string" ? payload.code : null,
-    errorDetails: payload.details ?? null
+    errorDetails: payload.details ?? null,
   };
 }
 
@@ -770,21 +817,125 @@ type ParameterTableProps = {
 };
 
 function ParameterTable({ parameters, values, onChange }: ParameterTableProps) {
-  return <div className={styles.parameterTableScroll}><table className={styles.parameterTable}><caption className={styles.tableCaption}>接口请求参数</caption><thead><tr><th scope="col">参数</th><th scope="col">位置</th><th scope="col">类型</th><th scope="col">必填</th><th scope="col">填写值</th><th scope="col">说明</th></tr></thead><tbody>{parameters.map((parameter) => {
-    const schema = parameter.schema;
-    const key = parameterKey(parameter);
-    const value = values[key] ?? "";
-    const options = schema?.enum ?? [];
-    return <tr key={key}><th scope="row"><code>{parameter.name}</code></th><td><span className={styles.parameterLocation}>{parameter.in}</span></td><td><code>{schemaTypeLabel(schema)}</code></td><td>{parameter.required ? <span className={styles.requiredMarker}>必填</span> : <span className={styles.optionalMarker}>可选</span>}</td><td>{options.length > 0 ? <select className={styles.tableControl} value={value} onChange={(event) => onChange(key, event.target.value)} aria-label={`${parameter.name} 参数` }><option value="">请选择</option>{options.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}</select> : <input className={styles.tableControl} value={value} onChange={(event) => onChange(key, event.target.value)} placeholder={schema?.format === "uuid" ? "UUID" : parameter.required ? "必填" : "可选"} aria-label={`${parameter.name} 参数`} />}</td><td>{parameter.description ?? "—"}</td></tr>;
-  })}</tbody></table></div>;
+  return (
+    <div className={styles.parameterTableScroll}>
+      <table className={styles.parameterTable}>
+        <caption className={styles.tableCaption}>接口请求参数</caption>
+        <thead>
+          <tr>
+            <th scope="col">参数</th>
+            <th scope="col">位置</th>
+            <th scope="col">类型</th>
+            <th scope="col">必填</th>
+            <th scope="col">填写值</th>
+            <th scope="col">说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          {parameters.map((parameter) => {
+            const schema = parameter.schema;
+            const key = parameterKey(parameter);
+            const value = values[key] ?? "";
+            const options = schema?.enum ?? [];
+            return (
+              <tr key={key}>
+                <th scope="row">
+                  <code>{parameter.name}</code>
+                </th>
+                <td>
+                  <span className={styles.parameterLocation}>{parameter.in}</span>
+                </td>
+                <td>
+                  <code>{schemaTypeLabel(schema)}</code>
+                </td>
+                <td>
+                  {parameter.required ? (
+                    <span className={styles.requiredMarker}>必填</span>
+                  ) : (
+                    <span className={styles.optionalMarker}>可选</span>
+                  )}
+                </td>
+                <td>
+                  {options.length > 0 ? (
+                    <select
+                      className={styles.tableControl}
+                      value={value}
+                      onChange={(event) => onChange(key, event.target.value)}
+                      aria-label={`${parameter.name} 参数`}
+                    >
+                      <option value="">请选择</option>
+                      {options.map((option) => (
+                        <option key={String(option)} value={String(option)}>
+                          {String(option)}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      className={styles.tableControl}
+                      value={value}
+                      onChange={(event) => onChange(key, event.target.value)}
+                      placeholder={schema?.format === "uuid" ? "UUID" : parameter.required ? "必填" : "可选"}
+                      aria-label={`${parameter.name} 参数`}
+                    />
+                  )}
+                </td>
+                <td>{parameter.description ?? "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function BodySchemaTable({ fields }: { fields: SchemaField[] }) {
-  return <div className={styles.parameterTableScroll}><table className={styles.parameterTable}><caption className={styles.tableCaption}>Request Body 参数</caption><thead><tr><th scope="col">参数</th><th scope="col">类型</th><th scope="col">必填</th><th scope="col">示例</th><th scope="col">说明</th></tr></thead><tbody>{fields.map((field) => {
-    const type = schemaType(field.schema);
-    const isContainer = type === "object" || type === "array";
-    return <tr key={field.path}><th scope="row"><code>{field.path}</code></th><td><code>{schemaTypeLabel(field.schema)}</code></td><td>{field.required ? <span className={styles.requiredMarker}>必填</span> : <span className={styles.optionalMarker}>可选</span>}</td><td><code>{isContainer ? type === "array" ? "[]" : "{}" : inputValue(schemaExample(field.schema))}</code></td><td>{field.schema.description ?? "—"}</td></tr>;
-  })}</tbody></table></div>;
+  return (
+    <div className={styles.parameterTableScroll}>
+      <table className={styles.parameterTable}>
+        <caption className={styles.tableCaption}>Request Body 参数</caption>
+        <thead>
+          <tr>
+            <th scope="col">参数</th>
+            <th scope="col">类型</th>
+            <th scope="col">必填</th>
+            <th scope="col">示例</th>
+            <th scope="col">说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          {fields.map((field) => {
+            const type = schemaType(field.schema);
+            const isContainer = type === "object" || type === "array";
+            return (
+              <tr key={field.path}>
+                <th scope="row">
+                  <code>{field.path}</code>
+                </th>
+                <td>
+                  <code>{schemaTypeLabel(field.schema)}</code>
+                </td>
+                <td>
+                  {field.required ? (
+                    <span className={styles.requiredMarker}>必填</span>
+                  ) : (
+                    <span className={styles.optionalMarker}>可选</span>
+                  )}
+                </td>
+                <td>
+                  <code>
+                    {isContainer ? (type === "array" ? "[]" : "{}") : inputValue(schemaExample(field.schema))}
+                  </code>
+                </td>
+                <td>{field.schema.description ?? "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 type MultipartTableProps = {
@@ -797,10 +948,63 @@ type MultipartTableProps = {
 };
 
 function MultipartTable({ properties, required, values, file, onValueChange, onFileChange }: MultipartTableProps) {
-  return <div className={styles.parameterTableScroll}><table className={styles.parameterTable}><caption className={styles.tableCaption}>Multipart Request Body 参数</caption><thead><tr><th scope="col">参数</th><th scope="col">类型</th><th scope="col">必填</th><th scope="col">填写值</th><th scope="col">说明</th></tr></thead><tbody>{properties.map(([name, property]) => {
-    const isFile = property.format === "binary";
-    return <tr key={name}><th scope="row"><code>{name}</code></th><td><code>{schemaTypeLabel(property)}</code></td><td>{required.includes(name) ? <span className={styles.requiredMarker}>必填</span> : <span className={styles.optionalMarker}>可选</span>}</td><td>{isFile ? <input className={styles.tableControl} type="file" onChange={(event) => onFileChange(event.target.files?.[0] ?? null)} aria-label={`${name} 文件`} /> : <input className={styles.tableControl} value={values[name] ?? ""} onChange={(event) => onValueChange(name, event.target.value)} placeholder="填写表单字段" aria-label={`${name} 参数`} />}</td><td>{isFile ? file?.name ?? "选择一个文件" : property.description ?? "—"}</td></tr>;
-  })}</tbody></table></div>;
+  return (
+    <div className={styles.parameterTableScroll}>
+      <table className={styles.parameterTable}>
+        <caption className={styles.tableCaption}>Multipart Request Body 参数</caption>
+        <thead>
+          <tr>
+            <th scope="col">参数</th>
+            <th scope="col">类型</th>
+            <th scope="col">必填</th>
+            <th scope="col">填写值</th>
+            <th scope="col">说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          {properties.map(([name, property]) => {
+            const isFile = property.format === "binary";
+            return (
+              <tr key={name}>
+                <th scope="row">
+                  <code>{name}</code>
+                </th>
+                <td>
+                  <code>{schemaTypeLabel(property)}</code>
+                </td>
+                <td>
+                  {required.includes(name) ? (
+                    <span className={styles.requiredMarker}>必填</span>
+                  ) : (
+                    <span className={styles.optionalMarker}>可选</span>
+                  )}
+                </td>
+                <td>
+                  {isFile ? (
+                    <input
+                      className={styles.tableControl}
+                      type="file"
+                      onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+                      aria-label={`${name} 文件`}
+                    />
+                  ) : (
+                    <input
+                      className={styles.tableControl}
+                      value={values[name] ?? ""}
+                      onChange={(event) => onValueChange(name, event.target.value)}
+                      placeholder="填写表单字段"
+                      aria-label={`${name} 参数`}
+                    />
+                  )}
+                </td>
+                <td>{isFile ? (file?.name ?? "选择一个文件") : (property.description ?? "—")}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 async function copyText(value: string): Promise<void> {
@@ -829,15 +1033,26 @@ export default function ApiConsolePage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [scenario, setScenario] = useState<ScenarioState>(() => initialScenarioState());
 
-  const selectedEntry = useMemo(() => entries.find((entry) => entry.key === selectedKey) ?? null, [entries, selectedKey]);
+  const selectedEntry = useMemo(
+    () => entries.find((entry) => entry.key === selectedKey) ?? null,
+    [entries, selectedKey],
+  );
   const tags = useMemo(() => ["ALL", ...new Set(entries.map((entry) => entry.tag))], [entries]);
-  const filteredEntries = useMemo(() => entries.filter((entry) => {
-    const matchesMethod = methodFilter === "ALL" || entry.method === methodFilter;
-    const matchesTag = tagFilter === "ALL" || entry.tag === tagFilter;
-    const search = pathSearch.trim().toLowerCase();
-    const matchesSearch = !search || `${entry.path} ${entry.operation.summary ?? ""} ${entry.operation.operationId}`.toLowerCase().includes(search);
-    return matchesMethod && matchesTag && matchesSearch;
-  }), [entries, methodFilter, pathSearch, tagFilter]);
+  const filteredEntries = useMemo(
+    () =>
+      entries.filter((entry) => {
+        const matchesMethod = methodFilter === "ALL" || entry.method === methodFilter;
+        const matchesTag = tagFilter === "ALL" || entry.tag === tagFilter;
+        const search = pathSearch.trim().toLowerCase();
+        const matchesSearch =
+          !search ||
+          `${entry.path} ${entry.operation.summary ?? ""} ${entry.operation.operationId}`
+            .toLowerCase()
+            .includes(search);
+        return matchesMethod && matchesTag && matchesSearch;
+      }),
+    [entries, methodFilter, pathSearch, tagFilter],
+  );
   const groupedEntries = useMemo(() => {
     const groups = new Map<string, OperationEntry[]>();
     for (const entry of filteredEntries) groups.set(entry.tag, [...(groups.get(entry.tag) ?? []), entry]);
@@ -850,36 +1065,49 @@ export default function ApiConsolePage() {
     if (!requestId) return;
     setScenario((current) => ({
       ...current,
-      requestIds: [...new Set([...current.requestIds, requestId])].slice(-12)
+      requestIds: [...new Set([...current.requestIds, requestId])].slice(-12),
     }));
   };
 
   const updateScenarioStep = (id: string, status: ScenarioStepStatus, detail: string) => {
     setScenario((current) => ({
       ...current,
-      steps: current.steps.map((step) => step.id === id ? { ...step, status, detail } : step)
+      steps: current.steps.map((step) => (step.id === id ? { ...step, status, detail } : step)),
     }));
   };
 
-  const pollScenarioJob = async (jobId: string, stepId: string): Promise<{ job: ScenarioJob; result: ScenarioHttpResult }> => {
+  const pollScenarioJob = async (
+    jobId: string,
+    stepId: string,
+  ): Promise<{ job: ScenarioJob; result: ScenarioHttpResult }> => {
     let afterVersion = 0;
     for (let attempt = 0; attempt < 80; attempt += 1) {
       const result = await requestScenario(entries, "getGenerationJobStatus", { jobId, afterVersion, waitMs: 750 });
       rememberScenarioRequest(result.requestId);
       if (result.status === 204) continue;
       const job = scenarioJobFromPayload(result.payload);
-      setScenario((current) => stepId === "job"
-        ? {
-          ...current,
-          job,
-          statusHistory: current.statusHistory.includes(job.status) ? current.statusHistory : [...current.statusHistory, job.status]
-        }
-        : {
-          ...current,
-          clarificationJob: job,
-          clarificationStatusHistory: current.clarificationStatusHistory.includes(job.status) ? current.clarificationStatusHistory : [...current.clarificationStatusHistory, job.status]
-        });
-      updateScenarioStep(stepId, job.status === "failed" ? "failed" : "running", `HTTP ${result.status} · ${job.status}`);
+      setScenario((current) =>
+        stepId === "job"
+          ? {
+              ...current,
+              job,
+              statusHistory: current.statusHistory.includes(job.status)
+                ? current.statusHistory
+                : [...current.statusHistory, job.status],
+            }
+          : {
+              ...current,
+              clarificationJob: job,
+              clarificationStatusHistory: current.clarificationStatusHistory.includes(job.status)
+                ? current.clarificationStatusHistory
+                : [...current.clarificationStatusHistory, job.status],
+            },
+      );
+      updateScenarioStep(
+        stepId,
+        job.status === "failed" ? "failed" : "running",
+        `HTTP ${result.status} · ${job.status}`,
+      );
       if (Number.isSafeInteger(job.statusVersion)) afterVersion = job.statusVersion as number;
       if (terminalScenarioStatuses.has(job.status)) return { job, result };
     }
@@ -912,38 +1140,57 @@ export default function ApiConsolePage() {
       const projectsResult = await requestScenario(entries, "listProjects");
       rememberScenarioRequest(projectsResult.requestId);
       const projects = Array.isArray(projectsResult.payload.projects) ? projectsResult.payload.projects : [];
-      if (!projects.some((project) => isRecord(project) && project.id === projectId)) throw new Error("Project 未出现在当前用户目录");
+      if (!projects.some((project) => isRecord(project) && project.id === projectId))
+        throw new Error("Project 未出现在当前用户目录");
       updateScenarioStep("project", "passed", `HTTP ${projectsResult.status} · 已确认可访问`);
 
       updateScenarioStep("data", "running", "粘贴区域销售月度示例数据");
-      const conversationResult = await requestScenario(entries, "createConversation", { projectId }, {
-        title: "Loop 4 销售分析对话"
-      });
+      const conversationResult = await requestScenario(
+        entries,
+        "createConversation",
+        { projectId },
+        {
+          title: "Loop 4 销售分析对话",
+        },
+      );
       rememberScenarioRequest(conversationResult.requestId);
-      const conversation = isRecord(conversationResult.payload.conversation) ? conversationResult.payload.conversation : null;
+      const conversation = isRecord(conversationResult.payload.conversation)
+        ? conversationResult.payload.conversation
+        : null;
       if (!conversation || typeof conversation.id !== "string") throw new Error("Conversation 创建失败");
       conversationId = conversation.id;
-      const dataResult = await requestScenario(entries, "pasteDataAsset", { projectId }, {
-        name: "loop4-sales.csv",
-        content: scenarioSalesCsv,
-        conversationId
-      });
+      const dataResult = await requestScenario(
+        entries,
+        "pasteDataAsset",
+        { projectId },
+        {
+          name: "loop4-sales.csv",
+          content: scenarioSalesCsv,
+          conversationId,
+        },
+      );
       rememberScenarioRequest(dataResult.requestId);
       const asset = isRecord(dataResult.payload.asset) ? dataResult.payload.asset : null;
       const snapshot = asset && isRecord(asset.latestSnapshot) ? asset.latestSnapshot : null;
-      if (!asset || typeof asset.id !== "string" || !snapshot || typeof snapshot.id !== "string") throw new Error("数据响应中缺少 Data Snapshot");
+      if (!asset || typeof asset.id !== "string" || !snapshot || typeof snapshot.id !== "string")
+        throw new Error("数据响应中缺少 Data Snapshot");
       assetId = asset.id;
       updateScenarioStep("data", "passed", `HTTP ${dataResult.status} · Snapshot ${snapshot.id}`);
 
       updateScenarioStep("metric", "running", "确认销售额与同比的指标口径");
-      const metricResult = await requestScenario(entries, "createMetricDefinition", { projectId }, {
-        name: "销售额",
-        meaning: "按记录汇总的销售金额，用于比较各区域各月份表现",
-        formula: "SUM(销售额)",
-        unit: "元",
-        timeRule: "按月份聚合；同比以去年同月为比较期",
-        filterRule: "不额外过滤"
-      });
+      const metricResult = await requestScenario(
+        entries,
+        "createMetricDefinition",
+        { projectId },
+        {
+          name: "销售额",
+          meaning: "按记录汇总的销售金额，用于比较各区域各月份表现",
+          formula: "SUM(销售额)",
+          unit: "元",
+          timeRule: "按月份聚合；同比以去年同月为比较期",
+          filterRule: "不额外过滤",
+        },
+      );
       rememberScenarioRequest(metricResult.requestId);
       const definition = isRecord(metricResult.payload.definition) ? metricResult.payload.definition : null;
       if (!definition || typeof definition.id !== "string") throw new Error("指标口径未成功确认");
@@ -955,7 +1202,7 @@ export default function ApiConsolePage() {
         dataAssetId: assetId,
         prompt: "按月份展示各区域销售额、同比变化和异常区域",
         renderer: "vega-lite",
-        idempotencyKey
+        idempotencyKey,
       };
       updateScenarioStep("job", "running", "提交异步 Generation Job");
       const jobResult = await requestScenario(entries, "createGenerationJob", { projectId }, generationInput);
@@ -969,25 +1216,37 @@ export default function ApiConsolePage() {
       const reusedResult = await requestScenario(entries, "createGenerationJob", { projectId }, generationInput);
       rememberScenarioRequest(reusedResult.requestId);
       const reusedJob = scenarioJobFromPayload(reusedResult.payload);
-      if (reusedResult.payload.reused !== true || reusedJob.id !== successJobId) throw new Error("重复提交没有复用已有任务");
+      if (reusedResult.payload.reused !== true || reusedJob.id !== successJobId)
+        throw new Error("重复提交没有复用已有任务");
       updateScenarioStep("idempotency", "passed", `HTTP ${reusedResult.status} · 复用已有任务 ${reusedJob.id}`);
 
       updateScenarioStep("idempotency-conflict", "running", "复用同一幂等键但修改 prompt");
       try {
-        await requestScenario(entries, "createGenerationJob", { projectId }, {
-          ...generationInput,
-          prompt: "同一个幂等键的另一组输入"
-        });
+        await requestScenario(
+          entries,
+          "createGenerationJob",
+          { projectId },
+          {
+            ...generationInput,
+            prompt: "同一个幂等键的另一组输入",
+          },
+        );
         throw new Error("同一幂等键的不同输入没有被拒绝");
       } catch (error) {
         if (!(error instanceof ScenarioRequestError) || error.status !== 409) throw error;
         rememberScenarioRequest(error.requestId);
-        updateScenarioStep("idempotency-conflict", "passed", `HTTP ${error.status} · ${String(error.payload.code ?? "IDEMPOTENCY_CONFLICT")}`);
+        updateScenarioStep(
+          "idempotency-conflict",
+          "passed",
+          `HTTP ${error.status} · ${String(error.payload.code ?? "IDEMPOTENCY_CONFLICT")}`,
+        );
       }
 
       const successResult = await pollScenarioJob(successJobId, "job");
       if (successResult.job.status !== "succeeded") {
-        throw new Error(`成功链路的 Job 进入 ${successResult.job.status}：${successResult.job.errorMessage ?? "无错误说明"}`);
+        throw new Error(
+          `成功链路的 Job 进入 ${successResult.job.status}：${successResult.job.errorMessage ?? "无错误说明"}`,
+        );
       }
       updateScenarioStep("job", "passed", `已完成 · ${successResult.job.status} · 状态变化已记录`);
 
@@ -995,12 +1254,23 @@ export default function ApiConsolePage() {
       const evidenceResult = await requestScenario(entries, "listEvidenceBlocks", { projectId });
       rememberScenarioRequest(evidenceResult.requestId);
       const evidenceList = Array.isArray(evidenceResult.payload.evidence) ? evidenceResult.payload.evidence : [];
-      const evidence = evidenceList.find((item): item is ScenarioEvidence => isRecord(item) && isRecord(item.block) && item.block.generationJobId === successJobId);
+      const evidence = evidenceList.find(
+        (item): item is ScenarioEvidence =>
+          isRecord(item) && isRecord(item.block) && item.block.generationJobId === successJobId,
+      );
       const resultRecord = isRecord(successResult.result.payload.result) ? successResult.result.payload.result : {};
       const revision = isRecord(successResult.result.payload.revision) ? successResult.result.payload.revision : null;
       const block = evidence?.block;
       const artifact = evidence?.artifact;
-      if (!evidence || !block || !artifact || !revision || typeof block.id !== "string" || typeof revision.id !== "string" || typeof artifact.id !== "string") {
+      if (
+        !evidence ||
+        !block ||
+        !artifact ||
+        !revision ||
+        typeof block.id !== "string" ||
+        typeof revision.id !== "string" ||
+        typeof artifact.id !== "string"
+      ) {
         throw new Error("成功任务没有返回可定位的 Evidence Block、Chart Revision 或 Artifact");
       }
       const jobRecord = successResult.job;
@@ -1008,7 +1278,8 @@ export default function ApiConsolePage() {
         projectId,
         assetId,
         snapshotId: typeof jobRecord.snapshotId === "string" ? jobRecord.snapshotId : String(snapshot.id),
-        metricDefinitionId: typeof jobRecord.metricDefinitionId === "string" ? jobRecord.metricDefinitionId : String(definition.id),
+        metricDefinitionId:
+          typeof jobRecord.metricDefinitionId === "string" ? jobRecord.metricDefinitionId : String(definition.id),
         jobId: successJobId,
         revisionId: revision.id,
         artifactId: artifact.id,
@@ -1020,56 +1291,93 @@ export default function ApiConsolePage() {
         flintSpec: resultRecord.flintSpec ?? jobRecord.flintSpec ?? null,
         validation: resultRecord.validation ?? jobRecord.validation ?? null,
         resultSummary: resultRecord.resultSummary ?? jobRecord.resultSummary ?? block.resultSummary ?? null,
-        finding: typeof block.finding === "string" ? block.finding : ""
+        finding: typeof block.finding === "string" ? block.finding : "",
       };
       setScenario((current) => ({ ...current, trace }));
       updateScenarioStep("result", "passed", `Evidence ${block.id} · Revision R${String(revision.revision ?? "?")}`);
 
       updateScenarioStep("invalid", "running", "提交空 prompt，验证 400 错误契约");
       try {
-        await requestScenario(entries, "createGenerationJob", { projectId }, {
-          dataAssetId: assetId,
-          prompt: "",
-          idempotencyKey: `api-console-loop4-invalid-${Date.now()}`
-        });
+        await requestScenario(
+          entries,
+          "createGenerationJob",
+          { projectId },
+          {
+            dataAssetId: assetId,
+            prompt: "",
+            idempotencyKey: `api-console-loop4-invalid-${Date.now()}`,
+          },
+        );
         throw new Error("空 prompt 没有被拒绝");
       } catch (error) {
         if (!(error instanceof ScenarioRequestError) || error.status !== 400) throw error;
         rememberScenarioRequest(error.requestId);
-        updateScenarioStep("invalid", "passed", `HTTP ${error.status} · ${String(error.payload.code ?? "INVALID_INPUT")}`);
+        updateScenarioStep(
+          "invalid",
+          "passed",
+          `HTTP ${error.status} · ${String(error.payload.code ?? "INVALID_INPUT")}`,
+        );
       }
 
       updateScenarioStep("clarification", "running", "粘贴缺少数值字段的数据，验证 needs_clarification 与提案");
-      const clarificationDataResult = await requestScenario(entries, "pasteDataAsset", { projectId }, {
-        name: "loop4-clarification.csv",
-        content: scenarioClarificationCsv,
-        conversationId
-      });
+      const clarificationDataResult = await requestScenario(
+        entries,
+        "pasteDataAsset",
+        { projectId },
+        {
+          name: "loop4-clarification.csv",
+          content: scenarioClarificationCsv,
+          conversationId,
+        },
+      );
       rememberScenarioRequest(clarificationDataResult.requestId);
-      const clarificationAsset = isRecord(clarificationDataResult.payload.asset) ? clarificationDataResult.payload.asset : null;
+      const clarificationAsset = isRecord(clarificationDataResult.payload.asset)
+        ? clarificationDataResult.payload.asset
+        : null;
       if (!clarificationAsset || typeof clarificationAsset.id !== "string") throw new Error("澄清场景数据资产创建失败");
-      const clarificationJobResult = await requestScenario(entries, "createGenerationJob", { projectId }, {
-        conversationId,
-        dataAssetId: clarificationAsset.id,
-        prompt: "验证缺少数值指标时生成任务应请求澄清",
-        renderer: "vega-lite",
-        idempotencyKey: `api-console-loop4-clarification-${Date.now()}`
-      });
+      const clarificationJobResult = await requestScenario(
+        entries,
+        "createGenerationJob",
+        { projectId },
+        {
+          conversationId,
+          dataAssetId: clarificationAsset.id,
+          prompt: "验证缺少数值指标时生成任务应请求澄清",
+          renderer: "vega-lite",
+          idempotencyKey: `api-console-loop4-clarification-${Date.now()}`,
+        },
+      );
       rememberScenarioRequest(clarificationJobResult.requestId);
       const clarificationJob = scenarioJobFromPayload(clarificationJobResult.payload);
       setScenario((current) => ({ ...current, clarificationJob }));
       const clarificationResult = await pollScenarioJob(clarificationJob.id, "clarification");
       rememberScenarioRequest(clarificationResult.result.requestId);
-      if (clarificationResult.job.status !== "needs_clarification") throw new Error(`澄清场景没有进入 needs_clarification，而是 ${clarificationResult.job.status}`);
+      if (clarificationResult.job.status !== "needs_clarification")
+        throw new Error(`澄清场景没有进入 needs_clarification，而是 ${clarificationResult.job.status}`);
       const proposal = clarificationResult.job.clarificationProposal;
-      if (!isRecord(proposal) || typeof proposal.code !== "string" || typeof proposal.question !== "string" || proposal.requiresUserDecision !== true) {
+      if (
+        !isRecord(proposal) ||
+        typeof proposal.code !== "string" ||
+        typeof proposal.question !== "string" ||
+        proposal.requiresUserDecision !== true
+      ) {
         throw new Error("needs_clarification Job 缺少有效的 clarificationProposal");
       }
-      setScenario((current) => ({ ...current, clarificationJob: clarificationResult.job, clarificationRequestId: clarificationResult.result.requestId }));
+      setScenario((current) => ({
+        ...current,
+        clarificationJob: clarificationResult.job,
+        clarificationRequestId: clarificationResult.result.requestId,
+      }));
       const clarificationEvidenceResult = await requestScenario(entries, "listEvidenceBlocks", { projectId });
       rememberScenarioRequest(clarificationEvidenceResult.requestId);
-      const clarificationEvidenceList = Array.isArray(clarificationEvidenceResult.payload.evidence) ? clarificationEvidenceResult.payload.evidence : [];
-      if (clarificationEvidenceList.some((item) => isRecord(item) && isRecord(item.block) && item.block.generationJobId === clarificationResult.job.id)) {
+      const clarificationEvidenceList = Array.isArray(clarificationEvidenceResult.payload.evidence)
+        ? clarificationEvidenceResult.payload.evidence
+        : [];
+      if (
+        clarificationEvidenceList.some(
+          (item) => isRecord(item) && isRecord(item.block) && item.block.generationJobId === clarificationResult.job.id,
+        )
+      ) {
         throw new Error("needs_clarification Job 错误地生成了 Evidence Block");
       }
       updateScenarioStep("clarification", "passed", `${proposal.code} · needs_clarification · 提案已保存`);
@@ -1080,7 +1388,12 @@ export default function ApiConsolePage() {
       setScenario((current) => {
         const failedStep = current.steps.find((step) => step.status === "running");
         return failedStep
-          ? { ...current, steps: current.steps.map((step) => step.id === failedStep.id ? { ...step, status: "failed", detail: scenarioErrorMessage(error) } : step) }
+          ? {
+              ...current,
+              steps: current.steps.map((step) =>
+                step.id === failedStep.id ? { ...step, status: "failed", detail: scenarioErrorMessage(error) } : step,
+              ),
+            }
           : current;
       });
       setNotice("Loop 4 场景未完成，请查看失败步骤和下一步建议");
@@ -1093,13 +1406,18 @@ export default function ApiConsolePage() {
     try {
       const result = await apiRequest<unknown>(openApiEndpoint(), {}, { unauthorized: "none", throwOnError: false });
       const payload = result.payload;
-      if (!result.response.ok) throw new Error(isRecord(payload) && typeof payload.error === "string" ? payload.error : "无法读取 OpenAPI 文档");
+      if (!result.response.ok)
+        throw new Error(
+          isRecord(payload) && typeof payload.error === "string" ? payload.error : "无法读取 OpenAPI 文档",
+        );
       if (!isRecord(payload) || !isRecord(payload.paths)) throw new Error("OpenAPI 文档格式无效");
       const documentPayload = payload as unknown as OpenApiDocument;
       const nextEntries = buildEntries(documentPayload);
       setDocument(documentPayload);
       setEntries(nextEntries);
-      setSelectedKey((current) => current && nextEntries.some((entry) => entry.key === current) ? current : nextEntries[0]?.key ?? null);
+      setSelectedKey((current) =>
+        current && nextEntries.some((entry) => entry.key === current) ? current : (nextEntries[0]?.key ?? null),
+      );
     } catch (error) {
       setLoadError(formatApiError(error, "无法读取 OpenAPI 文档"));
     } finally {
@@ -1107,7 +1425,9 @@ export default function ApiConsolePage() {
     }
   }, []);
 
-  useEffect(() => { void loadDocument(); }, [loadDocument]);
+  useEffect(() => {
+    void loadDocument();
+  }, [loadDocument]);
 
   useEffect(() => {
     try {
@@ -1182,7 +1502,11 @@ export default function ApiConsolePage() {
     setFile(null);
     setResponse(null);
     setRequestError(null);
-    setNotice(item.state.contentType === "multipart/form-data" && item.state.bodyFields ? "已恢复请求字段；请重新选择文件" : "已恢复请求");
+    setNotice(
+      item.state.contentType === "multipart/form-data" && item.state.bodyFields
+        ? "已恢复请求字段；请重新选择文件"
+        : "已恢复请求",
+    );
   };
 
   const sendRequest = async () => {
@@ -1194,12 +1518,21 @@ export default function ApiConsolePage() {
       const state = { parameterValues, contentType, bodyText, bodyFields };
       const request = buildRequest(selectedEntry, state, file);
       const startedAt = performance.now();
-      const result = await apiRequest<Record<string, unknown>>(request.url, {
-        method: request.method,
-        headers: request.headers,
-        body: request.body,
-      }, { unauthorized: "none", throwOnError: false });
-      const nextResponse = responseFromFetch(result.response, result.raw, Math.round(performance.now() - startedAt), request);
+      const result = await apiRequest<Record<string, unknown>>(
+        request.url,
+        {
+          method: request.method,
+          headers: request.headers,
+          body: request.body,
+        },
+        { unauthorized: "none", throwOnError: false },
+      );
+      const nextResponse = responseFromFetch(
+        result.response,
+        result.raw,
+        Math.round(performance.now() - startedAt),
+        request,
+      );
       setResponse(nextResponse);
       const historyItem: HistoryItem = {
         id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -1212,9 +1545,14 @@ export default function ApiConsolePage() {
         status: nextResponse.status,
         duration: nextResponse.duration,
         requestId: nextResponse.requestId,
-        state: sanitizeHistoryState(state, selectedEntry.operation)
+        state: sanitizeHistoryState(state, selectedEntry.operation),
       };
-      setHistory((current) => [historyItem, ...current.filter((item) => item.key !== historyItem.key || item.at !== historyItem.at)].slice(0, 30));
+      setHistory((current) =>
+        [historyItem, ...current.filter((item) => item.key !== historyItem.key || item.at !== historyItem.at)].slice(
+          0,
+          30,
+        ),
+      );
     } catch (error) {
       setRequestError(formatApiError(error, "请求发送失败"));
     } finally {
@@ -1240,115 +1578,735 @@ export default function ApiConsolePage() {
   const bodyProperties = Object.entries(bodySchema?.properties ?? {});
   const bodySchemaFields = collectSchemaFields(bodySchema);
   const responseExamples = responseExampleEntries(selectedEntry?.operation);
-  const parametersByLocation = Object.fromEntries(parameterLocations.map((location) => [location, (selectedEntry?.operation.parameters ?? []).filter((parameter) => parameter.in === location)])) as Record<typeof parameterLocations[number], OpenApiParameter[]>;
+  const parametersByLocation = Object.fromEntries(
+    parameterLocations.map((location) => [
+      location,
+      (selectedEntry?.operation.parameters ?? []).filter((parameter) => parameter.in === location),
+    ]),
+  ) as Record<(typeof parameterLocations)[number], OpenApiParameter[]>;
   const inspectorJob = scenario.clarificationJob ?? scenario.job;
-  const inspectorStatusHistory = scenario.clarificationJob ? scenario.clarificationStatusHistory : scenario.statusHistory;
-  return <main className={styles.page}>
-    <header className={styles.topbar}>
-      <a className={styles.brand} href="/" aria-label="返回 LangReport 工作台"><span className={styles.brandMark}>LR</span><span>LangReport</span></a>
-      <div className={styles.topbarTitle}><span className={styles.topbarPath}>API console</span></div>
-      <div className={styles.topbarActions}><span className={styles.environment}><i />{environment}</span><a className={styles.backLink} href="/">返回工作台 ↗</a></div>
-    </header>
-
-    <section className={styles.scenarioPanel} aria-labelledby="loop4-title">
-      <div className={styles.scenarioHeader}>
-        <div>
-          <span className={styles.eyebrow}>LOOP 4 / GENERATION JOB SCENARIO</span>
-          <h1 id="loop4-title">Generation Job 场景</h1>
-          <p>从健康检查开始，使用本地销售示例数据跑通异步生成、幂等复用、错误输入、澄清提案和 Evidence 追溯。</p>
+  const inspectorStatusHistory = scenario.clarificationJob
+    ? scenario.clarificationStatusHistory
+    : scenario.statusHistory;
+  return (
+    <main className={styles.page}>
+      <header className={styles.topbar}>
+        <a className={styles.brand} href="/" aria-label="返回 LangReport 工作台">
+          <span className={styles.brandMark}>LR</span>
+          <span>LangReport</span>
+        </a>
+        <div className={styles.topbarTitle}>
+          <span className={styles.topbarPath}>API console</span>
         </div>
-        <button type="button" className={styles.primaryButton} onClick={() => void runScenario()} disabled={isLoading || entries.length === 0 || scenario.phase === "running"}>
-          {scenario.phase === "running" ? "场景运行中…" : scenario.phase === "succeeded" ? "再次运行 Loop 4 ↗" : "运行 Loop 4 ↗"}
-        </button>
-      </div>
+        <div className={styles.topbarActions}>
+          <span className={styles.environment}>
+            <i />
+            {environment}
+          </span>
+          <a className={styles.backLink} href="/">
+            返回工作台 ↗
+          </a>
+        </div>
+      </header>
 
-      <div className={styles.scenarioBody}>
-        <div className={styles.scenarioSteps} aria-label="Loop 4 验收步骤">
-          {scenario.steps.map((step, index) => <div className={`${styles.scenarioStep} ${scenarioStepClass(step.status)}`} key={step.id}>
-            <span className={styles.scenarioStepNumber}>{String(index + 1).padStart(2, "0")}</span>
-            <div><strong>{step.label}</strong><small>{step.detail}</small></div>
-            <span className={styles.scenarioStepMark}>{step.status === "passed" ? "✓" : step.status === "failed" ? "!" : step.status === "running" ? "·" : "—"}</span>
-          </div>)}
+      <section className={styles.scenarioPanel} aria-labelledby="loop4-title">
+        <div className={styles.scenarioHeader}>
+          <div>
+            <span className={styles.eyebrow}>LOOP 4 / GENERATION JOB SCENARIO</span>
+            <h1 id="loop4-title">Generation Job 场景</h1>
+            <p>从健康检查开始，使用本地销售示例数据跑通异步生成、幂等复用、错误输入、澄清提案和 Evidence 追溯。</p>
+          </div>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={() => void runScenario()}
+            disabled={isLoading || entries.length === 0 || scenario.phase === "running"}
+          >
+            {scenario.phase === "running"
+              ? "场景运行中…"
+              : scenario.phase === "succeeded"
+                ? "再次运行 Loop 4 ↗"
+                : "运行 Loop 4 ↗"}
+          </button>
         </div>
 
-        <div className={styles.scenarioInspector}>
-          {scenario.phase === "idle" && <div className={styles.scenarioEmpty}><span>04</span><strong>一键验证异步生成链路</strong><p>运行后会自动创建或复用本地 Demo Project。澄清场景使用不含数值字段的隔离 Data Snapshot，保存提案但不会伪造 Evidence。</p></div>}
-          {scenario.phase !== "idle" && <>
-            <div className={styles.scenarioInspectorHead}><div><span className={styles.eyebrow}>JOB STATE / POLLING</span><h2>{inspectorJob ? inspectorJob.status : "准备中"}</h2></div>{inspectorJob && <code>{inspectorJob.id}</code>}</div>
-            <div className={styles.scenarioPipeline} aria-label="Generation Job 状态">
-              {scenarioPipeline.map((status, index) => {
-                const currentIndex = inspectorJob ? scenarioPipeline.indexOf(inspectorJob.status as (typeof scenarioPipeline)[number]) : -1;
-                const isCurrent = inspectorJob?.status === status;
-                const isDone = currentIndex > index || inspectorJob?.status === "succeeded";
-                return <div className={`${styles.scenarioPipelineStep} ${isDone ? styles.scenarioPipelineDone : ""} ${isCurrent ? styles.scenarioPipelineCurrent : ""}`} key={status}><i /><span>{status}</span></div>;
-              })}
-            </div>
-            {inspectorStatusHistory.length > 0 && <p className={styles.scenarioTimeline}>状态变化：{inspectorStatusHistory.join(" → ")}</p>}
-            {scenario.error && <div className={styles.scenarioError} role="alert"><strong>场景未完成</strong><p>{scenario.error}</p><small>建议：确认 API、PostgreSQL、MinIO、Generation Worker 和 Render Worker 均已启动后重试。</small></div>}
-            {scenario.trace && <div className={styles.scenarioTrace}>
-              <div className={styles.scenarioTraceHeader}><div><span className={styles.eyebrow}>EVIDENCE BLOCK / TRACE</span><h3>成功结果追溯</h3></div><span className={styles.tracePassed}>链路完整</span></div>
-              <div className={styles.scenarioTraceGrid}>
-                <div><span>Data Snapshot</span><strong>{scenario.trace.snapshotId}</strong><small>Asset {scenario.trace.assetId}</small></div>
-                <div><span>Metric Definition</span><strong>{scenario.trace.metricDefinitionId}</strong><small>已确认口径</small></div>
-                <div><span>Generation Job</span><strong>{scenario.trace.jobId}</strong><small>状态 succeeded</small></div>
-                <div><span>Chart Revision</span><strong>{scenario.trace.revisionId}</strong><small>Artifact {scenario.trace.artifactId}</small></div>
-                <div><span>Evidence Block</span><strong>{scenario.trace.evidenceId}</strong><small>{scenario.trace.finding || "候选发现已保存"}</small></div>
-                <div><span>Visual Template</span><strong>{scenario.trace.theme} · {scenario.trace.themeVersion}</strong><small>生成时主题快照</small></div>
+        <div className={styles.scenarioBody}>
+          <div className={styles.scenarioSteps} aria-label="Loop 4 验收步骤">
+            {scenario.steps.map((step, index) => (
+              <div className={`${styles.scenarioStep} ${scenarioStepClass(step.status)}`} key={step.id}>
+                <span className={styles.scenarioStepNumber}>{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <strong>{step.label}</strong>
+                  <small>{step.detail}</small>
+                </div>
+                <span className={styles.scenarioStepMark}>
+                  {step.status === "passed"
+                    ? "✓"
+                    : step.status === "failed"
+                      ? "!"
+                      : step.status === "running"
+                        ? "·"
+                        : "—"}
+                </span>
               </div>
-              <details className={styles.scenarioDetails}>
-                <summary>查看 TransformPlan、完整结果摘要、字段血缘、Flint Spec 与校验 <span><ChevronDownIcon /></span></summary>
-                <div className={styles.scenarioJsonGrid}><div><span>TransformPlan</span><pre>{formatJson(scenario.trace.transformPlan)}</pre></div><div><span>完整结果摘要</span><pre>{formatJson(scenario.trace.resultSummary)}</pre></div><div><span>字段血缘</span><pre>{formatJson(scenario.trace.fieldLineage)}</pre></div><div><span>Flint Spec</span><pre>{formatJson(scenario.trace.flintSpec)}</pre></div><div><span>校验结果</span><pre>{formatJson(scenario.trace.validation)}</pre></div></div>
-              </details>
-            </div>}
-            {scenario.clarificationJob && <div className={styles.scenarioClarification} role="status"><div><span className={styles.clarificationMark}>?</span><div><span className={styles.eyebrow}>NEEDS CLARIFICATION</span><h3>澄清提案已保存</h3></div></div><strong>{String(scenario.clarificationJob.clarificationProposal?.code ?? scenario.clarificationJob.errorCode ?? "GENERATION_NEEDS_CLARIFICATION")}</strong><p>{String(scenario.clarificationJob.clarificationProposal?.question ?? scenario.clarificationJob.errorMessage ?? "任务已进入 needs_clarification 状态")}</p><small>阶段 · {String(scenario.clarificationJob.clarificationProposal?.stage ?? "unknown")} · 目标 · {String(scenario.clarificationJob.clarificationProposal?.target ?? "未指定")} · 用户决策 · {scenario.clarificationJob.clarificationProposal?.requiresUserDecision === true ? "必需" : "未标记"}</small>{scenario.clarificationStatusHistory.length > 0 && <small>状态变化 · {scenario.clarificationStatusHistory.join(" → ")}</small>}<small>generationJobId · {scenario.clarificationJob.id}<br />requestId · {scenario.clarificationRequestId ?? "已由轮询请求记录"}</small>{scenario.clarificationJob.clarificationProposal && <details className={styles.scenarioDetails}><summary>查看候选与证据 <span><ChevronDownIcon /></span></summary><pre>{formatJson({ candidates: scenario.clarificationJob.clarificationProposal.candidates ?? [], recommendedCandidate: scenario.clarificationJob.clarificationProposal.recommendedCandidate ?? null, diagnostic: scenario.clarificationJob.clarificationProposal.diagnostic ?? null })}</pre></details>}<em>没有生成 Evidence Block。下一步：根据候选提案做出当前 Cycle 决策，或停止本次生成。</em></div>}
-          </>}
+            ))}
+          </div>
+
+          <div className={styles.scenarioInspector}>
+            {scenario.phase === "idle" && (
+              <div className={styles.scenarioEmpty}>
+                <span>04</span>
+                <strong>一键验证异步生成链路</strong>
+                <p>
+                  运行后会自动创建或复用本地 Demo Project。澄清场景使用不含数值字段的隔离 Data
+                  Snapshot，保存提案但不会伪造 Evidence。
+                </p>
+              </div>
+            )}
+            {scenario.phase !== "idle" && (
+              <>
+                <div className={styles.scenarioInspectorHead}>
+                  <div>
+                    <span className={styles.eyebrow}>JOB STATE / POLLING</span>
+                    <h2>{inspectorJob ? inspectorJob.status : "准备中"}</h2>
+                  </div>
+                  {inspectorJob && <code>{inspectorJob.id}</code>}
+                </div>
+                <div className={styles.scenarioPipeline} aria-label="Generation Job 状态">
+                  {scenarioPipeline.map((status, index) => {
+                    const currentIndex = inspectorJob
+                      ? scenarioPipeline.indexOf(inspectorJob.status as (typeof scenarioPipeline)[number])
+                      : -1;
+                    const isCurrent = inspectorJob?.status === status;
+                    const isDone = currentIndex > index || inspectorJob?.status === "succeeded";
+                    return (
+                      <div
+                        className={`${styles.scenarioPipelineStep} ${isDone ? styles.scenarioPipelineDone : ""} ${isCurrent ? styles.scenarioPipelineCurrent : ""}`}
+                        key={status}
+                      >
+                        <i />
+                        <span>{status}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {inspectorStatusHistory.length > 0 && (
+                  <p className={styles.scenarioTimeline}>状态变化：{inspectorStatusHistory.join(" → ")}</p>
+                )}
+                {scenario.error && (
+                  <div className={styles.scenarioError} role="alert">
+                    <strong>场景未完成</strong>
+                    <p>{scenario.error}</p>
+                    <small>
+                      建议：确认 API、PostgreSQL、MinIO、Generation Worker 和 Render Worker 均已启动后重试。
+                    </small>
+                  </div>
+                )}
+                {scenario.trace && (
+                  <div className={styles.scenarioTrace}>
+                    <div className={styles.scenarioTraceHeader}>
+                      <div>
+                        <span className={styles.eyebrow}>EVIDENCE BLOCK / TRACE</span>
+                        <h3>成功结果追溯</h3>
+                      </div>
+                      <span className={styles.tracePassed}>链路完整</span>
+                    </div>
+                    <div className={styles.scenarioTraceGrid}>
+                      <div>
+                        <span>Data Snapshot</span>
+                        <strong>{scenario.trace.snapshotId}</strong>
+                        <small>Asset {scenario.trace.assetId}</small>
+                      </div>
+                      <div>
+                        <span>Metric Definition</span>
+                        <strong>{scenario.trace.metricDefinitionId}</strong>
+                        <small>已确认口径</small>
+                      </div>
+                      <div>
+                        <span>Generation Job</span>
+                        <strong>{scenario.trace.jobId}</strong>
+                        <small>状态 succeeded</small>
+                      </div>
+                      <div>
+                        <span>Chart Revision</span>
+                        <strong>{scenario.trace.revisionId}</strong>
+                        <small>Artifact {scenario.trace.artifactId}</small>
+                      </div>
+                      <div>
+                        <span>Evidence Block</span>
+                        <strong>{scenario.trace.evidenceId}</strong>
+                        <small>{scenario.trace.finding || "候选发现已保存"}</small>
+                      </div>
+                      <div>
+                        <span>Visual Template</span>
+                        <strong>
+                          {scenario.trace.theme} · {scenario.trace.themeVersion}
+                        </strong>
+                        <small>生成时主题快照</small>
+                      </div>
+                    </div>
+                    <details className={styles.scenarioDetails}>
+                      <summary>
+                        查看 TransformPlan、完整结果摘要、字段血缘、Flint Spec 与校验{" "}
+                        <span>
+                          <ChevronDownIcon />
+                        </span>
+                      </summary>
+                      <div className={styles.scenarioJsonGrid}>
+                        <div>
+                          <span>TransformPlan</span>
+                          <pre>{formatJson(scenario.trace.transformPlan)}</pre>
+                        </div>
+                        <div>
+                          <span>完整结果摘要</span>
+                          <pre>{formatJson(scenario.trace.resultSummary)}</pre>
+                        </div>
+                        <div>
+                          <span>字段血缘</span>
+                          <pre>{formatJson(scenario.trace.fieldLineage)}</pre>
+                        </div>
+                        <div>
+                          <span>Flint Spec</span>
+                          <pre>{formatJson(scenario.trace.flintSpec)}</pre>
+                        </div>
+                        <div>
+                          <span>校验结果</span>
+                          <pre>{formatJson(scenario.trace.validation)}</pre>
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+                )}
+                {scenario.clarificationJob && (
+                  <div className={styles.scenarioClarification} role="status">
+                    <div>
+                      <span className={styles.clarificationMark}>?</span>
+                      <div>
+                        <span className={styles.eyebrow}>NEEDS CLARIFICATION</span>
+                        <h3>澄清提案已保存</h3>
+                      </div>
+                    </div>
+                    <strong>
+                      {String(
+                        scenario.clarificationJob.clarificationProposal?.code ??
+                          scenario.clarificationJob.errorCode ??
+                          "GENERATION_NEEDS_CLARIFICATION",
+                      )}
+                    </strong>
+                    <p>
+                      {String(
+                        scenario.clarificationJob.clarificationProposal?.question ??
+                          scenario.clarificationJob.errorMessage ??
+                          "任务已进入 needs_clarification 状态",
+                      )}
+                    </p>
+                    <small>
+                      阶段 · {String(scenario.clarificationJob.clarificationProposal?.stage ?? "unknown")} · 目标 ·{" "}
+                      {String(scenario.clarificationJob.clarificationProposal?.target ?? "未指定")} · 用户决策 ·{" "}
+                      {scenario.clarificationJob.clarificationProposal?.requiresUserDecision === true
+                        ? "必需"
+                        : "未标记"}
+                    </small>
+                    {scenario.clarificationStatusHistory.length > 0 && (
+                      <small>状态变化 · {scenario.clarificationStatusHistory.join(" → ")}</small>
+                    )}
+                    <small>
+                      generationJobId · {scenario.clarificationJob.id}
+                      <br />
+                      requestId · {scenario.clarificationRequestId ?? "已由轮询请求记录"}
+                    </small>
+                    {scenario.clarificationJob.clarificationProposal && (
+                      <details className={styles.scenarioDetails}>
+                        <summary>
+                          查看候选与证据{" "}
+                          <span>
+                            <ChevronDownIcon />
+                          </span>
+                        </summary>
+                        <pre>
+                          {formatJson({
+                            candidates: scenario.clarificationJob.clarificationProposal.candidates ?? [],
+                            recommendedCandidate:
+                              scenario.clarificationJob.clarificationProposal.recommendedCandidate ?? null,
+                            diagnostic: scenario.clarificationJob.clarificationProposal.diagnostic ?? null,
+                          })}
+                        </pre>
+                      </details>
+                    )}
+                    <em>没有生成 Evidence Block。下一步：根据候选提案做出当前 Cycle 决策，或停止本次生成。</em>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
-      {scenario.requestIds.length > 0 && <div className={styles.scenarioRequestIds}><span>本轮 requestId</span><code>{scenario.requestIds.join(" · ")}</code></div>}
-    </section>
-
-
-    <section className={styles.mainGrid} aria-label="接口调试控制台">
-      <aside className={styles.catalog} aria-label="接口目录">
-          <div className={styles.sectionHeader}><div><span className={styles.eyebrow}>接口目录 DIRECTORY</span><h2>接口目录</h2></div><span className={styles.count}>{filteredEntries.length.toString().padStart(2, "0")}</span></div>
-          <div className={styles.filters}>
-            <label className={styles.searchField}><span>⌕</span><input value={pathSearch} onChange={(event) => setPathSearch(event.target.value)} placeholder="搜索路径或摘要" aria-label="搜索路径或摘要" /></label>
-          <div className={styles.filterRow}><select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} aria-label="按标签筛选">{tags.map((tag) => <option key={tag} value={tag}>{displayTag(tag)}</option>)}</select><select value={methodFilter} onChange={(event) => setMethodFilter(event.target.value as (typeof methodOptions)[number])} aria-label="按 HTTP Method 筛选">{methodOptions.map((method) => <option key={method} value={method}>{method === "ALL" ? "全部方法" : method}</option>)}</select></div>
-        </div>
-        <div className={styles.catalogList}>
-          {isLoading && <div className={styles.catalogState}><span className={styles.loadingMark} />读取契约…</div>}
-          {!isLoading && loadError && <div className={styles.catalogError}><strong>OpenAPI 不可用</strong><span>{loadError}</span><button type="button" className={styles.textButton} onClick={() => void loadDocument()}>重试 ↗</button></div>}
-          {!isLoading && !loadError && groupedEntries.length === 0 && <div className={styles.catalogState}>没有匹配接口</div>}
-          {!isLoading && !loadError && groupedEntries.map(([tag, group]) => <div className={styles.catalogGroup} key={tag}><span className={styles.groupLabel}>{displayTag(tag)}</span>{group.map((entry) => <button type="button" key={entry.key} className={`${styles.operationItem} ${entry.key === selectedKey ? styles.operationCurrent : ""}`} onClick={() => selectEntry(entry)}><span className={`${styles.method} ${styles[`method${entry.method}`]}`}>{entry.method}</span><span className={styles.operationCopy}><strong>{entry.path}</strong><small>{entry.operation.summary ?? entry.operation.operationId}</small></span>{entry.operation["x-internal"] && <span className={styles.internalBadge}>内部</span>}</button>)}</div>)}
-        </div>
-        <a className={styles.sourceLink} href="/api-console/openapi.json" target="_blank" rel="noreferrer">查看 OpenAPI JSON ↗</a>
-      </aside>
-
-      <section className={styles.workspace} aria-label="请求编辑和响应">
-        {isLoading && <div className={styles.emptyPanel}><span className={styles.loadingMark} /><strong>正在读取接口契约</strong><p>目录、参数和响应结构会从 OpenAPI 自动出现。</p></div>}
-        {!isLoading && loadError && <div className={`${styles.emptyPanel} ${styles.errorPanel}`}><span className={styles.errorMark}>!</span><strong>无法载入调试面板</strong><p>{loadError}</p><button type="button" className={styles.primaryButton} onClick={() => void loadDocument()}>重新载入 ↗</button></div>}
-        {!isLoading && !loadError && !selectedEntry && <div className={styles.emptyPanel}><span className={styles.emptyMark}>＋</span><strong>选择一个接口</strong><p>从左侧目录开始一次可追溯的请求。</p></div>}
-        {!isLoading && !loadError && selectedEntry && <>
-          <div className={styles.operationHead}><div><div className={styles.breadcrumb}><span>{displayTag(selectedEntry.tag)}</span><b>/</b><span>{selectedEntry.operation.operationId}</span></div><div className={styles.operationTitle}><span className={`${styles.methodLarge} ${styles[`method${selectedEntry.method}`]}`}>{selectedEntry.method}</span><h2>{selectedEntry.path}</h2>{selectedEntry.operation["x-internal"] && <span className={styles.internalBadgeLarge}>内部接口</span>}</div><p>{selectedEntry.operation.description ?? selectedEntry.operation.summary}</p></div><span className={styles.operationNumber}>#{(entries.findIndex((entry) => entry.key === selectedEntry.key) + 1).toString().padStart(2, "0")}</span></div>
-
-          <section className={styles.requestPanel} aria-label="请求编辑器">
-            <div className={styles.panelHeader}><div><span className={styles.eyebrow}>请求编辑 REQUEST BUILDER</span><h3>编辑请求</h3></div><div className={styles.panelHeaderActions}><span className={styles.contractHint}>来自 OpenAPI</span><button type="button" className={styles.secondaryButton} onClick={resetRequest}>重置</button></div></div>
-            {parameterLocations.map((location) => parametersByLocation[location].length > 0 && <div className={styles.parameterSection} key={location}><div className={styles.subsectionTitle}><strong>{location === "path" ? "Path 参数" : location === "query" ? "Query 参数" : "Header 参数"}</strong><span>{parametersByLocation[location].length.toString().padStart(2, "0")}</span></div><ParameterTable parameters={parametersByLocation[location]} values={parameterValues} onChange={(key, value) => setParameterValues((current) => ({ ...current, [key]: value }))} /></div>)}
-            {bodyContentTypes(selectedEntry.operation).length > 0 && <div className={styles.bodySection}><div className={styles.subsectionTitle}><strong>Request Body</strong><span>{selectedEntry.operation.requestBody?.required ? "必填" : "可选"}</span></div>{bodyContentTypes(selectedEntry.operation).length > 1 && <label className={styles.contentTypeSelect}><span>Content-Type</span><select value={contentType} onChange={(event) => { const next = seedRequestState(selectedEntry, event.target.value); setContentType(next.contentType); setBodyText(next.bodyText); setBodyFields(next.bodyFields); setFile(null); }}><option value="">选择类型</option>{bodyContentTypes(selectedEntry.operation).map((type) => <option key={type} value={type}>{type}</option>)}</select></label>}{contentType !== "multipart/form-data" && bodySchema && <div className={styles.bodyContract}><div className={styles.subsectionTitle}><strong>可填参数</strong><span>{bodySchemaFields.length.toString().padStart(2, "0")} 个字段</span></div><p className={styles.contractDescription}>以下字段来自当前 Content-Type 的 OpenAPI schema；JSON Body 仍可直接编辑完整嵌套结构。</p>{bodySchemaFields.length > 0 ? <BodySchemaTable fields={bodySchemaFields} /> : <p className={styles.contractDescription}>该请求体未声明可枚举字段，请按接口约定填写 JSON。</p>}</div>}{contentType === "multipart/form-data" ? <MultipartTable properties={bodyProperties} required={bodySchema?.required ?? []} values={bodyFields} file={file} onValueChange={(name, value) => setBodyFields((current) => ({ ...current, [name]: value }))} onFileChange={setFile} /> : <label className={styles.jsonField}><span><b>JSON Body</b><em>{contentType || "application/json"}</em></span><textarea value={bodyText} onChange={(event) => setBodyText(event.target.value)} spellCheck={false} aria-label="JSON 请求体" /></label>}</div>}
-            {requestError && <div className={styles.requestError} role="alert"><strong>请求未发送</strong><span>{requestError}</span></div>}
-            <div className={styles.requestFooter}><div><span className={styles.safetyDot} />当前请求不会修改 OpenAPI 契约</div><button type="button" className={styles.primaryButton} onClick={() => void sendRequest()} disabled={isSending}>{isSending ? "发送中…" : "发送请求 ↗"}</button></div>
-          </section>
-
-          <section className={styles.responsePanel} aria-label="响应结果">
-            <div className={styles.panelHeader}><div><span className={styles.eyebrow}>响应 RESPONSE</span><h3>响应结果</h3></div>{response && <div className={styles.responseActions}><button type="button" className={styles.secondaryButton} onClick={() => void copyValue(response.requestPreview, "请求内容")}>复制请求</button><button type="button" className={styles.secondaryButton} onClick={() => void copyValue(responseContent, "响应内容")}>复制响应</button><button type="button" className={styles.secondaryButton} onClick={() => void copyValue(response.curl, "cURL")}>复制 cURL</button><button type="button" className={styles.primaryButton} onClick={() => void sendRequest()} disabled={isSending}>重新发送 ↗</button></div>}</div>
-            {response && <><div className={styles.responseMeta}><span className={`${styles.statusBadge} ${statusTone(response.status)}`}><i />{response.status} {response.statusText || (response.status < 400 ? "OK" : "ERROR")}</span><span>{response.duration} ms</span><span className={styles.truncate}>{response.requestUrl}</span>{response.requestId && <span className={styles.requestId}>requestId · {response.requestId}</span>}</div>{response.errorCode && <div className={styles.errorSummary} role="alert"><strong>{response.errorCode}</strong><span>错误响应</span>{response.errorDetails !== null && response.errorDetails !== undefined && <code>{formatJson(response.errorDetails)}</code>}</div>}<div className={styles.responseBody}><div className={styles.responseBlock}><div className={styles.subsectionTitle}><strong>JSON / Text</strong><button type="button" className={styles.textButton} onClick={() => void copyValue(responseContent, "响应内容")}>复制</button></div><pre>{response.formatted}</pre></div><div className={styles.responseBlock}><div className={styles.subsectionTitle}><strong>Response Headers</strong><span>{Object.keys(response.headers).length.toString().padStart(2, "0")}</span></div><pre>{formatJson(response.headers)}</pre></div></div><details className={styles.rawDetails}><summary>查看原始响应与请求 <span><ChevronDownIcon /></span></summary><div className={styles.rawGrid}><div><span>原始响应</span><pre>{response.raw || "(empty response)"}</pre></div><div><span>请求预览</span><pre>{response.requestPreview}</pre></div></div></details></>}
-            {responseExamples.length > 0 && <div className={styles.responseExamples} aria-label="OpenAPI 响应示例"><div className={styles.subsectionTitle}><strong>结果示例</strong><span>来自 OpenAPI responses</span></div><div className={styles.responseExampleList}>{responseExamples.map((item) => <article className={styles.responseExample} key={`${item.status}-${item.contentType ?? "empty"}`}><div className={styles.responseExampleHeader}><span className={`${styles.exampleStatus} ${statusTone(Number(item.status) || 200)}`}>{item.status}</span><strong>{item.description}</strong>{item.contentType && <code>{item.contentType}</code>}</div><pre>{exampleText(item.example)}</pre></article>)}</div></div>}
-            {!response && <div className={styles.responseEmpty}><span>200</span><p>上方先展示接口契约中的结果示例；发送请求后，这里会追加真实状态码、耗时、Header、requestId 和响应。</p></div>}
-          </section>
-        </>}
+        {scenario.requestIds.length > 0 && (
+          <div className={styles.scenarioRequestIds}>
+            <span>本轮 requestId</span>
+            <code>{scenario.requestIds.join(" · ")}</code>
+          </div>
+        )}
       </section>
 
-      <aside className={styles.historyPanel} aria-label="请求历史"><div className={styles.sectionHeader}><div><span className={styles.eyebrow}>本地历史 LOCAL HISTORY</span><h2>请求历史</h2></div><button type="button" className={styles.iconButton} onClick={clearHistory} aria-label="清空请求历史" title="清空历史">×</button></div><p className={styles.historyIntro}>只保存在当前浏览器。Authorization、Cookie、API Key 默认不会保存。</p>{history.length === 0 ? <div className={styles.historyEmpty}><span>∅</span><strong>还没有请求</strong><small>发送一次请求后会出现在这里。</small></div> : <div className={styles.historyList}>{history.map((item) => <button type="button" className={styles.historyItem} key={item.id} onClick={() => restoreHistory(item)}><div><span className={`${styles.method} ${styles[`method${item.method}`]}`}>{item.method}</span><strong>{item.path}</strong></div><small>{item.status ?? "—"} · {item.duration !== null ? `${item.duration} ms` : "—"}</small><time>{new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(item.at))}</time></button>)}</div>}</aside>
-    </section>
-  </main>;
+      <section className={styles.mainGrid} aria-label="接口调试控制台">
+        <aside className={styles.catalog} aria-label="接口目录">
+          <div className={styles.sectionHeader}>
+            <div>
+              <span className={styles.eyebrow}>接口目录 DIRECTORY</span>
+              <h2>接口目录</h2>
+            </div>
+            <span className={styles.count}>{filteredEntries.length.toString().padStart(2, "0")}</span>
+          </div>
+          <div className={styles.filters}>
+            <label className={styles.searchField}>
+              <span>⌕</span>
+              <input
+                value={pathSearch}
+                onChange={(event) => setPathSearch(event.target.value)}
+                placeholder="搜索路径或摘要"
+                aria-label="搜索路径或摘要"
+              />
+            </label>
+            <div className={styles.filterRow}>
+              <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} aria-label="按标签筛选">
+                {tags.map((tag) => (
+                  <option key={tag} value={tag}>
+                    {displayTag(tag)}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={methodFilter}
+                onChange={(event) => setMethodFilter(event.target.value as (typeof methodOptions)[number])}
+                aria-label="按 HTTP Method 筛选"
+              >
+                {methodOptions.map((method) => (
+                  <option key={method} value={method}>
+                    {method === "ALL" ? "全部方法" : method}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className={styles.catalogList}>
+            {isLoading && (
+              <div className={styles.catalogState}>
+                <span className={styles.loadingMark} />
+                读取契约…
+              </div>
+            )}
+            {!isLoading && loadError && (
+              <div className={styles.catalogError}>
+                <strong>OpenAPI 不可用</strong>
+                <span>{loadError}</span>
+                <button type="button" className={styles.textButton} onClick={() => void loadDocument()}>
+                  重试 ↗
+                </button>
+              </div>
+            )}
+            {!isLoading && !loadError && groupedEntries.length === 0 && (
+              <div className={styles.catalogState}>没有匹配接口</div>
+            )}
+            {!isLoading &&
+              !loadError &&
+              groupedEntries.map(([tag, group]) => (
+                <div className={styles.catalogGroup} key={tag}>
+                  <span className={styles.groupLabel}>{displayTag(tag)}</span>
+                  {group.map((entry) => (
+                    <button
+                      type="button"
+                      key={entry.key}
+                      className={`${styles.operationItem} ${entry.key === selectedKey ? styles.operationCurrent : ""}`}
+                      onClick={() => selectEntry(entry)}
+                    >
+                      <span className={`${styles.method} ${styles[`method${entry.method}`]}`}>{entry.method}</span>
+                      <span className={styles.operationCopy}>
+                        <strong>{entry.path}</strong>
+                        <small>{entry.operation.summary ?? entry.operation.operationId}</small>
+                      </span>
+                      {entry.operation["x-internal"] && <span className={styles.internalBadge}>内部</span>}
+                    </button>
+                  ))}
+                </div>
+              ))}
+          </div>
+          <a className={styles.sourceLink} href="/api-console/openapi.json" target="_blank" rel="noreferrer">
+            查看 OpenAPI JSON ↗
+          </a>
+        </aside>
+
+        <section className={styles.workspace} aria-label="请求编辑和响应">
+          {isLoading && (
+            <div className={styles.emptyPanel}>
+              <span className={styles.loadingMark} />
+              <strong>正在读取接口契约</strong>
+              <p>目录、参数和响应结构会从 OpenAPI 自动出现。</p>
+            </div>
+          )}
+          {!isLoading && loadError && (
+            <div className={`${styles.emptyPanel} ${styles.errorPanel}`}>
+              <span className={styles.errorMark}>!</span>
+              <strong>无法载入调试面板</strong>
+              <p>{loadError}</p>
+              <button type="button" className={styles.primaryButton} onClick={() => void loadDocument()}>
+                重新载入 ↗
+              </button>
+            </div>
+          )}
+          {!isLoading && !loadError && !selectedEntry && (
+            <div className={styles.emptyPanel}>
+              <span className={styles.emptyMark}>＋</span>
+              <strong>选择一个接口</strong>
+              <p>从左侧目录开始一次可追溯的请求。</p>
+            </div>
+          )}
+          {!isLoading && !loadError && selectedEntry && (
+            <>
+              <div className={styles.operationHead}>
+                <div>
+                  <div className={styles.breadcrumb}>
+                    <span>{displayTag(selectedEntry.tag)}</span>
+                    <b>/</b>
+                    <span>{selectedEntry.operation.operationId}</span>
+                  </div>
+                  <div className={styles.operationTitle}>
+                    <span className={`${styles.methodLarge} ${styles[`method${selectedEntry.method}`]}`}>
+                      {selectedEntry.method}
+                    </span>
+                    <h2>{selectedEntry.path}</h2>
+                    {selectedEntry.operation["x-internal"] && (
+                      <span className={styles.internalBadgeLarge}>内部接口</span>
+                    )}
+                  </div>
+                  <p>{selectedEntry.operation.description ?? selectedEntry.operation.summary}</p>
+                </div>
+                <span className={styles.operationNumber}>
+                  #{(entries.findIndex((entry) => entry.key === selectedEntry.key) + 1).toString().padStart(2, "0")}
+                </span>
+              </div>
+
+              {selectedEntry.tag === "Memory" && (
+                <aside className={styles.memoryPrivacyNote} aria-label="记忆接口权限说明">
+                  <strong>记忆数据按作用域隔离</strong>
+                  <p>
+                    Project Memory 按 Project 权限访问；个人偏好接口只读取当前登录账号的数据。个人偏好正文不会进入共享
+                    Generation Job 或 Revision。此目录与字段说明由服务端 OpenAPI 契约生成。
+                  </p>
+                </aside>
+              )}
+
+              <section className={styles.requestPanel} aria-label="请求编辑器">
+                <div className={styles.panelHeader}>
+                  <div>
+                    <span className={styles.eyebrow}>请求编辑 REQUEST BUILDER</span>
+                    <h3>编辑请求</h3>
+                  </div>
+                  <div className={styles.panelHeaderActions}>
+                    <span className={styles.contractHint}>来自 OpenAPI</span>
+                    <button type="button" className={styles.secondaryButton} onClick={resetRequest}>
+                      重置
+                    </button>
+                  </div>
+                </div>
+                {parameterLocations.map(
+                  (location) =>
+                    parametersByLocation[location].length > 0 && (
+                      <div className={styles.parameterSection} key={location}>
+                        <div className={styles.subsectionTitle}>
+                          <strong>
+                            {location === "path" ? "Path 参数" : location === "query" ? "Query 参数" : "Header 参数"}
+                          </strong>
+                          <span>{parametersByLocation[location].length.toString().padStart(2, "0")}</span>
+                        </div>
+                        <ParameterTable
+                          parameters={parametersByLocation[location]}
+                          values={parameterValues}
+                          onChange={(key, value) => setParameterValues((current) => ({ ...current, [key]: value }))}
+                        />
+                      </div>
+                    ),
+                )}
+                {bodyContentTypes(selectedEntry.operation).length > 0 && (
+                  <div className={styles.bodySection}>
+                    <div className={styles.subsectionTitle}>
+                      <strong>Request Body</strong>
+                      <span>{selectedEntry.operation.requestBody?.required ? "必填" : "可选"}</span>
+                    </div>
+                    {bodyContentTypes(selectedEntry.operation).length > 1 && (
+                      <label className={styles.contentTypeSelect}>
+                        <span>Content-Type</span>
+                        <select
+                          value={contentType}
+                          onChange={(event) => {
+                            const next = seedRequestState(selectedEntry, event.target.value);
+                            setContentType(next.contentType);
+                            setBodyText(next.bodyText);
+                            setBodyFields(next.bodyFields);
+                            setFile(null);
+                          }}
+                        >
+                          <option value="">选择类型</option>
+                          {bodyContentTypes(selectedEntry.operation).map((type) => (
+                            <option key={type} value={type}>
+                              {type}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {contentType !== "multipart/form-data" && bodySchema && (
+                      <div className={styles.bodyContract}>
+                        <div className={styles.subsectionTitle}>
+                          <strong>可填参数</strong>
+                          <span>{bodySchemaFields.length.toString().padStart(2, "0")} 个字段</span>
+                        </div>
+                        <p className={styles.contractDescription}>
+                          以下字段来自当前 Content-Type 的 OpenAPI schema；JSON Body 仍可直接编辑完整嵌套结构。
+                        </p>
+                        {bodySchemaFields.length > 0 ? (
+                          <BodySchemaTable fields={bodySchemaFields} />
+                        ) : (
+                          <p className={styles.contractDescription}>
+                            该请求体未声明可枚举字段，请按接口约定填写 JSON。
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {contentType === "multipart/form-data" ? (
+                      <MultipartTable
+                        properties={bodyProperties}
+                        required={bodySchema?.required ?? []}
+                        values={bodyFields}
+                        file={file}
+                        onValueChange={(name, value) => setBodyFields((current) => ({ ...current, [name]: value }))}
+                        onFileChange={setFile}
+                      />
+                    ) : (
+                      <label className={styles.jsonField}>
+                        <span>
+                          <b>JSON Body</b>
+                          <em>{contentType || "application/json"}</em>
+                        </span>
+                        <textarea
+                          value={bodyText}
+                          onChange={(event) => setBodyText(event.target.value)}
+                          spellCheck={false}
+                          aria-label="JSON 请求体"
+                        />
+                      </label>
+                    )}
+                  </div>
+                )}
+                {requestError && (
+                  <div className={styles.requestError} role="alert">
+                    <strong>请求未发送</strong>
+                    <span>{requestError}</span>
+                  </div>
+                )}
+                <div className={styles.requestFooter}>
+                  <div>
+                    <span className={styles.safetyDot} />
+                    当前请求不会修改 OpenAPI 契约
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={() => void sendRequest()}
+                    disabled={isSending}
+                  >
+                    {isSending ? "发送中…" : "发送请求 ↗"}
+                  </button>
+                </div>
+              </section>
+
+              <section className={styles.responsePanel} aria-label="响应结果">
+                <div className={styles.panelHeader}>
+                  <div>
+                    <span className={styles.eyebrow}>响应 RESPONSE</span>
+                    <h3>响应结果</h3>
+                  </div>
+                  {response && (
+                    <div className={styles.responseActions}>
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={() => void copyValue(response.requestPreview, "请求内容")}
+                      >
+                        复制请求
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={() => void copyValue(responseContent, "响应内容")}
+                      >
+                        复制响应
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={() => void copyValue(response.curl, "cURL")}
+                      >
+                        复制 cURL
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.primaryButton}
+                        onClick={() => void sendRequest()}
+                        disabled={isSending}
+                      >
+                        重新发送 ↗
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {response && (
+                  <>
+                    <div className={styles.responseMeta}>
+                      <span className={`${styles.statusBadge} ${statusTone(response.status)}`}>
+                        <i />
+                        {response.status} {response.statusText || (response.status < 400 ? "OK" : "ERROR")}
+                      </span>
+                      <span>{response.duration} ms</span>
+                      <span className={styles.truncate}>{response.requestUrl}</span>
+                      {response.requestId && <span className={styles.requestId}>requestId · {response.requestId}</span>}
+                    </div>
+                    {response.errorCode && (
+                      <div className={styles.errorSummary} role="alert">
+                        <strong>{response.errorCode}</strong>
+                        <span>错误响应</span>
+                        {response.errorDetails !== null && response.errorDetails !== undefined && (
+                          <code>{formatJson(response.errorDetails)}</code>
+                        )}
+                      </div>
+                    )}
+                    <div className={styles.responseBody}>
+                      <div className={styles.responseBlock}>
+                        <div className={styles.subsectionTitle}>
+                          <strong>JSON / Text</strong>
+                          <button
+                            type="button"
+                            className={styles.textButton}
+                            onClick={() => void copyValue(responseContent, "响应内容")}
+                          >
+                            复制
+                          </button>
+                        </div>
+                        <pre>{response.formatted}</pre>
+                      </div>
+                      <div className={styles.responseBlock}>
+                        <div className={styles.subsectionTitle}>
+                          <strong>Response Headers</strong>
+                          <span>{Object.keys(response.headers).length.toString().padStart(2, "0")}</span>
+                        </div>
+                        <pre>{formatJson(response.headers)}</pre>
+                      </div>
+                    </div>
+                    <details className={styles.rawDetails}>
+                      <summary>
+                        查看原始响应与请求{" "}
+                        <span>
+                          <ChevronDownIcon />
+                        </span>
+                      </summary>
+                      <div className={styles.rawGrid}>
+                        <div>
+                          <span>原始响应</span>
+                          <pre>{response.raw || "(empty response)"}</pre>
+                        </div>
+                        <div>
+                          <span>请求预览</span>
+                          <pre>{response.requestPreview}</pre>
+                        </div>
+                      </div>
+                    </details>
+                  </>
+                )}
+                {responseExamples.length > 0 && (
+                  <div className={styles.responseExamples} aria-label="OpenAPI 响应示例">
+                    <div className={styles.subsectionTitle}>
+                      <strong>结果示例</strong>
+                      <span>来自 OpenAPI responses</span>
+                    </div>
+                    <div className={styles.responseExampleList}>
+                      {responseExamples.map((item) => (
+                        <article
+                          className={styles.responseExample}
+                          key={`${item.status}-${item.contentType ?? "empty"}`}
+                        >
+                          <div className={styles.responseExampleHeader}>
+                            <span className={`${styles.exampleStatus} ${statusTone(Number(item.status) || 200)}`}>
+                              {item.status}
+                            </span>
+                            <strong>{item.description}</strong>
+                            {item.contentType && <code>{item.contentType}</code>}
+                          </div>
+                          <pre>{exampleText(item.example)}</pre>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {!response && (
+                  <div className={styles.responseEmpty}>
+                    <span>200</span>
+                    <p>
+                      上方先展示接口契约中的结果示例；发送请求后，这里会追加真实状态码、耗时、Header、requestId 和响应。
+                    </p>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+        </section>
+
+        <aside className={styles.historyPanel} aria-label="请求历史">
+          <div className={styles.sectionHeader}>
+            <div>
+              <span className={styles.eyebrow}>本地历史 LOCAL HISTORY</span>
+              <h2>请求历史</h2>
+            </div>
+            <button
+              type="button"
+              className={styles.iconButton}
+              onClick={clearHistory}
+              aria-label="清空请求历史"
+              title="清空历史"
+            >
+              ×
+            </button>
+          </div>
+          <p className={styles.historyIntro}>只保存在当前浏览器。Authorization、Cookie、API Key 默认不会保存。</p>
+          {history.length === 0 ? (
+            <div className={styles.historyEmpty}>
+              <span>∅</span>
+              <strong>还没有请求</strong>
+              <small>发送一次请求后会出现在这里。</small>
+            </div>
+          ) : (
+            <div className={styles.historyList}>
+              {history.map((item) => (
+                <button type="button" className={styles.historyItem} key={item.id} onClick={() => restoreHistory(item)}>
+                  <div>
+                    <span className={`${styles.method} ${styles[`method${item.method}`]}`}>{item.method}</span>
+                    <strong>{item.path}</strong>
+                  </div>
+                  <small>
+                    {item.status ?? "—"} · {item.duration !== null ? `${item.duration} ms` : "—"}
+                  </small>
+                  <time>
+                    {new Intl.DateTimeFormat("zh-CN", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }).format(new Date(item.at))}
+                  </time>
+                </button>
+              ))}
+            </div>
+          )}
+        </aside>
+      </section>
+    </main>
+  );
 }

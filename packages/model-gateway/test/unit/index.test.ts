@@ -4,7 +4,7 @@ import {
   chartPlanDecisionSchema,
   createChartPlanOutputDescriptor,
   type ChartPlanDecision,
-  type RuntimeModelRequest
+  type RuntimeModelRequest,
 } from "@langreport/contracts";
 import {
   createBailianQwenGateway,
@@ -12,8 +12,9 @@ import {
   encryptWorkspaceModelCredential,
   ModelCredentialEncryptionError,
   ModelGatewayConfigurationError,
+  estimateBailianRequestTokenUpperBound,
   resolveModelRouteSnapshot,
-  type FetchLike
+  type FetchLike,
 } from "../../src/index.js";
 
 const capturedAt = "2026-09-06T00:00:00.000Z";
@@ -23,7 +24,7 @@ const baseEnvironment = {
   BAILIAN_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
   BAILIAN_MODEL_ID: "qwen-plus",
   BAILIAN_STRUCTURED_OUTPUT: "json_schema",
-  BAILIAN_TEMPERATURE: "0.1"
+  BAILIAN_TEMPERATURE: "0.1",
 };
 
 test("freezes a non-secret Bailian JSON Schema route and rejects incomplete production config", () => {
@@ -38,11 +39,15 @@ test("freezes a non-secret Bailian JSON Schema route and rejects incomplete prod
   assert.equal(JSON.stringify(route).includes("API_KEY"), false);
   assert.throws(
     () => resolveModelRouteSnapshot({ NODE_ENV: "production", GENERATION_MODE: "llm" }, capturedAt),
-    ModelGatewayConfigurationError
+    ModelGatewayConfigurationError,
   );
   assert.throws(
-    () => resolveModelRouteSnapshot({ ...baseEnvironment, BAILIAN_BASE_URL: "http://example.com/compatible-mode/v1" }, capturedAt),
-    ModelGatewayConfigurationError
+    () =>
+      resolveModelRouteSnapshot(
+        { ...baseEnvironment, BAILIAN_BASE_URL: "http://example.com/compatible-mode/v1" },
+        capturedAt,
+      ),
+    ModelGatewayConfigurationError,
   );
 });
 
@@ -56,12 +61,9 @@ test("encrypts Workspace credentials without retaining their plaintext", () => {
   assert.equal(decryptWorkspaceModelCredential(encrypted, masterKey), apiKey);
   assert.throws(
     () => decryptWorkspaceModelCredential(encrypted, Buffer.alloc(32, 8).toString("base64")),
-    ModelCredentialEncryptionError
+    ModelCredentialEncryptionError,
   );
-  assert.throws(
-    () => encryptWorkspaceModelCredential(apiKey, undefined),
-    ModelCredentialEncryptionError
-  );
+  assert.throws(() => encryptWorkspaceModelCredential(apiKey, undefined), ModelCredentialEncryptionError);
 });
 
 test("sends one Qwen Chat Completions JSON Schema request and preserves invocation metadata", async () => {
@@ -72,11 +74,13 @@ test("sends one Qwen Chat Completions JSON Schema request and preserves invocati
     return jsonResponse({
       id: "chatcmpl-bailian-001",
       model: "qwen-plus-2026-09-01",
-      choices: [{
-        finish_reason: "stop",
-        message: { content: JSON.stringify(needsClarificationDecision()) }
-      }],
-      usage: { prompt_tokens: 101, completion_tokens: 37, total_tokens: 138 }
+      choices: [
+        {
+          finish_reason: "stop",
+          message: { content: JSON.stringify(needsClarificationDecision()) },
+        },
+      ],
+      usage: { prompt_tokens: 101, completion_tokens: 37, total_tokens: 138 },
     });
   };
   const gateway = createBailianQwenGateway(route, { BAILIAN_API_KEY: "worker-secret" }, fetcher);
@@ -105,6 +109,22 @@ test("sends one Qwen Chat Completions JSON Schema request and preserves invocati
   assert.equal(result.invocation?.outcome, "succeeded");
 });
 
+test("request budget estimator grows with UTF-8 preference content and fixed output reservation remains separate", () => {
+  const route = resolveModelRouteSnapshot(baseEnvironment, capturedAt);
+  const baseline = runtimeRequest("invocation-budget-baseline", route.routeSnapshotId);
+  const withPrivatePreference = {
+    ...baseline,
+    context: { ...baseline.context, userPreferences: ["回答使用简体中文，语气简洁".repeat(40)] },
+  };
+
+  const baselineUpperBound = estimateBailianRequestTokenUpperBound(route, baseline);
+  const preferenceUpperBound = estimateBailianRequestTokenUpperBound(route, withPrivatePreference);
+
+  assert.ok(baselineUpperBound > 32);
+  assert.ok(preferenceUpperBound > baselineUpperBound);
+  assert.equal(withPrivatePreference.budget.maxOutputTokens, baseline.budget.maxOutputTokens);
+});
+
 test("uses explicit JSON Object mode and normalizes provider failures without exposing raw output", async () => {
   const route = resolveModelRouteSnapshot({ ...baseEnvironment, BAILIAN_STRUCTURED_OUTPUT: "json_object" }, capturedAt);
   let capturedBody: Record<string, any> | undefined;
@@ -127,15 +147,42 @@ test("uses explicit JSON Object mode and normalizes provider failures without ex
 test("normalizes auth, rate-limit, timeout, empty, and malformed model responses", async () => {
   const route = resolveModelRouteSnapshot(baseEnvironment, capturedAt);
   const cases: Array<{ name: string; response: Response; code: string; retryable: boolean }> = [
-    { name: "auth", response: jsonResponse({ error: { message: "invalid api key" } }, 401), code: "MODEL_AUTH_FAILED", retryable: false },
-    { name: "rate", response: jsonResponse({ error: { message: "too many requests" } }, 429), code: "MODEL_RATE_LIMITED", retryable: true },
-    { name: "timeout", response: jsonResponse({ error: { message: "gateway timeout" } }, 504), code: "MODEL_TIMEOUT", retryable: true },
-    { name: "empty", response: jsonResponse({ choices: [{ finish_reason: "stop", message: { content: "" } }] }), code: "MODEL_OUTPUT_EMPTY", retryable: false },
-    { name: "invalid-json", response: jsonResponse({ choices: [{ finish_reason: "stop", message: { content: "not json" } }] }), code: "MODEL_OUTPUT_INVALID", retryable: false }
+    {
+      name: "auth",
+      response: jsonResponse({ error: { message: "invalid api key" } }, 401),
+      code: "MODEL_AUTH_FAILED",
+      retryable: false,
+    },
+    {
+      name: "rate",
+      response: jsonResponse({ error: { message: "too many requests" } }, 429),
+      code: "MODEL_RATE_LIMITED",
+      retryable: true,
+    },
+    {
+      name: "timeout",
+      response: jsonResponse({ error: { message: "gateway timeout" } }, 504),
+      code: "MODEL_TIMEOUT",
+      retryable: true,
+    },
+    {
+      name: "empty",
+      response: jsonResponse({ choices: [{ finish_reason: "stop", message: { content: "" } }] }),
+      code: "MODEL_OUTPUT_EMPTY",
+      retryable: false,
+    },
+    {
+      name: "invalid-json",
+      response: jsonResponse({ choices: [{ finish_reason: "stop", message: { content: "not json" } }] }),
+      code: "MODEL_OUTPUT_INVALID",
+      retryable: false,
+    },
   ];
 
   for (const item of cases) {
-    const gateway = createBailianQwenGateway(route, { BAILIAN_API_KEY: "worker-secret" }, async () => item.response.clone());
+    const gateway = createBailianQwenGateway(route, { BAILIAN_API_KEY: "worker-secret" }, async () =>
+      item.response.clone(),
+    );
     const result = await gateway.generateStructured(runtimeRequest(`invocation-${item.name}`, route.routeSnapshotId));
     assert.equal(result.status, "error", item.name);
     if (result.status !== "error") continue;
@@ -149,12 +196,17 @@ test("normalizes auth, rate-limit, timeout, empty, and malformed model responses
 test("normalizes provider failures without retaining credential-like provider text", async () => {
   const route = resolveModelRouteSnapshot(baseEnvironment, capturedAt);
   const providerSentinel = "sk-provider-error-must-not-leak";
-  const gateway = createBailianQwenGateway(route, { BAILIAN_API_KEY: "worker-secret" }, async () => jsonResponse({
-    error: {
-      message: `authentication failed for ${providerSentinel}`,
-      provider_debug: "raw provider body must remain private"
-    }
-  }, 401));
+  const gateway = createBailianQwenGateway(route, { BAILIAN_API_KEY: "worker-secret" }, async () =>
+    jsonResponse(
+      {
+        error: {
+          message: `authentication failed for ${providerSentinel}`,
+          provider_debug: "raw provider body must remain private",
+        },
+      },
+      401,
+    ),
+  );
 
   const result = await gateway.generateStructured(runtimeRequest("invocation-redaction", route.routeSnapshotId));
 
@@ -173,7 +225,9 @@ test("normalizes transport failures without retaining raw network exception text
     throw new Error(`socket reset while sending ${transportSentinel}`);
   });
 
-  const result = await gateway.generateStructured(runtimeRequest("invocation-transport-redaction", route.routeSnapshotId));
+  const result = await gateway.generateStructured(
+    runtimeRequest("invocation-transport-redaction", route.routeSnapshotId),
+  );
 
   assert.equal(result.status, "error");
   if (result.status !== "error") return;
@@ -185,14 +239,26 @@ test("normalizes transport failures without retaining raw network exception text
 test("uses Harness deadline cancellation while retaining the existing timeout audit result", async () => {
   const route = resolveModelRouteSnapshot(baseEnvironment, capturedAt);
   let requestWasAborted = false;
-  const gateway = createBailianQwenGateway(route, { BAILIAN_API_KEY: "worker-secret" }, async (_input, init) => new Promise<Response>((_resolve, reject) => {
-    init?.signal?.addEventListener("abort", () => {
-      requestWasAborted = true;
-      reject(new Error("aborted"));
-    }, { once: true });
-  }));
+  const gateway = createBailianQwenGateway(
+    route,
+    { BAILIAN_API_KEY: "worker-secret" },
+    async (_input, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => {
+            requestWasAborted = true;
+            reject(new Error("aborted"));
+          },
+          { once: true },
+        );
+      }),
+  );
 
-  const result = await gateway.generateStructured({ ...runtimeRequest("invocation-timeout", route.routeSnapshotId), budget: { deadlineAt: Date.now() + 5, maxOutputTokens: 512 } });
+  const result = await gateway.generateStructured({
+    ...runtimeRequest("invocation-timeout", route.routeSnapshotId),
+    budget: { deadlineAt: Date.now() + 5, maxOutputTokens: 512 },
+  });
 
   assert.equal(requestWasAborted, true);
   assert.equal(result.status, "error");
@@ -202,7 +268,10 @@ test("uses Harness deadline cancellation while retaining the existing timeout au
   assert.equal(result.invocation?.errorCode, "MODEL_TIMEOUT");
 });
 
-function runtimeRequest(invocationId = "invocation-001", routeSnapshotId = "route-001"): RuntimeModelRequest<ChartPlanDecision> {
+function runtimeRequest(
+  invocationId = "invocation-001",
+  routeSnapshotId = "route-001",
+): RuntimeModelRequest<ChartPlanDecision> {
   return {
     version: "v1",
     workspaceId: "workspace-001",
@@ -219,24 +288,40 @@ function runtimeRequest(invocationId = "invocation-001", routeSnapshotId = "rout
         messages: [{ role: "user", content: "按月份展示销售额趋势" }],
         omittedMessageCount: 0,
         truncatedMessageCount: 0,
-        hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       },
-      brief: { businessQuestion: "按月份展示销售额趋势", audience: "客户汇报", timeRange: null, timeGrain: "month", outputFormat: "evidence_block" },
-      metricDefinition: { name: "销售额", meaning: "订单销售额合计", formula: "sum(销售额)", unit: "元", timeRule: "按月份统计", filterRule: null },
+      brief: {
+        businessQuestion: "按月份展示销售额趋势",
+        audience: "客户汇报",
+        timeRange: null,
+        timeGrain: "month",
+        outputFormat: "evidence_block",
+      },
+      metricDefinition: {
+        name: "销售额",
+        meaning: "订单销售额合计",
+        formula: "sum(销售额)",
+        unit: "元",
+        timeRule: "按月份统计",
+        filterRule: null,
+      },
       memories: [],
-      fieldProfiles: [{ name: "月份", inferredType: "date", nullCount: 0, distinctCount: 2, sampleValues: ["2026-01", "2026-02"] }],
+      userPreferences: [],
+      fieldProfiles: [
+        { name: "月份", inferredType: "date", nullCount: 0, distinctCount: 2, sampleValues: ["2026-01", "2026-02"] },
+      ],
       statistics: [],
       samples: [],
       allowedOperations: ["filter", "derive", "aggregate", "sort", "limit"],
       allowedChartTypes: ["line", "bar", "area"],
-      templateConstraints: { templateId: "builtin-default", templateVersion: "v1", requirements: [] }
+      templateConstraints: { templateId: "builtin-default", templateVersion: "v1", requirements: [] },
     },
     output: {
       ...createChartPlanOutputDescriptor(),
-      parse: (value: unknown) => chartPlanDecisionSchema.parse(value)
+      parse: (value: unknown) => chartPlanDecisionSchema.parse(value),
     },
     budget: { deadlineAt: Date.now() + 30_000, maxOutputTokens: 512 },
-    signal: new AbortController().signal
+    signal: new AbortController().signal,
   };
 }
 
@@ -248,7 +333,16 @@ function needsClarificationDecision() {
     chartSelection: null,
     proposal: {
       version: "v1",
-      diagnostic: { version: "v1", code: "period_required", stage: "planning", severity: "blocking", source: "model_output", message: "请确认分析时间范围", field: null, evidence: [] },
+      diagnostic: {
+        version: "v1",
+        code: "period_required",
+        stage: "planning",
+        severity: "blocking",
+        source: "model_output",
+        message: "请确认分析时间范围",
+        field: null,
+        evidence: [],
+      },
       code: "period_required",
       target: "metric",
       stage: "planning",
@@ -258,8 +352,8 @@ function needsClarificationDecision() {
       field: null,
       candidates: [],
       recommendedCandidate: null,
-      requiresUserDecision: true
-    }
+      requiresUserDecision: true,
+    },
   };
 }
 

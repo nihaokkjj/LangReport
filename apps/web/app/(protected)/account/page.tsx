@@ -59,6 +59,9 @@ export default function AccountPage() {
         <div className={styles.heading}>
           <span className={styles.eyebrow}>ACCOUNT</span>
           <h1 id="account-title">账号设置</h1>
+          <Link className={styles.memoryLink} href="/account/memory">
+            管理长期记忆 →
+          </Link>
         </div>
         <div className={styles.card}>
           <div className={styles.identity}>

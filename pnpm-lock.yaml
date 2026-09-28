@@ -142,6 +142,9 @@ importers:
       '@langreport/flint-adapter':
         specifier: workspace:*
         version: link:../../packages/flint-adapter
+      '@langreport/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
       '@langreport/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins

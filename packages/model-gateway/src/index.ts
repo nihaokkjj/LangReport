@@ -8,13 +8,9 @@ import {
   type ModelInvocation,
   type ModelResult,
   type ModelRouteSnapshot,
-  type RuntimeModelRequest
+  type RuntimeModelRequest,
 } from "@langreport/contracts";
-import {
-  sendStructuredModelRequest,
-  type FetchLike,
-  type JsonRecord
-} from "@langreport/harness";
+import { sendStructuredModelRequest, type FetchLike, type JsonRecord } from "@langreport/harness";
 
 const BAILIAN_ADAPTER_VERSION = "bailian-qwen-native-http-v1";
 const BAILIAN_PROFILE_ID = "bailian-qwen-chart-plan";
@@ -65,10 +61,9 @@ export function decryptWorkspaceModelCredential(payload: string, masterKey: stri
   try {
     const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(encodedIv, "base64url"));
     decipher.setAuthTag(Buffer.from(encodedTag, "base64url"));
-    const value = Buffer.concat([
-      decipher.update(Buffer.from(encodedCiphertext, "base64url")),
-      decipher.final()
-    ]).toString("utf8").trim();
+    const value = Buffer.concat([decipher.update(Buffer.from(encodedCiphertext, "base64url")), decipher.final()])
+      .toString("utf8")
+      .trim();
     if (!value) throw new Error("empty credential");
     return value;
   } catch {
@@ -78,7 +73,8 @@ export function decryptWorkspaceModelCredential(payload: string, masterKey: stri
 
 function credentialEncryptionKey(masterKey: string | undefined): Buffer {
   const value = masterKey?.trim();
-  if (!value) throw new ModelCredentialEncryptionError("缺少 MODEL_CREDENTIAL_ENCRYPTION_KEY，无法安全保存 Workspace 模型凭据");
+  if (!value)
+    throw new ModelCredentialEncryptionError("缺少 MODEL_CREDENTIAL_ENCRYPTION_KEY，无法安全保存 Workspace 模型凭据");
   const key = Buffer.from(value, "base64");
   if (key.length !== 32) {
     throw new ModelCredentialEncryptionError("MODEL_CREDENTIAL_ENCRYPTION_KEY 必须是 32 字节的 Base64 编码值");
@@ -92,7 +88,7 @@ function credentialEncryptionKey(masterKey: string | undefined): Buffer {
  */
 export function resolveModelRouteSnapshot(
   environment: Environment = process.env,
-  capturedAt = new Date().toISOString()
+  capturedAt = new Date().toISOString(),
 ): ModelRouteSnapshot {
   const rawMode = environment.GENERATION_MODE?.trim();
   if (!rawMode) {
@@ -108,15 +104,17 @@ export function resolveModelRouteSnapshot(
 
   const baseUrl = normalizeBailianBaseUrl(requiredEnvironment(environment, "BAILIAN_BASE_URL"));
   const modelId = requiredEnvironment(environment, "BAILIAN_MODEL_ID");
-  const structuredOutputMethod = bailianStructuredOutputMethod(requiredEnvironment(environment, "BAILIAN_STRUCTURED_OUTPUT"));
+  const structuredOutputMethod = bailianStructuredOutputMethod(
+    requiredEnvironment(environment, "BAILIAN_STRUCTURED_OUTPUT"),
+  );
   const requestedOptions: Record<string, unknown> = {
-    structuredOutput: environment.BAILIAN_STRUCTURED_OUTPUT?.trim()
+    structuredOutput: environment.BAILIAN_STRUCTURED_OUTPUT?.trim(),
   };
   const temperature = optionalNumber(environment, "BAILIAN_TEMPERATURE", 0, 2);
   if (temperature !== undefined) requestedOptions.temperature = temperature;
   const effectiveOptions: Record<string, unknown> = {
     ...requestedOptions,
-    enableThinking: false
+    enableThinking: false,
   };
   const output = createChartPlanOutputDescriptor();
   const outputSchemaHash = sha256(JSON.stringify(output.jsonSchema));
@@ -134,14 +132,14 @@ export function resolveModelRouteSnapshot(
     outputSchemaVersion: output.schemaVersion,
     outputSchemaHash,
     requestedOptions,
-    effectiveOptions
+    effectiveOptions,
   };
   return modelRouteSnapshotSchema.parse({
     version: "v1",
     routeSnapshotId: sha256(JSON.stringify(routeMaterial)),
     generationMode: "llm",
     ...routeMaterial,
-    capturedAt
+    capturedAt,
   });
 }
 
@@ -158,7 +156,7 @@ export function modelRouteFingerprint(route: ModelRouteSnapshot): string {
 export function createBailianQwenGateway(
   routeInput: ModelRouteSnapshot,
   environment: Environment = process.env,
-  fetcher: FetchLike = fetch
+  fetcher: FetchLike = fetch,
 ): ModelGateway {
   const route = modelRouteSnapshotSchema.parse(routeInput);
   if (route.generationMode !== "llm" || route.provider !== "bailian" || route.protocol !== "chat-completions") {
@@ -175,12 +173,19 @@ export class BailianQwenGateway implements ModelGateway {
     private readonly route: ModelRouteSnapshot,
     private readonly apiKey: string,
     private readonly fetcher: FetchLike = fetch,
-    private readonly now: () => Date = () => new Date()
+    private readonly now: () => Date = () => new Date(),
   ) {
-    if (route.generationMode !== "llm" || route.provider !== "bailian" || route.protocol !== "chat-completions" || !route.baseUrl || !route.structuredOutputMethod) {
+    if (
+      route.generationMode !== "llm" ||
+      route.provider !== "bailian" ||
+      route.protocol !== "chat-completions" ||
+      !route.baseUrl ||
+      !route.structuredOutputMethod
+    ) {
       throw new ModelGatewayConfigurationError("BailianQwenGateway 只能使用已冻结的百炼 llm Chat Completions 路由");
     }
-    if (!apiKey.trim()) throw new ModelGatewayConfigurationError("缺少 BAILIAN_API_KEY，Generation Worker 不能调用百炼");
+    if (!apiKey.trim())
+      throw new ModelGatewayConfigurationError("缺少 BAILIAN_API_KEY，Generation Worker 不能调用百炼");
   }
 
   async generateStructured<T>(request: RuntimeModelRequest<T>): Promise<ModelResult<T>> {
@@ -189,30 +194,29 @@ export class BailianQwenGateway implements ModelGateway {
       return this.failure(request, startedAt, "MODEL_REQUEST_INVALID", "运行时请求与已冻结的模型路由不匹配", false);
     }
     if (request.signal.aborted || Date.now() >= request.budget.deadlineAt) {
-      return this.failure(request, startedAt, "MODEL_BUDGET_EXCEEDED", "模型调用前已超过 Generation Cycle 截止时间", false);
+      return this.failure(
+        request,
+        startedAt,
+        "MODEL_BUDGET_EXCEEDED",
+        "模型调用前已超过 Generation Cycle 截止时间",
+        false,
+      );
     }
 
-    const transport = await sendStructuredModelRequest({
-      url: chatCompletionsUrl(this.route.baseUrl!),
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-        Accept: "application/json"
+    const transport = await sendStructuredModelRequest(
+      {
+        url: chatCompletionsUrl(this.route.baseUrl!),
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: buildBailianRequestBody(this.route, request),
+        signal: request.signal,
+        deadlineAt: request.budget.deadlineAt,
       },
-      body: {
-          model: this.route.modelId,
-          stream: false,
-          messages: buildMessages(request),
-          response_format: responseFormatFor(this.route, request),
-          max_completion_tokens: request.budget.maxOutputTokens,
-          ...(typeof this.route.effectiveOptions.temperature === "number" ? { temperature: this.route.effectiveOptions.temperature } : {}),
-          // Structured output is incompatible with Qwen thinking mode. The
-          // route records this effective setting for later audit.
-          enable_thinking: false
-      },
-      signal: request.signal,
-      deadlineAt: request.budget.deadlineAt
-    }, this.fetcher);
+      this.fetcher,
+    );
     if (transport.kind === "timeout" || transport.kind === "cancelled") {
       return this.failure(request, startedAt, "MODEL_TIMEOUT", "百炼请求在 Generation Cycle 截止时间内未完成", true);
     }
@@ -230,32 +234,61 @@ export class BailianQwenGateway implements ModelGateway {
         httpStatus: transport.status,
         providerRequestId,
         providerModelId,
-        usage
+        usage,
       });
     }
 
     const choice = Array.isArray(payload.choices) ? asRecord(payload.choices[0]) : undefined;
     if (!choice) {
-      return this.failure(request, startedAt, "MODEL_OUTPUT_EMPTY", "百炼响应未包含 choices[0]", false, { httpStatus: transport.status, providerRequestId, providerModelId, usage });
+      return this.failure(request, startedAt, "MODEL_OUTPUT_EMPTY", "百炼响应未包含 choices[0]", false, {
+        httpStatus: transport.status,
+        providerRequestId,
+        providerModelId,
+        usage,
+      });
     }
     const finishReason = textValue(choice.finish_reason);
     if (finishReason === "length") {
-      return this.failure(request, startedAt, "MODEL_OUTPUT_TRUNCATED", "百炼响应因长度限制被截断", false, { httpStatus: transport.status, providerRequestId, providerModelId, finishReason, usage });
+      return this.failure(request, startedAt, "MODEL_OUTPUT_TRUNCATED", "百炼响应因长度限制被截断", false, {
+        httpStatus: transport.status,
+        providerRequestId,
+        providerModelId,
+        finishReason,
+        usage,
+      });
     }
     const message = asRecord(choice.message);
     if (textValue(message?.refusal)) {
-      return this.failure(request, startedAt, "MODEL_REFUSED", "百炼拒绝生成 chart-plan", false, { httpStatus: transport.status, providerRequestId, providerModelId, finishReason, usage });
+      return this.failure(request, startedAt, "MODEL_REFUSED", "百炼拒绝生成 chart-plan", false, {
+        httpStatus: transport.status,
+        providerRequestId,
+        providerModelId,
+        finishReason,
+        usage,
+      });
     }
     const content = textValue(message?.content);
     if (!content) {
-      return this.failure(request, startedAt, "MODEL_OUTPUT_EMPTY", "百炼响应未包含结构化输出内容", false, { httpStatus: transport.status, providerRequestId, providerModelId, finishReason, usage });
+      return this.failure(request, startedAt, "MODEL_OUTPUT_EMPTY", "百炼响应未包含结构化输出内容", false, {
+        httpStatus: transport.status,
+        providerRequestId,
+        providerModelId,
+        finishReason,
+        usage,
+      });
     }
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(content);
     } catch {
-      return this.failure(request, startedAt, "MODEL_OUTPUT_INVALID", "百炼响应不是合法 JSON", false, { httpStatus: transport.status, providerRequestId, providerModelId, finishReason, usage });
+      return this.failure(request, startedAt, "MODEL_OUTPUT_INVALID", "百炼响应不是合法 JSON", false, {
+        httpStatus: transport.status,
+        providerRequestId,
+        providerModelId,
+        finishReason,
+        usage,
+      });
     }
     try {
       return {
@@ -268,17 +301,24 @@ export class BailianQwenGateway implements ModelGateway {
           providerModelId,
           finishReason,
           usage,
-          errorCode: null
-        })
+          errorCode: null,
+        }),
       };
     } catch (error) {
-      return this.failure(request, startedAt, "MODEL_OUTPUT_INVALID", providerErrorMessage(error, "百炼输出不符合 chart-plan 合同"), false, {
-        httpStatus: transport.status,
-        providerRequestId,
-        providerModelId,
-        finishReason,
-        usage
-      });
+      return this.failure(
+        request,
+        startedAt,
+        "MODEL_OUTPUT_INVALID",
+        providerErrorMessage(error, "百炼输出不符合 chart-plan 合同"),
+        false,
+        {
+          httpStatus: transport.status,
+          providerRequestId,
+          providerModelId,
+          finishReason,
+          usage,
+        },
+      );
     }
   }
 
@@ -288,7 +328,7 @@ export class BailianQwenGateway implements ModelGateway {
     code: ModelErrorCode,
     message: string,
     retryable: boolean,
-    values: Partial<InvocationValues> = {}
+    values: Partial<InvocationValues> = {},
   ): ModelResult<T> {
     return {
       status: "error",
@@ -296,7 +336,7 @@ export class BailianQwenGateway implements ModelGateway {
       message,
       retryable,
       invocationId: request.invocationId,
-      invocation: this.invocation(request, startedAt, "failed", { ...values, errorCode: code })
+      invocation: this.invocation(request, startedAt, "failed", { ...values, errorCode: code }),
     };
   }
 
@@ -304,7 +344,7 @@ export class BailianQwenGateway implements ModelGateway {
     request: RuntimeModelRequest<unknown>,
     startedAt: string,
     outcome: "succeeded" | "failed",
-    values: InvocationValues
+    values: InvocationValues,
   ): ModelInvocation {
     return modelInvocationSchema.parse({
       version: "v1",
@@ -321,9 +361,23 @@ export class BailianQwenGateway implements ModelGateway {
       finishReason: values.finishReason ?? null,
       usage: values.usage ?? unknownUsage(),
       httpStatus: values.httpStatus ?? null,
-      errorCode: values.errorCode
+      errorCode: values.errorCode,
     });
   }
+}
+
+/** Conservative request-context ceiling used until per-model tokenizer adapters are configured. */
+export const MAX_HARD_REQUEST_TOKEN_UPPER_BOUND = 32_768;
+
+/**
+ * UTF-8 bytes upper-bound the number of byte-level tokens in the exact current
+ * provider body. The output reservation is added by the caller.
+ */
+export function estimateBailianRequestTokenUpperBound<T>(
+  route: ModelRouteSnapshot,
+  request: RuntimeModelRequest<T>,
+): number {
+  return Buffer.byteLength(JSON.stringify(buildBailianRequestBody(route, request)), "utf8") + 32;
 }
 
 type InvocationValues = {
@@ -352,14 +406,14 @@ function deterministicRoute(capturedAt: string): ModelRouteSnapshot {
     outputSchemaVersion: output.schemaVersion,
     outputSchemaHash,
     requestedOptions: {},
-    effectiveOptions: {}
+    effectiveOptions: {},
   };
   return modelRouteSnapshotSchema.parse({
     version: "v1",
     routeSnapshotId: sha256(JSON.stringify(routeMaterial)),
     generationMode: "deterministic",
     ...routeMaterial,
-    capturedAt
+    capturedAt,
   });
 }
 
@@ -415,7 +469,8 @@ function buildMessages<T>(request: RuntimeModelRequest<T>): Array<{ role: "syste
   return [
     {
       role: "system",
-      content: "你是 LangReport 的 chart-plan 规划器。只能基于提供的规范上下文提出一个候选计划；不得计算或声称未提供的数据事实。只输出一个符合 response_contract 的 JSON 对象，不要输出 Markdown、解释、推理过程或额外文本。"
+      content:
+        "你是 LangReport 的 chart-plan 规划器。只能基于提供的规范上下文提出一个候选计划；不得计算或声称未提供的数据事实。只输出一个符合 response_contract 的 JSON 对象，不要输出 Markdown、解释、推理过程或额外文本。",
     },
     {
       role: "user",
@@ -425,11 +480,25 @@ function buildMessages<T>(request: RuntimeModelRequest<T>): Array<{ role: "syste
         response_contract: {
           schema_id: request.output.schemaId,
           schema_version: request.output.schemaVersion,
-          json_schema: request.output.jsonSchema
-        }
-      })
-    }
+          json_schema: request.output.jsonSchema,
+        },
+      }),
+    },
   ];
+}
+
+function buildBailianRequestBody<T>(route: ModelRouteSnapshot, request: RuntimeModelRequest<T>): JsonRecord {
+  return {
+    model: route.modelId,
+    stream: false,
+    messages: buildMessages(request),
+    response_format: responseFormatFor(route, request),
+    max_completion_tokens: request.budget.maxOutputTokens,
+    ...(typeof route.effectiveOptions.temperature === "number"
+      ? { temperature: route.effectiveOptions.temperature }
+      : {}),
+    enable_thinking: false,
+  };
 }
 
 function responseFormatFor<T>(route: ModelRouteSnapshot, request: RuntimeModelRequest<T>): JsonRecord {
@@ -440,8 +509,8 @@ function responseFormatFor<T>(route: ModelRouteSnapshot, request: RuntimeModelRe
       json_schema: {
         name: "chart_plan_v1",
         strict: true,
-        schema: request.output.jsonSchema
-      }
+        schema: request.output.jsonSchema,
+      },
     };
   }
   throw new ModelGatewayConfigurationError("百炼路由没有可执行的结构化输出方式");
@@ -465,7 +534,7 @@ function usageFromPayload(value: unknown) {
   return {
     inputTokens: nonnegativeInteger(usage?.prompt_tokens) ?? nonnegativeInteger(usage?.input_tokens),
     outputTokens: nonnegativeInteger(usage?.completion_tokens) ?? nonnegativeInteger(usage?.output_tokens),
-    totalTokens: nonnegativeInteger(usage?.total_tokens)
+    totalTokens: nonnegativeInteger(usage?.total_tokens),
   };
 }
 
@@ -478,7 +547,7 @@ function nonnegativeInteger(value: unknown): number | null {
 }
 
 function asRecord(value: unknown): JsonRecord | undefined {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : undefined;
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : undefined;
 }
 
 function textValue(value: unknown): string | null {

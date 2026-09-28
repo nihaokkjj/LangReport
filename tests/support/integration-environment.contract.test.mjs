@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import {
   assertIsolatedIntegrationEnvironment,
@@ -14,6 +15,7 @@ const validEnvironment = {
   LANGREPORT_INTEGRATION_TEST: "1",
   DATABASE_URL: "postgres://langreport_test:langreport_test@127.0.0.1:54330/langreport_integration_test",
   DATABASE_SCHEMA: "langreport_test_0123456789abcdef",
+  MEMORY_REVOCATION_LEDGER_DIR: join(tmpdir(), "langreport-memory-revocation-contract"),
   S3_ENDPOINT: "http://127.0.0.1:9002",
   S3_ACCESS_KEY: "langreport_test",
   S3_SECRET_KEY: "langreport-test-secret",
@@ -51,6 +53,10 @@ test("integration runner replaces parent database and storage settings with one 
   assert.equal(environment.LANGREPORT_INTEGRATION_TEST, "1");
   assert.match(environment.DATABASE_URL, /langreport_integration_test$/);
   assert.equal(environment.DATABASE_SCHEMA, "langreport_test_0123456789abcdef");
+  assert.equal(
+    environment.MEMORY_REVOCATION_LEDGER_DIR,
+    join(tmpdir(), "langreport-memory-revocation-0123456789abcdef"),
+  );
   assert.equal(environment.S3_BUCKET, "langreport-test-0123456789abcdef");
   assert.equal(environment.S3_ACCESS_KEY, "langreport_test");
   assert.notEqual(environment.S3_SECRET_KEY, "production-secret");
@@ -75,6 +81,7 @@ test("the integration command owns a dedicated Compose lifecycle instead of deve
   const runner = readFileSync(runnerPath, "utf8");
   assert.match(runner, /prepare-integration-schema/);
   assert.match(runner, /prepare-integration-bucket/);
+  assert.match(runner, /init-revocation-ledger/);
   assert.match(runner, /cleanup-integration-schema/);
   assert.match(runner, /cleanup-integration-bucket/);
 });
