@@ -1,4 +1,9 @@
 "use client";
+
+import CloseIcon from "@mui/icons-material/Close";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import { Button, Checkbox, Dialog, IconButton, MenuItem, TextField } from "@mui/material";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -51,7 +56,7 @@ import { EvidenceCanvas } from "../../features/evidence/evidence-canvas";
 import { ReviewComposition } from "../../features/review/review-composition";
 import { useReviewComments } from "../../features/review/use-review-comments";
 import { AlertBanner } from "../../components/feedback/alert-banner";
-import { ChevronDownIcon } from "../../components/icons/chevron-down";
+import ChevronDownIcon from "@mui/icons-material/ExpandMore";
 import { EvidenceContextRail } from "./evidence-context-rail";
 import { RightDrawer, type RightDrawerView } from "./right-drawer";
 import { SnapshotPreviewModal } from "./snapshot-preview-modal";
@@ -582,9 +587,9 @@ function ClarificationDecisionDetails({ job, onStop }: { job: GenerationJob; onS
       )}
       <div className="clarification-details-actions">
         <span>可以直接在下方补充或修改分析方向；文本仍会重新经过字段、指标和权限校验。</span>
-        <button type="button" className="secondary-button clarification-stop" onClick={onStop}>
+        <Button variant="outlined" type="button" className=" clarification-stop" onClick={onStop}>
           停止生成
-        </button>
+        </Button>
       </div>
     </section>
   );
@@ -687,6 +692,7 @@ export default function Home() {
   const [isSending, setIsSending] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isSavingBrief, setIsSavingBrief] = useState(false);
+  const [isSavingMetric, setIsSavingMetric] = useState(false);
   const [isSavingEditor, setIsSavingEditor] = useState(false);
   const [isSavingModelCredential, setIsSavingModelCredential] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
@@ -750,7 +756,6 @@ export default function Home() {
     brief.timeGrain &&
     brief.outputFormat,
   );
-  const canGenerate = Boolean(projectId && hasSnapshot && hasMetric && hasBrief && conversationId && !isJobActive);
   const canManageModelCredential = workspace?.role === "owner" || workspace?.role === "admin";
   const availableFields = activeSpec ? Object.keys(activeSpec.data.values[0] ?? {}) : [];
   const sourceFields = selectedAsset?.latestSnapshot?.schema.map((column) => column.name) ?? availableFields;
@@ -1138,7 +1143,9 @@ export default function Home() {
     }
   }
   async function confirmMetric() {
-    if (!projectId || !metricForm.name.trim()) return;
+    if (!projectId || !metricForm.name.trim() || isSavingMetric) return;
+    setIsSavingMetric(true);
+    setError(null);
     try {
       const payload = await apiFetch<{ definition: MetricDefinition }>(
         `/api/v1/projects/${projectId}/metric-definitions`,
@@ -1174,6 +1181,8 @@ export default function Home() {
       }
     } catch (metricError) {
       setError(formatApiError(metricError, "无法保存指标口径"));
+    } finally {
+      setIsSavingMetric(false);
     }
   }
   function openBriefModal() {
@@ -1471,38 +1480,41 @@ export default function Home() {
         <div className="topbar-actions">
           <span className={`connection-dot ${error ? "attention" : ""}`} aria-label={error ? "有错误" : "接口正常"} />
           {canManageModelCredential && (
-            <button type="button" className="plugin-link" onClick={() => setShowModelCredentialModal(true)}>
+            <Button variant="text" type="button" onClick={() => setShowModelCredentialModal(true)}>
               模型设置
-            </button>
+            </Button>
           )}
-          <a className="plugin-link" href="/plugins">
+          <Button component="a" variant="text" href="/plugins">
             插件
-          </a>
-          <a className="plugin-link" href="/account">
+          </Button>
+          <Button component="a" variant="text" href="/account">
             账号
-          </a>
-          <button type="button" className="plugin-link" onClick={() => void logout()}>
+          </Button>
+          <Button variant="text" type="button" onClick={() => void logout()}>
             退出
-          </button>
-          <button
-            type="button"
+          </Button>
+          <IconButton
             className="rail-toggle desktop-only"
             aria-label={leftRailOpen ? "隐藏对话历史" : "显示对话历史"}
             aria-expanded={leftRailOpen}
             onClick={() => setLeftRailOpen((open) => !open)}
           >
-            {leftRailOpen ? "‹" : "›"}
-          </button>
-          <button
-            type="button"
+            {leftRailOpen ? <ChevronLeftIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
+          </IconButton>
+          <IconButton
             className="rail-toggle desktop-only"
             aria-label={activeRightView === "context" ? "隐藏依据面板" : "显示依据面板"}
             aria-expanded={rightDrawerOpen}
             onClick={() => setActiveRightView((current) => (current === "context" ? null : "context"))}
           >
-            {activeRightView === "context" ? "›" : "‹"}
-          </button>
-          <button
+            {activeRightView === "context" ? (
+              <ChevronRightIcon fontSize="small" />
+            ) : (
+              <ChevronLeftIcon fontSize="small" />
+            )}
+          </IconButton>
+          <Button
+            variant="text"
             type="button"
             className="mobile-history-button"
             aria-label={leftRailOpen ? "关闭对话历史" : "打开对话历史"}
@@ -1510,8 +1522,9 @@ export default function Home() {
             onClick={() => setLeftRailOpen((open) => !open)}
           >
             历史
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="text"
             type="button"
             className="mobile-inspector-button"
             aria-label={activeRightView === "context" ? "关闭项目依据" : "打开项目依据"}
@@ -1519,7 +1532,7 @@ export default function Home() {
             onClick={() => setActiveRightView((current) => (current === "context" ? null : "context"))}
           >
             依据
-          </button>
+          </Button>
         </div>
       </header>
       <PluginTrace state={pluginTraceState} revision={activeRevision?.revision} />
@@ -1527,14 +1540,13 @@ export default function Home() {
 
       <div className="workspace-grid">
         <aside className="history-rail" aria-label="对话历史">
-          <button
-            type="button"
+          <IconButton
             className="drawer-close history-drawer-close"
             aria-label="关闭对话历史"
             onClick={() => setLeftRailOpen(false)}
           >
-            ×
-          </button>
+            <CloseIcon fontSize="small" />
+          </IconButton>
           <ConversationHistoryRail
             conversations={conversations}
             evidence={evidence}
@@ -1595,23 +1607,24 @@ export default function Home() {
                 </span>
               </div>
               {selectedAsset?.status === "ready" && (
-                <button
+                <Button
+                  variant="outlined"
                   type="button"
-                  className="secondary-button"
+
                   onClick={() => openFilePicker(selectedAsset.id)}
                   disabled={isUploading || isBooting}
                 >
                   更新当前数据
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 type="button"
                 className="inspector-trigger mobile-only"
                 aria-expanded={rightDrawerOpen}
                 onClick={() => setActiveRightView("context")}
               >
                 依据
-              </button>
+              </Button>
             </div>
           </div>
           {error && <AlertBanner tone="error" title="错误" message={error} onDismiss={() => setError(null)} />}
@@ -1627,9 +1640,9 @@ export default function Home() {
                     : "业务问题、受众、时间范围、时间粒度和交付形式均为必填。"}
                 </small>
               </div>
-              <button type="button" className="secondary-button" onClick={openBriefModal}>
+              <Button variant="outlined" type="button" onClick={openBriefModal}>
                 {brief ? "编辑简报" : "填写简报"}
-              </button>
+              </Button>
             </div>
           )}
           <AnalysisBriefForm
@@ -1638,7 +1651,9 @@ export default function Home() {
             value={briefForm}
             isSaving={isSavingBrief}
             onChange={(patch) => setBriefForm((current) => ({ ...current, ...patch }))}
-            onClose={() => setShowBriefModal(false)}
+            onClose={() => {
+              if (!isSavingBrief) setShowBriefModal(false);
+            }}
             onSave={(confirm) => void saveBrief(confirm)}
           />
           <section
@@ -1676,7 +1691,7 @@ export default function Home() {
                       {job.clarificationProposal.candidates.length > 0 && (
                         <div className="clarification-options">
                           {job.clarificationProposal.candidates.map((candidate) => (
-                            <button
+                            <Button
                               type="button"
                               className="clarification-option"
                               key={candidate.value}
@@ -1686,16 +1701,16 @@ export default function Home() {
                               }}
                             >
                               {candidate.label}
-                            </button>
+                            </Button>
                           ))}
                         </div>
                       )}
                     </div>
                   )}
                 </div>
-                <button type="button" className="secondary-button" onClick={() => composerRef.current?.focus()}>
+                <Button variant="outlined" type="button" onClick={() => composerRef.current?.focus()}>
                   在下方回答
-                </button>
+                </Button>
               </div>
             )}
             {!isLoadingProject && job?.status === "failed" && (
@@ -1703,25 +1718,27 @@ export default function Home() {
                 <div className="eyebrow">生成失败</div>
                 <strong>{job.errorCode ?? "生成失败"}</strong>
                 <p>{job.errorMessage ?? "生成失败"}</p>
-                <button
+                <Button
+                  variant="outlined"
                   type="button"
-                  className="secondary-button"
+
                   onClick={() => {
                     setJob(null);
                     setError(null);
                   }}
                 >
                   返回分析
-                </button>
+                </Button>
                 {(job.errorCode === "GENERATION_FAILED" || job.errorCode === "RENDER_FAILED") && (
-                  <button
+                  <Button
+                    variant="outlined"
                     type="button"
-                    className="secondary-button"
+
                     onClick={() => void retryGeneration()}
                     disabled={isRetrying}
                   >
                     {isRetrying ? "重新排队中" : "再次尝试"}
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
@@ -1793,19 +1810,19 @@ export default function Home() {
                   </div>
                   <div className="empty-actions">
                     {!hasSnapshot && (
-                      <button type="button" className="primary-button" onClick={() => fileInputRef.current?.click()}>
+                      <Button variant="contained" type="button" onClick={() => fileInputRef.current?.click()}>
                         导入数据 ↗
-                      </button>
+                      </Button>
                     )}
                     {hasSnapshot && !hasMetric && (
-                      <button type="button" className="primary-button" onClick={() => setShowMetricModal(true)}>
+                      <Button variant="contained" type="button" onClick={() => setShowMetricModal(true)}>
                         确认指标 ↗
-                      </button>
+                      </Button>
                     )}
                     {hasSnapshot && hasMetric && !hasBrief && (
-                      <button type="button" className="primary-button" onClick={openBriefModal}>
+                      <Button variant="contained" type="button" onClick={openBriefModal}>
                         填写简报 ↗
-                      </button>
+                      </Button>
                     )}
                     <span className="empty-hint">可以先提交问题；准备度满足后会创建 Generation Cycle。</span>
                   </div>
@@ -1861,7 +1878,9 @@ export default function Home() {
                 assets.find((asset) => asset.id === snapshotPreview.assetId)?.name ?? selectedAsset?.name ?? "数据资产"
               }
               assetStatus={
-                assets.find((asset) => asset.id === snapshotPreview.assetId)?.status ?? selectedAsset?.status ?? "unknown"
+                assets.find((asset) => asset.id === snapshotPreview.assetId)?.status ??
+                selectedAsset?.status ??
+                "unknown"
               }
               summaries={snapshotPreview.summaries}
               selectedSnapshotId={snapshotPreview.selectedSnapshotId}
@@ -1883,417 +1902,419 @@ export default function Home() {
         form={projectForm}
         isCreating={isCreatingProject}
         onChange={(patch) => setProjectForm((current) => ({ ...current, ...patch }))}
-        onClose={() => setShowProjectModal(false)}
+        onClose={() => {
+          if (!isCreatingProject) setShowProjectModal(false);
+        }}
         onCreate={() => void createProject()}
       />
       <MetricForm
         isOpen={showMetricModal}
         value={metricForm}
+        isSaving={isSavingMetric}
         onChange={(patch) => setMetricForm((current) => ({ ...current, ...patch }))}
-        onClose={() => setShowMetricModal(false)}
+        onClose={() => {
+          if (!isSavingMetric) setShowMetricModal(false);
+        }}
         onSave={() => void confirmMetric()}
       />
       {showModelCredentialModal && canManageModelCredential && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => {
+        <Dialog
+          open
+          onClose={() => {
             setShowModelCredentialModal(false);
             setModelApiKey("");
           }}
+          aria-labelledby="model-credential-modal-title"
+          slotProps={{ paper: { className: "modal-dialog small-modal" } }}
         >
-          <section
-            className="modal-dialog small-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="model-credential-modal-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="modal-head cream-head">
-              <div>
-                <div className="eyebrow">模型设置</div>
-                <h2 id="model-credential-modal-title">配置百炼 API Key</h2>
-              </div>
-              <button
+          <div className="modal-head cream-head">
+            <div>
+              <div className="eyebrow">模型设置</div>
+              <h2 id="model-credential-modal-title">配置百炼 API Key</h2>
+            </div>
+            <IconButton
+              aria-label="关闭"
+              onClick={() => {
+                setShowModelCredentialModal(false);
+                setModelApiKey("");
+              }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </div>
+          <div className="modal-body form-grid">
+            <div className={`credential-status ${modelCredential?.configured ? "configured" : ""}`}>
+              <strong>{modelCredential?.configured ? `已配置 · 尾号 ${modelCredential.keySuffix}` : "尚未配置"}</strong>
+              <span>
+                {modelCredential?.configured
+                  ? `最近更新：${formatDate(modelCredential.updatedAt)}`
+                  : "保存后，下一次百炼生成会使用当前账号的凭据。"}
+              </span>
+            </div>
+            <p className="credential-note">
+              密钥仅经 TLS 提交，服务端会立即加密。浏览器不会持久化或再次展示它；Generation Job
+              与审计记录也不会保存密钥。
+            </p>
+            <label className="field-label">
+              <span>百炼 API Key</span>
+              <TextField
+                autoFocus
+                type="password"
+                autoComplete="new-password"
+                spellCheck={false}
+                value={modelApiKey}
+                onChange={(event) => setModelApiKey(event.target.value)}
+                placeholder="sk-..."
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void saveWorkspaceModelCredential();
+                }}
+              />
+            </label>
+            <p className="credential-note">
+              模型 ID、端点和结构化输出方式仍由部署环境控制，避免已排队任务改变模型路由。
+            </p>
+          </div>
+          <div className="modal-footer">
+            <p>仅当前账号可修改</p>
+            <div>
+              <Button
+                variant="outlined"
                 type="button"
-                className="icon-button"
-                aria-label="关闭"
+
                 onClick={() => {
                   setShowModelCredentialModal(false);
                   setModelApiKey("");
                 }}
               >
-                ×
-              </button>
+                取消
+              </Button>
+              <Button
+                variant="contained"
+                type="button"
+
+                onClick={() => void saveWorkspaceModelCredential()}
+                disabled={isSavingModelCredential || modelApiKey.trim().length < 8}
+              >
+                {isSavingModelCredential ? "加密保存中" : modelCredential?.configured ? "轮换密钥 ↗" : "加密保存 ↗"}
+              </Button>
             </div>
-            <div className="modal-body form-grid">
-              <div className={`credential-status ${modelCredential?.configured ? "configured" : ""}`}>
-                <strong>
-                  {modelCredential?.configured ? `已配置 · 尾号 ${modelCredential.keySuffix}` : "尚未配置"}
-                </strong>
-                <span>
-                  {modelCredential?.configured
-                    ? `最近更新：${formatDate(modelCredential.updatedAt)}`
-                    : "保存后，下一次百炼生成会使用当前账号的凭据。"}
-                </span>
-              </div>
-              <p className="credential-note">
-                密钥仅经 TLS 提交，服务端会立即加密。浏览器不会持久化或再次展示它；Generation Job
-                与审计记录也不会保存密钥。
-              </p>
-              <label className="field-label">
-                <span>百炼 API Key</span>
-                <input
-                  autoFocus
-                  type="password"
-                  autoComplete="new-password"
-                  spellCheck={false}
-                  value={modelApiKey}
-                  onChange={(event) => setModelApiKey(event.target.value)}
-                  placeholder="sk-..."
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") void saveWorkspaceModelCredential();
-                  }}
-                />
-              </label>
-              <p className="credential-note">
-                模型 ID、端点和结构化输出方式仍由部署环境控制，避免已排队任务改变模型路由。
-              </p>
-            </div>
-            <div className="modal-footer">
-              <p>仅当前账号可修改</p>
-              <div>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => {
-                    setShowModelCredentialModal(false);
-                    setModelApiKey("");
-                  }}
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => void saveWorkspaceModelCredential()}
-                  disabled={isSavingModelCredential || modelApiKey.trim().length < 8}
-                >
-                  {isSavingModelCredential ? "加密保存中" : modelCredential?.configured ? "轮换密钥 ↗" : "加密保存 ↗"}
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
+          </div>
+        </Dialog>
       )}
       {showEditor && activeEvidence && activeSpec && (
-        <div className="modal-backdrop" role="presentation" onClick={() => setShowEditor(false)}>
-          <section
-            className="modal-dialog editor-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="editor-modal-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="modal-head cream-head">
-              <div>
-                <div className="eyebrow">图表产物 / R{activeRevision?.revision} / 新草稿</div>
-                <h2 id="editor-modal-title">编辑图表</h2>
-                <p className="modal-lead">
-                  逻辑变化会基于同一 Data Snapshot 重算，显示变化也会追加新的 Draft Revision。
-                </p>
-              </div>
-              <button type="button" className="icon-button" aria-label="关闭" onClick={() => setShowEditor(false)}>
-                ×
-              </button>
+        <Dialog
+          open
+          onClose={() => setShowEditor(false)}
+          aria-labelledby="editor-modal-title"
+          maxWidth={false}
+          slotProps={{ paper: { className: "modal-dialog editor-modal" } }}
+        >
+          <div className="modal-head cream-head">
+            <div>
+              <div className="eyebrow">图表产物 / R{activeRevision?.revision} / 新草稿</div>
+              <h2 id="editor-modal-title">编辑图表</h2>
+              <p className="modal-lead">逻辑变化会基于同一 Data Snapshot 重算，显示变化也会追加新的 Draft Revision。</p>
             </div>
-            <div className="editor-body">
-              <div className="editor-preview">
-                <div className="editor-preview-head">
-                  <div>
-                    <strong>{editor.title}</strong>
-                    <small>{chartTypeName(editor.chartType)} · 草稿</small>
-                  </div>
-                  <span className="revision-chip">R{(activeRevision?.revision ?? 0) + 1} 草稿</span>
+            <IconButton aria-label="关闭" onClick={() => setShowEditor(false)}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </div>
+          <div className="editor-body">
+            <div className="editor-preview">
+              <div className="editor-preview-head">
+                <div>
+                  <strong>{editor.title}</strong>
+                  <small>{chartTypeName(editor.chartType)} · 草稿</small>
                 </div>
-                <InteractiveChart
-                  rows={activeRows}
-                  spec={{
-                    ...activeSpec,
-                    chartSpec: {
-                      ...activeSpec.chartSpec,
-                      title: editor.title,
-                      chartType: editor.chartType,
-                      annotations: editor.annotation
-                        .split(/\r?\n/)
-                        .map((text) => text.trim())
-                        .filter(Boolean)
-                        .map((text) => ({ text })),
-                      showValues: editor.showValues,
-                      showLegend: editor.showLegend,
-                      encodings: {
-                        x: { field: editor.xField },
-                        y: { field: editor.yField },
-                        ...(editor.seriesField ? { color: { field: editor.seriesField } } : {}),
-                      },
+                <span className="revision-chip">R{(activeRevision?.revision ?? 0) + 1} 草稿</span>
+              </div>
+              <InteractiveChart
+                rows={activeRows}
+                spec={{
+                  ...activeSpec,
+                  chartSpec: {
+                    ...activeSpec.chartSpec,
+                    title: editor.title,
+                    chartType: editor.chartType,
+                    annotations: editor.annotation
+                      .split(/\r?\n/)
+                      .map((text) => text.trim())
+                      .filter(Boolean)
+                      .map((text) => ({ text })),
+                    showValues: editor.showValues,
+                    showLegend: editor.showLegend,
+                    encodings: {
+                      x: { field: editor.xField },
+                      y: { field: editor.yField },
+                      ...(editor.seriesField ? { color: { field: editor.seriesField } } : {}),
                     },
-                  }}
-                />
-                <div className="editor-preview-foot">
-                  <span>数据快照 v{selectedAsset?.latestSnapshot?.version ?? "—"}</span>
-                  <span>保存后重算 · {activeRevision?.fieldLineage.length ?? 0} 条当前血缘</span>
-                </div>
+                  },
+                }}
+              />
+              <div className="editor-preview-foot">
+                <span>数据快照 v{selectedAsset?.latestSnapshot?.version ?? "—"}</span>
+                <span>保存后重算 · {activeRevision?.fieldLineage.length ?? 0} 条当前血缘</span>
               </div>
-              <div className="editor-controls">
-                <div className="control-group">
-                  <h3>图表结构</h3>
+            </div>
+            <div className="editor-controls">
+              <div className="control-group">
+                <h3>图表结构</h3>
+                <label className="field-label">
+                  <span>图表类型</span>
+                  <TextField
+                    select
+                    value={editor.chartType}
+                    onChange={(event) =>
+                      dispatchEditor({
+                        type: "set-field",
+                        field: "chartType",
+                        value: event.target.value as FlintSpec["chartSpec"]["chartType"],
+                      })
+                    }
+                  >
+                    <MenuItem value="Line Chart">折线图</MenuItem>
+                    <MenuItem value="Bar Chart">柱状图</MenuItem>
+                    <MenuItem value="Area Chart">面积图</MenuItem>
+                  </TextField>
+                </label>
+                <label className="field-label">
+                  <span>横轴</span>
+                  <TextField
+                    select
+                    value={editor.xField}
+                    onChange={(event) =>
+                      dispatchEditor({ type: "set-field", field: "xField", value: event.target.value })
+                    }
+                  >
+                    {availableFields.map((field) => (
+                      <MenuItem value={field} key={field}>
+                        {field}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </label>
+                <label className="field-label">
+                  <span>纵轴</span>
+                  <TextField
+                    select
+                    value={editor.yField}
+                    onChange={(event) =>
+                      dispatchEditor({ type: "set-field", field: "yField", value: event.target.value })
+                    }
+                  >
+                    {availableFields.map((field) => (
+                      <MenuItem value={field} key={field}>
+                        {field}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </label>
+                <label className="field-label">
+                  <span>系列 / 颜色</span>
+                  <TextField
+                    select
+                    value={editor.seriesField}
+                    onChange={(event) =>
+                      dispatchEditor({ type: "set-field", field: "seriesField", value: event.target.value })
+                    }
+                  >
+                    <MenuItem value="">不分系列</MenuItem>
+                    {availableFields
+                      .filter((field) => field !== editor.yField)
+                      .map((field) => (
+                        <MenuItem value={field} key={field}>
+                          {field}
+                        </MenuItem>
+                      ))}
+                  </TextField>
+                </label>
+              </div>
+              <div className="control-group">
+                <h3>数据逻辑</h3>
+                <label className="field-label">
+                  <span>聚合度量</span>
+                  <TextField
+                    select
+                    value={editor.aggregateOperation}
+                    onChange={(event) =>
+                      dispatchEditor({
+                        type: "set-field",
+                        field: "aggregateOperation",
+                        value: event.target.value as AggregateOperation,
+                      })
+                    }
+                  >
+                    {aggregateOperations.map((operation) => (
+                      <MenuItem value={operation} key={operation}>
+                        {aggregateOperationLabels[operation]}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </label>
+                <div className="form-row">
                   <label className="field-label">
-                    <span>图表类型</span>
-                    <select
-                      value={editor.chartType}
+                    <span>筛选字段</span>
+                    <TextField
+                      select
+                      value={editor.filterField}
+                      onChange={(event) =>
+                        dispatchEditor({ type: "set-field", field: "filterField", value: event.target.value })
+                      }
+                    >
+                      <MenuItem value="">不筛选</MenuItem>
+                      {sourceFields.map((field) => (
+                        <MenuItem value={field} key={field}>
+                          {field}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </label>
+                  <label className="field-label">
+                    <span>条件</span>
+                    <TextField
+                      select
+                      value={editor.filterOperator}
                       onChange={(event) =>
                         dispatchEditor({
                           type: "set-field",
-                          field: "chartType",
-                          value: event.target.value as FlintSpec["chartSpec"]["chartType"],
+                          field: "filterOperator",
+                          value: event.target.value as FilterOperator,
                         })
                       }
                     >
-                      <option value="Line Chart">折线图</option>
-                      <option value="Bar Chart">柱状图</option>
-                      <option value="Area Chart">面积图</option>
-                    </select>
-                  </label>
-                  <label className="field-label">
-                    <span>横轴</span>
-                    <select
-                      value={editor.xField}
-                      onChange={(event) =>
-                        dispatchEditor({ type: "set-field", field: "xField", value: event.target.value })
-                      }
-                    >
-                      {availableFields.map((field) => (
-                        <option value={field} key={field}>
-                          {field}
-                        </option>
+                      {filterOperators.map((operator) => (
+                        <MenuItem value={operator} key={operator}>
+                          {filterOperatorLabels[operator]}
+                        </MenuItem>
                       ))}
-                    </select>
-                  </label>
-                  <label className="field-label">
-                    <span>纵轴</span>
-                    <select
-                      value={editor.yField}
-                      onChange={(event) =>
-                        dispatchEditor({ type: "set-field", field: "yField", value: event.target.value })
-                      }
-                    >
-                      {availableFields.map((field) => (
-                        <option value={field} key={field}>
-                          {field}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field-label">
-                    <span>系列 / 颜色</span>
-                    <select
-                      value={editor.seriesField}
-                      onChange={(event) =>
-                        dispatchEditor({ type: "set-field", field: "seriesField", value: event.target.value })
-                      }
-                    >
-                      <option value="">不分系列</option>
-                      {availableFields
-                        .filter((field) => field !== editor.yField)
-                        .map((field) => (
-                          <option value={field} key={field}>
-                            {field}
-                          </option>
-                        ))}
-                    </select>
+                    </TextField>
                   </label>
                 </div>
-                <div className="control-group">
-                  <h3>数据逻辑</h3>
+                <label className="field-label">
+                  <span>筛选值</span>
+                  <TextField
+                    value={editor.filterValue}
+                    disabled={!editor.filterField || editor.filterOperator === "is_not_null"}
+                    onChange={(event) =>
+                      dispatchEditor({ type: "set-field", field: "filterValue", value: event.target.value })
+                    }
+                    placeholder={editor.filterOperator === "is_not_null" ? "无需填写" : "例如：华东"}
+                  />
+                </label>
+                <div className="form-row">
                   <label className="field-label">
-                    <span>聚合度量</span>
-                    <select
-                      value={editor.aggregateOperation}
+                    <span>排序字段</span>
+                    <TextField
+                      select
+                      value={editor.sortField}
+                      onChange={(event) =>
+                        dispatchEditor({ type: "set-field", field: "sortField", value: event.target.value })
+                      }
+                    >
+                      <MenuItem value="">不排序</MenuItem>
+                      {availableFields.map((field) => (
+                        <MenuItem value={field} key={field}>
+                          {field}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </label>
+                  <label className="field-label">
+                    <span>方向</span>
+                    <TextField
+                      select
+                      value={editor.sortDirection}
                       onChange={(event) =>
                         dispatchEditor({
                           type: "set-field",
-                          field: "aggregateOperation",
-                          value: event.target.value as AggregateOperation,
+                          field: "sortDirection",
+                          value: event.target.value as "asc" | "desc",
                         })
                       }
                     >
-                      {aggregateOperations.map((operation) => (
-                        <option value={operation} key={operation}>
-                          {aggregateOperationLabels[operation]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="form-row">
-                    <label className="field-label">
-                      <span>筛选字段</span>
-                      <select
-                        value={editor.filterField}
-                        onChange={(event) =>
-                          dispatchEditor({ type: "set-field", field: "filterField", value: event.target.value })
-                        }
-                      >
-                        <option value="">不筛选</option>
-                        {sourceFields.map((field) => (
-                          <option value={field} key={field}>
-                            {field}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="field-label">
-                      <span>条件</span>
-                      <select
-                        value={editor.filterOperator}
-                        onChange={(event) =>
-                          dispatchEditor({
-                            type: "set-field",
-                            field: "filterOperator",
-                            value: event.target.value as FilterOperator,
-                          })
-                        }
-                      >
-                        {filterOperators.map((operator) => (
-                          <option value={operator} key={operator}>
-                            {filterOperatorLabels[operator]}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  <label className="field-label">
-                    <span>筛选值</span>
-                    <input
-                      value={editor.filterValue}
-                      disabled={!editor.filterField || editor.filterOperator === "is_not_null"}
-                      onChange={(event) =>
-                        dispatchEditor({ type: "set-field", field: "filterValue", value: event.target.value })
-                      }
-                      placeholder={editor.filterOperator === "is_not_null" ? "无需填写" : "例如：华东"}
-                    />
-                  </label>
-                  <div className="form-row">
-                    <label className="field-label">
-                      <span>排序字段</span>
-                      <select
-                        value={editor.sortField}
-                        onChange={(event) =>
-                          dispatchEditor({ type: "set-field", field: "sortField", value: event.target.value })
-                        }
-                      >
-                        <option value="">不排序</option>
-                        {availableFields.map((field) => (
-                          <option value={field} key={field}>
-                            {field}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="field-label">
-                      <span>方向</span>
-                      <select
-                        value={editor.sortDirection}
-                        onChange={(event) =>
-                          dispatchEditor({
-                            type: "set-field",
-                            field: "sortDirection",
-                            value: event.target.value as "asc" | "desc",
-                          })
-                        }
-                      >
-                        <option value="asc">升序</option>
-                        <option value="desc">降序</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div className="logic-note">
-                    <strong>Worker 重算</strong>
-                    <span>筛选、聚合、排序会写入新 Revision 的 TransformPlan 和字段血缘。</span>
-                  </div>
-                </div>
-                <div className="control-group">
-                  <h3>表达与注释</h3>
-                  <label className="field-label">
-                    <span>注释（每行一条）</span>
-                    <textarea
-                      value={editor.annotation}
-                      onChange={(event) =>
-                        dispatchEditor({ type: "set-field", field: "annotation", value: event.target.value })
-                      }
-                      placeholder="例如：华东是当前重点区域"
-                    />
-                  </label>
-                  <label className="toggle-field">
-                    <input
-                      type="checkbox"
-                      checked={editor.showValues}
-                      onChange={(event) =>
-                        dispatchEditor({ type: "set-field", field: "showValues", value: event.target.checked })
-                      }
-                    />
-                    <span>
-                      <strong>显示数值标签</strong>
-                      <small>在图表点或柱上显示已聚合数值</small>
-                    </span>
-                  </label>
-                  <label className="toggle-field">
-                    <input
-                      type="checkbox"
-                      checked={editor.showLegend}
-                      disabled={!editor.seriesField}
-                      onChange={(event) =>
-                        dispatchEditor({ type: "set-field", field: "showLegend", value: event.target.checked })
-                      }
-                    />
-                    <span>
-                      <strong>显示图例</strong>
-                      <small>保留系列字段的图例说明</small>
-                    </span>
+                      <MenuItem value="asc">升序</MenuItem>
+                      <MenuItem value="desc">降序</MenuItem>
+                    </TextField>
                   </label>
                 </div>
-                <div className="control-group">
-                  <h3>编辑状态</h3>
-                  <div className="logic-note">
-                    <strong>仅追加</strong>
-                    <span>来源 Revision 保持不变；已批准版本不能编辑。</span>
-                  </div>
+                <div className="logic-note">
+                  <strong>Worker 重算</strong>
+                  <span>筛选、聚合、排序会写入新 Revision 的 TransformPlan 和字段血缘。</span>
+                </div>
+              </div>
+              <div className="control-group">
+                <h3>表达与注释</h3>
+                <label className="field-label">
+                  <span>注释（每行一条）</span>
+                  <TextField
+                    multiline
+                    minRows={3}
+                    value={editor.annotation}
+                    onChange={(event) =>
+                      dispatchEditor({ type: "set-field", field: "annotation", value: event.target.value })
+                    }
+                    placeholder="例如：华东是当前重点区域"
+                  />
+                </label>
+                <label className="toggle-field">
+                  <Checkbox
+                    checked={editor.showValues}
+                    onChange={(event) =>
+                      dispatchEditor({ type: "set-field", field: "showValues", value: event.target.checked })
+                    }
+                  />
+                  <span>
+                    <strong>显示数值标签</strong>
+                    <small>在图表点或柱上显示已聚合数值</small>
+                  </span>
+                </label>
+                <label className="toggle-field">
+                  <Checkbox
+                    checked={editor.showLegend}
+                    disabled={!editor.seriesField}
+                    onChange={(event) =>
+                      dispatchEditor({ type: "set-field", field: "showLegend", value: event.target.checked })
+                    }
+                  />
+                  <span>
+                    <strong>显示图例</strong>
+                    <small>保留系列字段的图例说明</small>
+                  </span>
+                </label>
+              </div>
+              <div className="control-group">
+                <h3>编辑状态</h3>
+                <div className="logic-note">
+                  <strong>仅追加</strong>
+                  <span>来源 Revision 保持不变；已批准版本不能编辑。</span>
                 </div>
               </div>
             </div>
-            <div className="modal-footer">
-              <p>仅追加 · 同一快照重算 · 已批准版本只读</p>
-              <div>
-                <button type="button" className="secondary-button" onClick={() => setShowEditor(false)}>
-                  取消
-                </button>
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => void saveEditor()}
-                  disabled={
-                    isSavingEditor ||
-                    !editor.title.trim() ||
-                    !editor.xField ||
-                    !editor.yField ||
-                    Boolean(editor.filterField && editor.filterOperator !== "is_not_null" && !editor.filterValue.trim())
-                  }
-                >
-                  {isSavingEditor ? "保存中" : "保存为新版本 ↗"}
-                </button>
-              </div>
+          </div>
+          <div className="modal-footer">
+            <p>仅追加 · 同一快照重算 · 已批准版本只读</p>
+            <div>
+              <Button variant="outlined" type="button" onClick={() => setShowEditor(false)}>
+                取消
+              </Button>
+              <Button
+                variant="contained"
+                type="button"
+
+                onClick={() => void saveEditor()}
+                disabled={
+                  isSavingEditor ||
+                  !editor.title.trim() ||
+                  !editor.xField ||
+                  !editor.yField ||
+                  Boolean(editor.filterField && editor.filterOperator !== "is_not_null" && !editor.filterValue.trim())
+                }
+              >
+                {isSavingEditor ? "保存中" : "保存为新版本 ↗"}
+              </Button>
             </div>
-          </section>
-        </div>
+          </div>
+        </Dialog>
       )}
       <ReviewComposition
         revision={activeRevision}

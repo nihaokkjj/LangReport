@@ -1,5 +1,7 @@
 "use client";
 
+import { Alert, AlertTitle } from "@mui/material";
+
 export type AlertBannerTone = "error" | "notice";
 
 export type AlertBannerProps = {
@@ -10,9 +12,15 @@ export type AlertBannerProps = {
 };
 
 export function AlertBanner({ tone, message, title, onDismiss }: AlertBannerProps) {
-  return <div className={`alert ${tone}-alert`} role={tone === "error" ? "alert" : "status"}>
-    {title && <strong>{title}</strong>}
-    <span>{message}</span>
-    <button type="button" onClick={onDismiss}>×</button>
-  </div>;
+  return (
+    <Alert
+      severity={tone === "error" ? "error" : "info"}
+      role={tone === "error" ? "alert" : "status"}
+      onClose={onDismiss}
+      sx={{ mb: 3 }}
+    >
+      {title && <AlertTitle>{title}</AlertTitle>}
+      {message}
+    </Alert>
+  );
 }

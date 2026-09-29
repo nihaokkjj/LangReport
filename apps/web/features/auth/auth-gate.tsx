@@ -1,5 +1,7 @@
 "use client";
 
+import { Alert, Button, CircularProgress } from "@mui/material";
+
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { authErrorMessage } from "./auth-client";
@@ -16,8 +18,11 @@ export function AuthGate({ children }: AuthGateProps) {
 
   async function checkSession() {
     setRetrying(true);
-    try { await queryClient.invalidateQueries({ queryKey: authSessionQueryKey }); }
-    finally { setRetrying(false); }
+    try {
+      await queryClient.invalidateQueries({ queryKey: authSessionQueryKey });
+    } finally {
+      setRetrying(false);
+    }
   }
 
   useEffect(() => {
@@ -34,7 +39,23 @@ export function AuthGate({ children }: AuthGateProps) {
 
   if (session?.authenticated) return <>{children}</>;
 
-  return <main className="auth-gate" aria-live="polite">
-    {error ? <div className="auth-gate-error" role="alert"><strong>无法检查登录状态</strong><span>{error}</span><button type="button" onClick={() => void checkSession()} disabled={retrying}>{retrying ? "重试中…" : "重试"}</button></div> : <div className="auth-gate-loading"><span className="state-mark pulse-mark" /><strong>{isPending ? "检查登录状态…" : "正在跳转…"}</strong></div>}
-  </main>;
+  return (
+    <main className="auth-gate" aria-live="polite">
+      {error ? (
+        <div className="auth-gate-error">
+          <Alert severity="error" role="alert">
+            无法检查登录状态：{error}
+          </Alert>
+          <Button variant="contained" type="button" onClick={() => void checkSession()} disabled={retrying}>
+            {retrying ? "重试中…" : "重试"}
+          </Button>
+        </div>
+      ) : (
+        <div className="auth-gate-loading">
+          <CircularProgress size={24} aria-hidden="true" />
+          <strong>{isPending ? "检查登录状态…" : "正在跳转…"}</strong>
+        </div>
+      )}
+    </main>
+  );
 }

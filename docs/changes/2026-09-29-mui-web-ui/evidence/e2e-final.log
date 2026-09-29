@@ -1,0 +1,93 @@
+$ playwright test -c playwright.config.ts
+[WebServer] (node:38512) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:36868) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:47012) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 64 tests using 1 worker
+
+(node:14324) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14324) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [chromium-desktop] › test\e2e\account.spec.ts:4:5 › 账号页显示当前用户名、验证当前密码并能在桌面和窄屏完成改密 (1.6s)
+  ok 2 [chromium-desktop] › test\e2e\api-console.spec.ts:4:5 › API Console 将业务 401 留在响应面板而不跳转登录 (1.2s)
+  ok 3 [chromium-desktop] › test\e2e\api-console.spec.ts:56:5 › API Console 发送改密请求时保留实时请求体，并从预览、cURL 与本地历史脱敏 (1.7s)
+  -  4 [chromium-desktop] › test\e2e\auth-live.spec.ts:11:7 › 真实同源 Cookie logout/cache › 登出后 Cookie、选择状态和旧工作台 DOM 均清理
+  ok 5 [chromium-desktop] › test\e2e\consulting-report.spec.ts:442:5 › 导入文件与更新当前数据保持显式分流 (2.0s)
+  ok 6 [chromium-desktop] › test\e2e\consulting-report.spec.ts:473:5 › 数据预览默认打开最新版本并可切换历史 Snapshot (2.9s)
+  ok 7 [chromium-desktop] › test\e2e\consulting-report.spec.ts:531:5 › 销售 CSV 到固定 Revision 导出的核心链路 (6.3s)
+  ok 8 [chromium-desktop] › test\e2e\consulting-report.spec.ts:669:5 › 图表编辑器把逻辑和显示变化提交为可追溯 Patch (11.1s)
+  ok 9 [chromium-desktop] › test\e2e\consulting-report.spec.ts:742:5 › 指标保存期间禁止重复提交和关闭弹窗 (2.2s)
+  ok 10 [chromium-desktop] › test\e2e\consulting-report.spec.ts:784:5 › 准备度不足时提交问题不会触发前端异常 (1.2s)
+  ok 11 [chromium-desktop] › test\e2e\consulting-report.spec.ts:798:5 › 长对话消息可以滚动到完整末尾 (1.7s)
+  ok 12 [chromium-desktop] › test\e2e\login.spec.ts:4:5 › 登录页不持久化密码，并在认证成功后返回原路径 (1.4s)
+  ok 13 [chromium-desktop] › test\e2e\login.spec.ts:58:5 › 开发工作台未登录时跳转登录且不发送 x-user-id (1.0s)
+  ok 14 [chromium-desktop] › test\e2e\login.spec.ts:82:5 › 浏览器登出清理 Cookie、选择状态并中止 Generation watcher (2.4s)
+  ok 15 [chromium-desktop] › test\e2e\memory-management.spec.ts:10:5 › 个人偏好与 Project Memory 分域管理并支持版本、冲突、历史和响应式布局 (4.0s)
+  ok 16 [chromium-desktop] › test\e2e\plugins.spec.ts:21:5 › 插件安装、项目启停、Manifest 校验和显式主题选择 (2.1s)
+(node:42264) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:42264) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 17 [chromium-tablet] › test\e2e\account.spec.ts:4:5 › 账号页显示当前用户名、验证当前密码并能在桌面和窄屏完成改密 (1.6s)
+  ok 18 [chromium-tablet] › test\e2e\api-console.spec.ts:4:5 › API Console 将业务 401 留在响应面板而不跳转登录 (1.2s)
+  ok 19 [chromium-tablet] › test\e2e\api-console.spec.ts:56:5 › API Console 发送改密请求时保留实时请求体，并从预览、cURL 与本地历史脱敏 (1.5s)
+  -  20 [chromium-tablet] › test\e2e\auth-live.spec.ts:11:7 › 真实同源 Cookie logout/cache › 登出后 Cookie、选择状态和旧工作台 DOM 均清理
+  ok 21 [chromium-tablet] › test\e2e\consulting-report.spec.ts:442:5 › 导入文件与更新当前数据保持显式分流 (2.3s)
+  ok 22 [chromium-tablet] › test\e2e\consulting-report.spec.ts:473:5 › 数据预览默认打开最新版本并可切换历史 Snapshot (2.6s)
+  ok 23 [chromium-tablet] › test\e2e\consulting-report.spec.ts:531:5 › 销售 CSV 到固定 Revision 导出的核心链路 (6.9s)
+  ok 24 [chromium-tablet] › test\e2e\consulting-report.spec.ts:669:5 › 图表编辑器把逻辑和显示变化提交为可追溯 Patch (10.5s)
+  ok 25 [chromium-tablet] › test\e2e\consulting-report.spec.ts:742:5 › 指标保存期间禁止重复提交和关闭弹窗 (2.2s)
+  ok 26 [chromium-tablet] › test\e2e\consulting-report.spec.ts:784:5 › 准备度不足时提交问题不会触发前端异常 (1.3s)
+  ok 27 [chromium-tablet] › test\e2e\consulting-report.spec.ts:798:5 › 长对话消息可以滚动到完整末尾 (1.6s)
+  ok 28 [chromium-tablet] › test\e2e\login.spec.ts:4:5 › 登录页不持久化密码，并在认证成功后返回原路径 (1.3s)
+  ok 29 [chromium-tablet] › test\e2e\login.spec.ts:58:5 › 开发工作台未登录时跳转登录且不发送 x-user-id (802ms)
+  ok 30 [chromium-tablet] › test\e2e\login.spec.ts:82:5 › 浏览器登出清理 Cookie、选择状态并中止 Generation watcher (2.1s)
+  ok 31 [chromium-tablet] › test\e2e\memory-management.spec.ts:10:5 › 个人偏好与 Project Memory 分域管理并支持版本、冲突、历史和响应式布局 (4.2s)
+  ok 32 [chromium-tablet] › test\e2e\plugins.spec.ts:21:5 › 插件安装、项目启停、Manifest 校验和显式主题选择 (2.1s)
+(node:46488) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46488) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 33 [chromium-compact] › test\e2e\account.spec.ts:4:5 › 账号页显示当前用户名、验证当前密码并能在桌面和窄屏完成改密 (1.6s)
+  ok 34 [chromium-compact] › test\e2e\api-console.spec.ts:4:5 › API Console 将业务 401 留在响应面板而不跳转登录 (1.0s)
+  ok 35 [chromium-compact] › test\e2e\api-console.spec.ts:56:5 › API Console 发送改密请求时保留实时请求体，并从预览、cURL 与本地历史脱敏 (1.4s)
+  -  36 [chromium-compact] › test\e2e\auth-live.spec.ts:11:7 › 真实同源 Cookie logout/cache › 登出后 Cookie、选择状态和旧工作台 DOM 均清理
+  ok 37 [chromium-compact] › test\e2e\consulting-report.spec.ts:442:5 › 导入文件与更新当前数据保持显式分流 (1.8s)
+  ok 38 [chromium-compact] › test\e2e\consulting-report.spec.ts:473:5 › 数据预览默认打开最新版本并可切换历史 Snapshot (2.4s)
+  ok 39 [chromium-compact] › test\e2e\consulting-report.spec.ts:531:5 › 销售 CSV 到固定 Revision 导出的核心链路 (5.6s)
+  ok 40 [chromium-compact] › test\e2e\consulting-report.spec.ts:669:5 › 图表编辑器把逻辑和显示变化提交为可追溯 Patch (9.6s)
+  ok 41 [chromium-compact] › test\e2e\consulting-report.spec.ts:742:5 › 指标保存期间禁止重复提交和关闭弹窗 (2.1s)
+  ok 42 [chromium-compact] › test\e2e\consulting-report.spec.ts:784:5 › 准备度不足时提交问题不会触发前端异常 (1.2s)
+  ok 43 [chromium-compact] › test\e2e\consulting-report.spec.ts:798:5 › 长对话消息可以滚动到完整末尾 (1.1s)
+  ok 44 [chromium-compact] › test\e2e\login.spec.ts:4:5 › 登录页不持久化密码，并在认证成功后返回原路径 (1.2s)
+  ok 45 [chromium-compact] › test\e2e\login.spec.ts:58:5 › 开发工作台未登录时跳转登录且不发送 x-user-id (799ms)
+  ok 46 [chromium-compact] › test\e2e\login.spec.ts:82:5 › 浏览器登出清理 Cookie、选择状态并中止 Generation watcher (2.0s)
+  ok 47 [chromium-compact] › test\e2e\memory-management.spec.ts:10:5 › 个人偏好与 Project Memory 分域管理并支持版本、冲突、历史和响应式布局 (3.7s)
+  ok 48 [chromium-compact] › test\e2e\plugins.spec.ts:21:5 › 插件安装、项目启停、Manifest 校验和显式主题选择 (1.9s)
+(node:46292) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46292) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 49 [chromium-mobile] › test\e2e\account.spec.ts:4:5 › 账号页显示当前用户名、验证当前密码并能在桌面和窄屏完成改密 (1.5s)
+  ok 50 [chromium-mobile] › test\e2e\api-console.spec.ts:4:5 › API Console 将业务 401 留在响应面板而不跳转登录 (988ms)
+  ok 51 [chromium-mobile] › test\e2e\api-console.spec.ts:56:5 › API Console 发送改密请求时保留实时请求体，并从预览、cURL 与本地历史脱敏 (1.4s)
+  -  52 [chromium-mobile] › test\e2e\auth-live.spec.ts:11:7 › 真实同源 Cookie logout/cache › 登出后 Cookie、选择状态和旧工作台 DOM 均清理
+  ok 53 [chromium-mobile] › test\e2e\consulting-report.spec.ts:442:5 › 导入文件与更新当前数据保持显式分流 (1.8s)
+  ok 54 [chromium-mobile] › test\e2e\consulting-report.spec.ts:473:5 › 数据预览默认打开最新版本并可切换历史 Snapshot (2.7s)
+  ok 55 [chromium-mobile] › test\e2e\consulting-report.spec.ts:531:5 › 销售 CSV 到固定 Revision 导出的核心链路 (5.1s)
+  ok 56 [chromium-mobile] › test\e2e\consulting-report.spec.ts:669:5 › 图表编辑器把逻辑和显示变化提交为可追溯 Patch (10.7s)
+  ok 57 [chromium-mobile] › test\e2e\consulting-report.spec.ts:742:5 › 指标保存期间禁止重复提交和关闭弹窗 (2.2s)
+  ok 58 [chromium-mobile] › test\e2e\consulting-report.spec.ts:784:5 › 准备度不足时提交问题不会触发前端异常 (1.3s)
+  ok 59 [chromium-mobile] › test\e2e\consulting-report.spec.ts:798:5 › 长对话消息可以滚动到完整末尾 (945ms)
+  ok 60 [chromium-mobile] › test\e2e\login.spec.ts:4:5 › 登录页不持久化密码，并在认证成功后返回原路径 (1.1s)
+  ok 61 [chromium-mobile] › test\e2e\login.spec.ts:58:5 › 开发工作台未登录时跳转登录且不发送 x-user-id (801ms)
+  ok 62 [chromium-mobile] › test\e2e\login.spec.ts:82:5 › 浏览器登出清理 Cookie、选择状态并中止 Generation watcher (2.1s)
+  ok 63 [chromium-mobile] › test\e2e\memory-management.spec.ts:10:5 › 个人偏好与 Project Memory 分域管理并支持版本、冲突、历史和响应式布局 (4.0s)
+  ok 64 [chromium-mobile] › test\e2e\plugins.spec.ts:21:5 › 插件安装、项目启停、Manifest 校验和显式主题选择 (2.1s)
+
+  4 skipped
+  60 passed (2.9m)

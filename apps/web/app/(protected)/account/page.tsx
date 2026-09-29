@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { Alert, Button, TextField } from "@mui/material";
 import styles from "./account.module.css";
 import { changePassword } from "../../../features/auth/auth-client";
 import { useAuthSession } from "../../../features/auth/use-auth-session";
@@ -70,58 +71,51 @@ export default function AccountPage() {
           </div>
           <form className={styles.form} onSubmit={(event) => void submit(event)} aria-busy={isSaving}>
             <h2>修改密码</h2>
-            <label>
-              <span>当前密码</span>
-              <input
-                autoComplete="current-password"
-                maxLength={1024}
-                required
-                type="password"
-                value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-              />
-            </label>
-            <label>
-              <span>新密码</span>
-              <input
-                autoComplete="new-password"
-                maxLength={1024}
-                minLength={6}
-                required
-                type="password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-              />
-            </label>
-            <label>
-              <span>确认新密码</span>
-              <input
-                autoComplete="new-password"
-                maxLength={1024}
-                minLength={6}
-                required
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-              />
-            </label>
+            <TextField
+              label="当前密码"
+              autoComplete="current-password"
+              slotProps={{ htmlInput: { maxLength: 1024 } }}
+              required
+              type="password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+            />
+            <TextField
+              label="新密码"
+              autoComplete="new-password"
+              slotProps={{ htmlInput: { maxLength: 1024, minLength: 6, "aria-label": "新密码" } }}
+              required
+              type="password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+            <TextField
+              label="确认新密码"
+              autoComplete="new-password"
+              slotProps={{ htmlInput: { maxLength: 1024, minLength: 6, "aria-label": "确认新密码" } }}
+              required
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+            />
             {error && (
-              <p className={styles.error} role="alert">
+              <Alert severity="error" role="alert">
                 {error}
-              </p>
+              </Alert>
             )}
             {success && (
-              <p className={styles.success} role="status">
+              <Alert severity="success" role="status">
                 {success}
-              </p>
+              </Alert>
             )}
-            <button
-              className={styles.submit}
+            <Button
+              variant="contained"
               type="submit"
               disabled={isSaving || !currentPassword || !newPassword || !confirmPassword}
+              sx={{ justifySelf: "start" }}
             >
               {isSaving ? "正在更新…" : "更新密码"}
-            </button>
+            </Button>
           </form>
         </div>
       </section>

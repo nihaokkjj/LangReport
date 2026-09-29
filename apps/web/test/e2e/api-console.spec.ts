@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { captureUiEvidence } from "./visual-evidence";
 
 test("API Console 将业务 401 留在响应面板而不跳转登录", async ({ page }) => {
   await page.route("**/api-console/openapi.json", async (route) => {
@@ -41,6 +42,7 @@ test("API Console 将业务 401 留在响应面板而不跳转登录", async ({ 
 
   await page.goto("/api-console");
   await expect(page.getByRole("heading", { name: "Generation Job 场景" })).toBeVisible();
+  await captureUiEvidence(page, "api-console");
   await expect(page.getByRole("button", { name: /\/api\/v1\/projects/ })).toBeVisible();
   await page.getByRole("button", { name: /\/api\/v1\/projects/ }).click();
   await page.getByRole("button", { name: "发送请求 ↗" }).click();

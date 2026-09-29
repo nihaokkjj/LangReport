@@ -1,6 +1,9 @@
 "use client";
 
-import { ChevronDownIcon } from "../../components/icons/chevron-down";
+import CloseIcon from "@mui/icons-material/Close";
+import { Button, IconButton } from "@mui/material";
+
+import ChevronDownIcon from "@mui/icons-material/ExpandMore";
 import type { PluginTraceState } from "../../features/evidence/plugin-trace";
 import type { Snapshot } from "../../features/data-snapshot/use-snapshot-preview";
 
@@ -55,9 +58,9 @@ export function EvidenceContextRail({
           <div className="eyebrow">依据</div>
           <h2 id="context-drawer-title">证据上下文</h2>
         </div>
-        <button type="button" className="context-close drawer-close" aria-label="关闭依据面板" onClick={onClose}>
-          ×
-        </button>
+        <IconButton className="context-close drawer-close" aria-label="关闭依据面板" onClick={onClose}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
       </div>
       <details>
         <summary>
@@ -65,7 +68,8 @@ export function EvidenceContextRail({
             <strong>数据快照</strong>
             {selectedAsset?.latestSnapshot && (
               <small>
-                {selectedAsset.name} · v{selectedAsset.latestSnapshot.version} · {selectedAsset.latestSnapshot.rowCount.toLocaleString()} 行
+                {selectedAsset.name} · v{selectedAsset.latestSnapshot.version} ·{" "}
+                {selectedAsset.latestSnapshot.rowCount.toLocaleString()} 行
               </small>
             )}
           </span>
@@ -93,9 +97,9 @@ export function EvidenceContextRail({
               <div className="context-quality">
                 {qualityWarningCount ? `${qualityWarningCount} 个字段存在缺失值` : "数据完整"}
               </div>
-              <button type="button" className="context-cta snapshot-preview-trigger" onClick={onOpenData} aria-haspopup="dialog">
+              <Button type="button" className="context-cta snapshot-preview-trigger" onClick={onOpenData}>
                 查看数据 <span>↗</span>
-              </button>
+              </Button>
               <div className="context-detail-label">字段画像</div>
               <div className="context-data-list">
                 {selectedAsset.latestSnapshot.schema.slice(0, 6).map((column) => (
@@ -111,9 +115,9 @@ export function EvidenceContextRail({
           ) : (
             <div className="context-empty">
               <strong>未导入数据</strong>
-              <button type="button" onClick={onImportData}>
+              <Button type="button" onClick={onImportData}>
                 导入数据
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -140,9 +144,9 @@ export function EvidenceContextRail({
               </div>
             </>
           ) : (
-            <button type="button" className="context-cta" onClick={onOpenMetric}>
+            <Button type="button" className="context-cta" onClick={onOpenMetric}>
               确认指标口径 <span>↗</span>
-            </button>
+            </Button>
           )}
         </div>
       </details>
@@ -191,7 +195,9 @@ export function EvidenceContextRail({
               </div>
               <div className="context-row">
                 <span>父版本</span>
-                <strong>{activeRevision.parentRevisionId ? activeRevision.parentRevisionId.slice(0, 8) : "初始"}</strong>
+                <strong>
+                  {activeRevision.parentRevisionId ? activeRevision.parentRevisionId.slice(0, 8) : "初始"}
+                </strong>
               </div>
               <div className="context-row">
                 <span>插件</span>

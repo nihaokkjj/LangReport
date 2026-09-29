@@ -1,4 +1,5 @@
 import { expect, test, type Route } from "@playwright/test";
+import { captureUiEvidence } from "./visual-evidence";
 
 const projectId = "10000000-0000-4000-8000-000000000001";
 const preferenceId = "20000000-0000-4000-8000-000000000001";
@@ -145,6 +146,7 @@ test("个人偏好与 Project Memory 分域管理并支持版本、冲突、历�
 
   await page.goto("/account/memory");
   await expect(page.getByRole("heading", { name: "记忆设置" })).toBeVisible();
+  await captureUiEvidence(page, "memory");
   await expect(
     page.getByText("只对当前账号可见，不会出现在 Project、Generation Job 或 Revision 的共享记录中。"),
   ).toBeVisible();
@@ -157,8 +159,20 @@ test("个人偏好与 Project Memory 分域管理并支持版本、冲突、历�
   await preferencePanel.getByLabel("编辑个人偏好").fill("回答使用简体中文，表达简洁");
   await preferencePanel.getByRole("button", { name: "保存新版本" }).click();
   await expect(page.getByText("回答使用简体中文，表达简洁", { exact: true })).toBeVisible();
-  page.once("dialog", (dialog) => dialog.accept());
   await preferencePanel.getByRole("button", { name: "删除" }).click();
+  const deleteDialog = page.getByRole("dialog", { name: "删除个人偏好" });
+  await expect(deleteDialog).toContainText("全部历史正文和派生引用");
+  await deleteDialog.getByRole("button", { name: "取消" }).click();
+  await expect(deleteDialog).toBeHidden();
+  await expect(preferencePanel.getByText("回答使用简体中文，表达简洁", { exact: true })).toBeVisible();
+  expect(preferenceDeleteBody).toBeUndefined();
+  await preferencePanel.getByRole("button", { name: "删除" }).click();
+  await expect(deleteDialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(deleteDialog).toBeHidden();
+  expect(preferenceDeleteBody).toBeUndefined();
+  await preferencePanel.getByRole("button", { name: "删除" }).click();
+  await deleteDialog.getByRole("button", { name: "确认删除" }).click();
   await expect(page.getByText("个人偏好及其历史正文已清除。", { exact: true })).toBeVisible();
   await expect(page.getByText("回答使用简体中文，表达简洁", { exact: true })).toHaveCount(0);
   expect(preferenceCreateBody).toEqual({ category: "language", statement: "回答优先使用简体中文", value: {} });
