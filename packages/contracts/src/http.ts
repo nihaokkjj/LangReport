@@ -2075,12 +2075,12 @@ function normalizeOpenApiSchema(value: unknown): unknown {
   if (Array.isArray(normalized.type)) {
     const hasNull = normalized.type.includes("null");
     const nonNullTypes = normalized.type.filter((type): type is string => type !== "null");
-    const { type: _type, ...withoutType } = normalized;
+    delete normalized.type;
     if (nonNullTypes.length === 1)
-      return { ...withoutType, type: nonNullTypes[0], ...(hasNull ? { nullable: true } : {}) };
+      return { ...normalized, type: nonNullTypes[0], ...(hasNull ? { nullable: true } : {}) };
     if (nonNullTypes.length > 1) {
       return {
-        ...withoutType,
+        ...normalized,
         oneOf: nonNullTypes.map((type) => ({ type })),
         ...(hasNull ? { nullable: true } : {}),
       };
@@ -2124,8 +2124,8 @@ function requestParameters(contract: RouteContract): Array<Record<string, unknow
 
   return parameters.map((parameter) => {
     if (parameter.description !== undefined) return parameter;
-    const { description: _description, ...withoutDescription } = parameter;
-    return withoutDescription;
+    delete parameter.description;
+    return parameter;
   });
 }
 

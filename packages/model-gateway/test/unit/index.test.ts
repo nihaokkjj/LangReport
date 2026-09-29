@@ -18,6 +18,15 @@ import {
 } from "../../src/index.js";
 
 const capturedAt = "2026-09-06T00:00:00.000Z";
+
+type BailianRequestBody = {
+  enable_thinking?: boolean;
+  max_completion_tokens?: number;
+  messages?: Array<{ content?: string }>;
+  model?: string;
+  response_format?: { json_schema?: { strict?: boolean }; type?: string };
+  stream?: boolean;
+};
 const baseEnvironment = {
   NODE_ENV: "production",
   GENERATION_MODE: "llm",
@@ -91,14 +100,16 @@ test("sends one Qwen Chat Completions JSON Schema request and preserves invocati
   assert.equal(String(requests[0]?.input), "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions");
   const headers = new Headers(requests[0]?.init?.headers);
   assert.equal(headers.get("authorization"), "Bearer worker-secret");
-  const body = JSON.parse(String(requests[0]?.init?.body)) as Record<string, any>;
+  const body = JSON.parse(String(requests[0]?.init?.body)) as BailianRequestBody;
   assert.equal(body.model, "qwen-plus");
   assert.equal(body.stream, false);
   assert.equal(body.max_completion_tokens, 512);
   assert.equal(body.enable_thinking, false);
-  assert.deepEqual(body.response_format.type, "json_schema");
+  assert.ok(body.response_format);
+  assert.equal(body.response_format.type, "json_schema");
+  assert.ok(body.response_format.json_schema);
   assert.equal(body.response_format.json_schema.strict, true);
-  assert.match(body.messages[0].content, /JSON/);
+  assert.match(body.messages?.[0]?.content ?? "", /JSON/);
 
   assert.equal(result.status, "ok");
   if (result.status !== "ok") return;
@@ -127,7 +138,7 @@ test("request budget estimator grows with UTF-8 preference content and fixed out
 
 test("uses explicit JSON Object mode and normalizes provider failures without exposing raw output", async () => {
   const route = resolveModelRouteSnapshot({ ...baseEnvironment, BAILIAN_STRUCTURED_OUTPUT: "json_object" }, capturedAt);
-  let capturedBody: Record<string, any> | undefined;
+  let capturedBody: BailianRequestBody | undefined;
   const gateway = createBailianQwenGateway(route, { BAILIAN_API_KEY: "worker-secret" }, async (_input, init) => {
     capturedBody = JSON.parse(String(init?.body));
     return jsonResponse({ choices: [{ finish_reason: "length", message: { content: "{}" } }] });

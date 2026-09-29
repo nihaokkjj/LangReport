@@ -1012,7 +1012,7 @@ async function copyText(value: string): Promise<void> {
 }
 
 export default function ApiConsolePage() {
-  const [document, setDocument] = useState<OpenApiDocument | null>(null);
+  const [, setDocument] = useState<OpenApiDocument | null>(null);
   const [entries, setEntries] = useState<OperationEntry[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [parameterValues, setParameterValues] = useState<Record<string, string>>({});
@@ -1030,7 +1030,7 @@ export default function ApiConsolePage() {
   const [response, setResponse] = useState<ResponseState | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyHydrated, setHistoryHydrated] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [, setNotice] = useState<string | null>(null);
   const [scenario, setScenario] = useState<ScenarioState>(() => initialScenarioState());
 
   const selectedEntry = useMemo(
@@ -1119,8 +1119,8 @@ export default function ApiConsolePage() {
     setScenario({ ...initialScenarioState(), phase: "running" });
     setNotice(null);
     let projectId = "";
-    let conversationId = "";
-    let assetId = "";
+    let conversationId: string;
+    let assetId: string;
     let successJobId = "";
     try {
       updateScenarioStep("health", "running", "请求 GET /health");

@@ -32,7 +32,7 @@ function parseDatabaseUrl(databaseUrl) {
     const parsed = new URL(databaseUrl);
     return parsed;
   } catch (error) {
-    if (error instanceof TypeError) throw new Error("DATABASE_URL must be a valid URL");
+    if (error instanceof TypeError) throw new Error("DATABASE_URL must be a valid URL", { cause: error });
     throw error;
   }
 }

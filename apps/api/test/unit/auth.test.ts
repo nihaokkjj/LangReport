@@ -23,6 +23,10 @@ function accountRecord(overrides: Partial<UserAccountRecord> = {}): UserAccountR
     status: "active",
     legacyAuthSubject: null,
     legacyAuthSubjectExpiresAt: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    passwordChangedAt: new Date("2026-01-01T00:00:00.000Z"),
+    disabledAt: null,
     ...overrides,
   };
 }
@@ -45,7 +49,7 @@ function memoryAccountStore(initial: UserAccountRecord[]): {
     async updatePasswordHash(id, passwordHash, changedAt) {
       const record = records.get(id);
       if (!record) return false;
-      records.set(id, { ...record, passwordHash });
+      records.set(id, { ...record, passwordHash, passwordChangedAt: changedAt, updatedAt: changedAt });
       return true;
     },
   };

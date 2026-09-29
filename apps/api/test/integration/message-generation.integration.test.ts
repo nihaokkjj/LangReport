@@ -14,7 +14,8 @@ import {
   members,
   metricDefinitions,
   projects,
-  workspaces
+  users,
+  workspaces,
 } from "@langreport/db";
 import { conversationUploadObjectKey, snapshotSourceObjectKey } from "@langreport/storage";
 import { buildApp } from "../../src/app.js";
@@ -22,38 +23,56 @@ import { buildApp } from "../../src/app.js";
 type JsonObject = Record<string, unknown>;
 
 function asObject(value: unknown): JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : {};
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as JsonObject) : {};
 }
 
 test("message-triggered generation is single-write, idempotent and explains missing prerequisites", async () => {
   const suffix = randomUUID();
   const userId = `phase1-message-${suffix}`;
-  const [workspace] = await db.insert(workspaces).values({ name: `Phase 1 message ${suffix}` }).returning();
+  await db.insert(users).values({
+    id: userId,
+    username: `phase1-message-${suffix}`,
+    usernameKey: `phase1-message-${suffix}`,
+    passwordHash: "integration-test-only",
+  });
+  const [workspace] = await db
+    .insert(workspaces)
+    .values({ name: `Phase 1 message ${suffix}` })
+    .returning();
   await db.insert(members).values({ workspaceId: workspace.id, userId, role: "owner" });
   async function fixture(name: string, options: { snapshot: boolean; metricCount: number; brief?: boolean }) {
-    const [project] = await db.insert(projects).values({
-      workspaceId: workspace.id,
-      name: `Phase 1 ${name} ${suffix}`,
-      slug: `phase1-${name}-${suffix.slice(0, 8)}`
-    }).returning();
-    const [conversation] = await db.insert(conversations).values({
-      projectId: project.id,
-      title: `Phase 1 ${name}`,
-      createdBy: userId
-    }).returning();
+    const [project] = await db
+      .insert(projects)
+      .values({
+        workspaceId: workspace.id,
+        name: `Phase 1 ${name} ${suffix}`,
+        slug: `phase1-${name}-${suffix.slice(0, 8)}`,
+      })
+      .returning();
+    const [conversation] = await db
+      .insert(conversations)
+      .values({
+        projectId: project.id,
+        title: `Phase 1 ${name}`,
+        createdBy: userId,
+      })
+      .returning();
     const assetId = randomUUID();
     const snapshotId = randomUUID();
-    const [asset] = await db.insert(dataAssets).values({
-      id: assetId,
-      projectId: project.id,
-      sourceConversationId: conversation.id,
-      name: `${name}.csv`,
-      sourceType: "pasted",
-      mimeType: "text/csv",
-      sizeBytes: 1,
-      status: "ready",
-      createdBy: userId
-    }).returning();
+    const [asset] = await db
+      .insert(dataAssets)
+      .values({
+        id: assetId,
+        projectId: project.id,
+        sourceConversationId: conversation.id,
+        name: `${name}.csv`,
+        sourceType: "pasted",
+        mimeType: "text/csv",
+        sizeBytes: 1,
+        status: "ready",
+        createdBy: userId,
+      })
+      .returning();
     if (options.snapshot) {
       await db.insert(dataSnapshots).values({
         id: snapshotId,
@@ -69,7 +88,7 @@ test("message-triggered generation is single-write, idempotent and explains miss
           conversationId: conversation.id,
           assetId,
           snapshotId,
-          filename: `${name}.csv`
+          filename: `${name}.csv`,
         }),
         normalizedObjectKey: conversationUploadObjectKey({
           workspaceId: workspace.id,
@@ -77,27 +96,30 @@ test("message-triggered generation is single-write, idempotent and explains miss
           conversationId: conversation.id,
           assetId,
           kind: "normalized",
-          filename: `${snapshotId}.json`
-        })
+          filename: `${snapshotId}.json`,
+        }),
       });
     }
     const metricIds: string[] = [];
     for (let index = 0; index < options.metricCount; index += 1) {
-      const [metric] = await db.insert(metricDefinitions).values({
-        projectId: project.id,
-        sourceConversationId: conversation.id,
-        name: index === 0 ? "销售额" : `利润${index}`,
-        meaning: "测试指标",
-        formula: "sum(value)",
-        unit: "元",
-        timeRule: "按月",
-        status: "confirmed",
-        version: index + 1,
-        confirmedBy: userId,
-        confirmedAt: new Date(),
-        createdBy: userId,
-        updatedAt: new Date()
-      }).returning({ id: metricDefinitions.id });
+      const [metric] = await db
+        .insert(metricDefinitions)
+        .values({
+          projectId: project.id,
+          sourceConversationId: conversation.id,
+          name: index === 0 ? "销售额" : `利润${index}`,
+          meaning: "测试指标",
+          formula: "sum(value)",
+          unit: "元",
+          timeRule: "按月",
+          status: "confirmed",
+          version: index + 1,
+          confirmedBy: userId,
+          confirmedAt: new Date(),
+          createdBy: userId,
+          updatedAt: new Date(),
+        })
+        .returning({ id: metricDefinitions.id });
       metricIds.push(metric.id);
     }
     if (options.brief !== false) {
@@ -111,7 +133,7 @@ test("message-triggered generation is single-write, idempotent and explains miss
         outputFormat: "evidence_block",
         status: "confirmed",
         createdBy: userId,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       });
     }
     const value = { projectId: project.id, conversationId: conversation.id, assetId: asset.id, metricIds };
@@ -126,7 +148,8 @@ test("message-triggered generation is single-write, idempotent and explains miss
   const app = await buildApp({
     logger: false,
     environment: { ...process.env, NODE_ENV: "test", APP_ENV: "test" },
-    authProvider: (request) => typeof request.headers["x-user-id"] === "string" ? { id: request.headers["x-user-id"] } : null
+    authProvider: (request) =>
+      typeof request.headers["x-user-id"] === "string" ? { id: request.headers["x-user-id"] } : null,
   });
   await app.ready();
 
@@ -136,7 +159,7 @@ test("message-triggered generation is single-write, idempotent and explains miss
         method: "POST",
         url: `/api/v1/conversations/${conversationId}/messages`,
         headers: { "x-user-id": userId, "content-type": "application/json" },
-        payload: JSON.stringify(payload)
+        payload: JSON.stringify(payload),
       });
       return { status: response.statusCode, body: asObject(response.json()) };
     };
@@ -147,7 +170,7 @@ test("message-triggered generation is single-write, idempotent and explains miss
       generate: true,
       dataAssetId: valid.assetId,
       metricDefinitionId: valid.metricIds[0],
-      clientRequestId: idempotencyKey
+      clientRequestId: idempotencyKey,
     };
     let result = await request(valid.conversationId, validPayload);
     assert.equal(result.status, 202, JSON.stringify(result.body));
@@ -164,42 +187,74 @@ test("message-triggered generation is single-write, idempotent and explains miss
     const concurrentPayload = {
       ...validPayload,
       content: "并发提交销售额趋势",
-      clientRequestId: `phase1-concurrent-${suffix}`
+      clientRequestId: `phase1-concurrent-${suffix}`,
     };
     const concurrentResults = await Promise.all([
       request(valid.conversationId, concurrentPayload),
-      request(valid.conversationId, concurrentPayload)
+      request(valid.conversationId, concurrentPayload),
     ]);
-    assert.deepEqual(concurrentResults.map((item) => item.status).sort((left, right) => left - right), [200, 202]);
-    const validMessages = await db.select().from(conversationMessages).where(eq(conversationMessages.conversationId, valid.conversationId));
+    assert.deepEqual(
+      concurrentResults.map((item) => item.status).sort((left, right) => left - right),
+      [200, 202],
+    );
+    const validMessages = await db
+      .select()
+      .from(conversationMessages)
+      .where(eq(conversationMessages.conversationId, valid.conversationId));
     const validJobs = await db.select().from(generationJobs).where(eq(generationJobs.projectId, valid.projectId));
     assert.equal(validMessages.length, 2);
-    assert.equal(validMessages.every((message) => message.role === "user"), true);
+    assert.equal(
+      validMessages.every((message) => message.role === "user"),
+      true,
+    );
     assert.equal(validJobs.length, 2);
 
     result = await request(valid.conversationId, { ...validPayload, content: "换成利润" });
     assert.equal(result.status, 409);
     assert.equal(result.body.code, "IDEMPOTENCY_CONFLICT");
 
-    result = await request(noSnapshot.conversationId, { content: "生成销售额", generate: true, dataAssetId: noSnapshot.assetId, metricDefinitionId: noSnapshot.metricIds[0], clientRequestId: `no-snapshot-${suffix}` });
+    result = await request(noSnapshot.conversationId, {
+      content: "生成销售额",
+      generate: true,
+      dataAssetId: noSnapshot.assetId,
+      metricDefinitionId: noSnapshot.metricIds[0],
+      clientRequestId: `no-snapshot-${suffix}`,
+    });
     assert.equal(result.status, 201);
     assert.equal(asObject(result.body.nextAction).code, "DATA_SNAPSHOT_REQUIRED");
     assert.equal(result.body.job, null);
 
-    result = await request(noMetric.conversationId, { content: "生成销售额", generate: true, dataAssetId: noMetric.assetId, clientRequestId: `no-metric-${suffix}` });
+    result = await request(noMetric.conversationId, {
+      content: "生成销售额",
+      generate: true,
+      dataAssetId: noMetric.assetId,
+      clientRequestId: `no-metric-${suffix}`,
+    });
     assert.equal(result.status, 201);
     assert.equal(asObject(result.body.nextAction).code, "METRIC_DEFINITION_REQUIRED");
 
-    result = await request(multipleMetrics.conversationId, { content: "生成销售额", generate: true, dataAssetId: multipleMetrics.assetId, clientRequestId: `multiple-${suffix}` });
+    result = await request(multipleMetrics.conversationId, {
+      content: "生成销售额",
+      generate: true,
+      dataAssetId: multipleMetrics.assetId,
+      clientRequestId: `multiple-${suffix}`,
+    });
     assert.equal(result.status, 201);
     assert.equal(asObject(result.body.nextAction).code, "METRIC_SELECTION_REQUIRED");
 
-    result = await request(noBrief.conversationId, { content: "生成销售额", generate: true, dataAssetId: noBrief.assetId, metricDefinitionId: noBrief.metricIds[0], clientRequestId: `no-brief-${suffix}` });
+    result = await request(noBrief.conversationId, {
+      content: "生成销售额",
+      generate: true,
+      dataAssetId: noBrief.assetId,
+      metricDefinitionId: noBrief.metricIds[0],
+      clientRequestId: `no-brief-${suffix}`,
+    });
     assert.equal(result.status, 201);
     assert.equal(asObject(result.body.nextAction).code, "ANALYSIS_BRIEF_REQUIRED");
   } finally {
     await app.close();
     await db.delete(workspaces).where(and(eq(workspaces.id, workspace.id)));
+    await db.delete(users).where(eq(users.id, userId));
     await closeDatabase();
   }
 });

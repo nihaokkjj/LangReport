@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import {
@@ -95,7 +95,6 @@ import {
 } from "@langreport/model-gateway";
 import {
   PluginServiceError,
-  assertProjectThemeReference,
   getWorkspacePlugin,
   installPlugin,
   listBuiltinPluginCatalog,
@@ -916,6 +915,7 @@ export async function registerRoutes(
                   idempotencyKey: body.clientRequestId,
                 },
                 id: request.id,
+                headers: request.headers,
               },
               environment,
               {
@@ -1199,10 +1199,17 @@ export async function registerRoutes(
     conversationProjection?: Awaited<ReturnType<typeof projectConversationForGeneration>>;
     precondition?: GenerationPrecondition;
   };
+  type GenerationJobRequest = {
+    params: { projectId: string };
+    body: unknown;
+    id: string;
+    headers: FastifyRequest["headers"];
+    user?: unknown;
+  };
   // 冻结本次输入创建 Generation Job 时固化 Snapshot ID、Brief/Metric 快照、对话投影、主题、模型路由、记忆和幂等指纹。
 
   const createGenerationJobRecord = async (
-    request: any,
+    request: GenerationJobRequest,
     environment: NodeJS.ProcessEnv,
     options: GenerationJobCreationOptions = {},
   ) => {
@@ -1481,9 +1488,22 @@ export async function registerRoutes(
     return { job: result, reused: false };
   };
 
-  const createGenerationJob = async (request: any, reply: FastifyReply) => {
+  const createGenerationJob = async (
+    request: FastifyRequest<{ Params: { projectId: string } }>,
+    reply: FastifyReply,
+  ) => {
     try {
-      const result = await createGenerationJobRecord(request, environment);
+      const requestWithUser = request as typeof request & { user?: unknown };
+      const result = await createGenerationJobRecord(
+        {
+          id: request.id,
+          params: request.params,
+          body: request.body,
+          headers: request.headers,
+          user: requestWithUser.user,
+        },
+        environment,
+      );
       return reply.code(result.reused ? 200 : 202).send(result);
     } catch (error) {
       return sendDataError(reply, error);

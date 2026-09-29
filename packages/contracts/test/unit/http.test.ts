@@ -14,6 +14,25 @@ import {
   pasteDataRequestSchema,
 } from "../../src/index.js";
 
+type TestOpenApiSchema = {
+  enum: string[];
+  format?: string;
+  properties: Record<string, TestOpenApiSchema>;
+  required: string[];
+  type?: string;
+};
+
+type TestOpenApiResponse = {
+  description?: string;
+  content?: Record<string, { schema: TestOpenApiSchema }>;
+};
+
+type TestOpenApiOperation = {
+  requestBody: { content: Record<string, { schema: TestOpenApiSchema }> };
+  parameters: Array<{ name: string; in: string; required: boolean }>;
+  responses: Record<string, TestOpenApiResponse>;
+};
+
 const expectedRoutes = [
   "GET /health",
   "GET /ready",
@@ -252,7 +271,7 @@ test("Project creation contract requires auditable onboarding context", () => {
   );
 
   const document = createOpenApiDocument({ serverUrl: "http://localhost:4000" });
-  const operation = document.paths["/api/v1/projects"]?.post as Record<string, any>;
+  const operation = document.paths["/api/v1/projects"]?.post as unknown as TestOpenApiOperation;
   const schema = operation.requestBody.content["application/json"].schema;
   assert.deepEqual(schema.required, ["name", "clientName", "objective", "audience", "visualTemplate"]);
   assert.equal(schema.properties.audience.enum.join(","), "internal_analysis,client_presentation,management");
@@ -342,26 +361,27 @@ test("OpenAPI document is generated from the route contracts", () => {
     /DATABASE_URL|POSTGRES_PASSWORD|S3_SECRET_KEY|AUTH_JWT_SECRET|API_KEY/i,
   );
 
-  const loginOperation = document.paths["/api/v1/auth/login"]?.post as Record<string, any>;
+  const loginOperation = document.paths["/api/v1/auth/login"]?.post as unknown as TestOpenApiOperation;
   assert.deepEqual(loginOperation.requestBody.content["application/json"].schema.required, ["username", "password"]);
   assert.equal(loginOperation.requestBody.content["application/json"].schema.properties.password.format, "password");
   assert.ok(loginOperation.responses["429"]);
   assert.ok(loginOperation.responses["503"]);
 
-  const pasteOperation = document.paths["/api/v1/projects/{projectId}/data-assets/paste"]?.post as Record<string, any>;
+  const pasteOperation = document.paths["/api/v1/projects/{projectId}/data-assets/paste"]
+    ?.post as unknown as TestOpenApiOperation;
   assert.equal(pasteOperation.requestBody.content["application/json"].schema.type, "object");
   assert.ok(pasteOperation.requestBody.content["application/json"].schema.required.includes("conversationId"));
   assert.ok(
     pasteOperation.parameters.some(
-      (parameter: any) => parameter.name === "projectId" && parameter.in === "path" && parameter.required === true,
+      (parameter) => parameter.name === "projectId" && parameter.in === "path" && parameter.required === true,
     ),
   );
-  assert.ok(pasteOperation.responses["400"].content["application/json"].schema.properties.error);
+  const badRequestContent = pasteOperation.responses["400"].content;
+  assert.ok(badRequestContent);
+  assert.ok(badRequestContent["application/json"].schema.properties.error);
 
-  const uploadOperation = document.paths["/api/v1/projects/{projectId}/data-assets/upload"]?.post as Record<
-    string,
-    any
-  >;
+  const uploadOperation = document.paths["/api/v1/projects/{projectId}/data-assets/upload"]
+    ?.post as unknown as TestOpenApiOperation;
   assert.ok(uploadOperation.requestBody.content["multipart/form-data"]);
   assert.equal(uploadOperation.requestBody.content["multipart/form-data"].schema.properties.file.format, "binary");
   assert.deepEqual(uploadOperation.requestBody.content["multipart/form-data"].schema.required, [
@@ -371,13 +391,14 @@ test("OpenAPI document is generated from the route contracts", () => {
 
   for (const pathItem of Object.values(document.paths)) {
     for (const operation of Object.values(pathItem)) {
-      const responses = (operation as Record<string, any>).responses as Record<string, any>;
+      const responses = (operation as unknown as TestOpenApiOperation).responses;
       for (const status of ["400", "403", "404", "409"]) assert.ok(responses[status]);
       for (const [status, response] of Object.entries(responses)) {
         assert.ok(response.description);
         if (status === "204") continue;
-        assert.ok(response.content);
-        assert.ok(Object.values(response.content).every((content: any) => content.schema));
+        const content = response.content;
+        assert.ok(content);
+        assert.ok(Object.values(content).every((item) => item.schema));
       }
     }
   }
