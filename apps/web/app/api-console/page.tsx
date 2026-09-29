@@ -1,9 +1,13 @@
 "use client";
 
+import SearchIcon from "@mui/icons-material/Search";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
+import { Alert, Button, CircularProgress, IconButton, InputAdornment, MenuItem, TextField } from "@mui/material";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./api-console.module.css";
 import { apiRequest, formatApiError } from "../../lib/http-client";
-import { ChevronDownIcon } from "../../components/icons/chevron-down";
+import ChevronDownIcon from "@mui/icons-material/ExpandMore";
 
 const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? "/api").replace(/\/$/, "");
 const historyStorageKey = "langreport-api-console-history-v1";
@@ -857,26 +861,27 @@ function ParameterTable({ parameters, values, onChange }: ParameterTableProps) {
                 </td>
                 <td>
                   {options.length > 0 ? (
-                    <select
+                    <TextField
+                      select
                       className={styles.tableControl}
                       value={value}
                       onChange={(event) => onChange(key, event.target.value)}
-                      aria-label={`${parameter.name} 参数`}
+                      slotProps={{ select: { inputProps: { "aria-label": `${parameter.name} 参数` } } }}
                     >
-                      <option value="">请选择</option>
+                      <MenuItem value="">请选择</MenuItem>
                       {options.map((option) => (
-                        <option key={String(option)} value={String(option)}>
+                        <MenuItem key={String(option)} value={String(option)}>
                           {String(option)}
-                        </option>
+                        </MenuItem>
                       ))}
-                    </select>
+                    </TextField>
                   ) : (
-                    <input
+                    <TextField
                       className={styles.tableControl}
                       value={value}
                       onChange={(event) => onChange(key, event.target.value)}
                       placeholder={schema?.format === "uuid" ? "UUID" : parameter.required ? "必填" : "可选"}
-                      aria-label={`${parameter.name} 参数`}
+                      slotProps={{ htmlInput: { "aria-label": `${parameter.name} 参数` } }}
                     />
                   )}
                 </td>
@@ -981,19 +986,21 @@ function MultipartTable({ properties, required, values, file, onValueChange, onF
                 </td>
                 <td>
                   {isFile ? (
-                    <input
-                      className={styles.tableControl}
-                      type="file"
-                      onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
-                      aria-label={`${name} 文件`}
-                    />
+                    <Button component="label" variant="outlined" aria-label={`${name} 文件`}>
+                      <input
+                        className="visually-hidden-file"
+                        type="file"
+                        onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+                      />
+                      选择文件
+                    </Button>
                   ) : (
-                    <input
+                    <TextField
                       className={styles.tableControl}
                       value={values[name] ?? ""}
                       onChange={(event) => onValueChange(name, event.target.value)}
                       placeholder="填写表单字段"
-                      aria-label={`${name} 参数`}
+                      slotProps={{ htmlInput: { "aria-label": `${name} 参数` } }}
                     />
                   )}
                 </td>
@@ -1616,9 +1623,10 @@ export default function ApiConsolePage() {
             <h1 id="loop4-title">Generation Job 场景</h1>
             <p>从健康检查开始，使用本地销售示例数据跑通异步生成、幂等复用、错误输入、澄清提案和 Evidence 追溯。</p>
           </div>
-          <button
+          <Button
+            variant="contained"
             type="button"
-            className={styles.primaryButton}
+
             onClick={() => void runScenario()}
             disabled={isLoading || entries.length === 0 || scenario.phase === "running"}
           >
@@ -1627,7 +1635,7 @@ export default function ApiConsolePage() {
               : scenario.phase === "succeeded"
                 ? "再次运行 Loop 4 ↗"
                 : "运行 Loop 4 ↗"}
-          </button>
+          </Button>
         </div>
 
         <div className={styles.scenarioBody}>
@@ -1694,13 +1702,12 @@ export default function ApiConsolePage() {
                   <p className={styles.scenarioTimeline}>状态变化：{inspectorStatusHistory.join(" → ")}</p>
                 )}
                 {scenario.error && (
-                  <div className={styles.scenarioError} role="alert">
-                    <strong>场景未完成</strong>
-                    <p>{scenario.error}</p>
+                  <Alert severity="error" role="alert">
+                    <strong>场景未完成</strong> {scenario.error}
                     <small>
                       建议：确认 API、PostgreSQL、MinIO、Generation Worker 和 Render Worker 均已启动后重试。
                     </small>
-                  </div>
+                  </Alert>
                 )}
                 {scenario.trace && (
                   <div className={styles.scenarioTrace}>
@@ -1858,51 +1865,63 @@ export default function ApiConsolePage() {
             <span className={styles.count}>{filteredEntries.length.toString().padStart(2, "0")}</span>
           </div>
           <div className={styles.filters}>
-            <label className={styles.searchField}>
-              <span>⌕</span>
-              <input
-                value={pathSearch}
-                onChange={(event) => setPathSearch(event.target.value)}
-                placeholder="搜索路径或摘要"
-                aria-label="搜索路径或摘要"
-              />
-            </label>
+            <TextField
+              value={pathSearch}
+              onChange={(event) => setPathSearch(event.target.value)}
+              placeholder="搜索路径或摘要"
+              slotProps={{
+                htmlInput: { "aria-label": "搜索路径或摘要" },
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
             <div className={styles.filterRow}>
-              <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} aria-label="按标签筛选">
+              <TextField
+                select
+                value={tagFilter}
+                onChange={(event) => setTagFilter(event.target.value)}
+                slotProps={{ select: { inputProps: { "aria-label": "按标签筛选" } } }}
+              >
                 {tags.map((tag) => (
-                  <option key={tag} value={tag}>
+                  <MenuItem key={tag} value={tag}>
                     {displayTag(tag)}
-                  </option>
+                  </MenuItem>
                 ))}
-              </select>
-              <select
+              </TextField>
+              <TextField
+                select
                 value={methodFilter}
                 onChange={(event) => setMethodFilter(event.target.value as (typeof methodOptions)[number])}
-                aria-label="按 HTTP Method 筛选"
+                slotProps={{ select: { inputProps: { "aria-label": "按 HTTP Method 筛选" } } }}
               >
                 {methodOptions.map((method) => (
-                  <option key={method} value={method}>
+                  <MenuItem key={method} value={method}>
                     {method === "ALL" ? "全部方法" : method}
-                  </option>
+                  </MenuItem>
                 ))}
-              </select>
+              </TextField>
             </div>
           </div>
           <div className={styles.catalogList}>
             {isLoading && (
               <div className={styles.catalogState}>
-                <span className={styles.loadingMark} />
+                <CircularProgress size={18} aria-hidden="true" />
                 读取契约…
               </div>
             )}
             {!isLoading && loadError && (
-              <div className={styles.catalogError}>
+              <Alert severity="error" className={styles.catalogError}>
                 <strong>OpenAPI 不可用</strong>
                 <span>{loadError}</span>
-                <button type="button" className={styles.textButton} onClick={() => void loadDocument()}>
+                <Button variant="text" type="button" onClick={() => void loadDocument()}>
                   重试 ↗
-                </button>
-              </div>
+                </Button>
+              </Alert>
             )}
             {!isLoading && !loadError && groupedEntries.length === 0 && (
               <div className={styles.catalogState}>没有匹配接口</div>
@@ -1913,7 +1932,7 @@ export default function ApiConsolePage() {
                 <div className={styles.catalogGroup} key={tag}>
                   <span className={styles.groupLabel}>{displayTag(tag)}</span>
                   {group.map((entry) => (
-                    <button
+                    <Button
                       type="button"
                       key={entry.key}
                       className={`${styles.operationItem} ${entry.key === selectedKey ? styles.operationCurrent : ""}`}
@@ -1925,7 +1944,7 @@ export default function ApiConsolePage() {
                         <small>{entry.operation.summary ?? entry.operation.operationId}</small>
                       </span>
                       {entry.operation["x-internal"] && <span className={styles.internalBadge}>内部</span>}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               ))}
@@ -1938,7 +1957,7 @@ export default function ApiConsolePage() {
         <section className={styles.workspace} aria-label="请求编辑和响应">
           {isLoading && (
             <div className={styles.emptyPanel}>
-              <span className={styles.loadingMark} />
+              <CircularProgress size={24} aria-hidden="true" />
               <strong>正在读取接口契约</strong>
               <p>目录、参数和响应结构会从 OpenAPI 自动出现。</p>
             </div>
@@ -1948,9 +1967,9 @@ export default function ApiConsolePage() {
               <span className={styles.errorMark}>!</span>
               <strong>无法载入调试面板</strong>
               <p>{loadError}</p>
-              <button type="button" className={styles.primaryButton} onClick={() => void loadDocument()}>
+              <Button variant="contained" type="button" onClick={() => void loadDocument()}>
                 重新载入 ↗
-              </button>
+              </Button>
             </div>
           )}
           {!isLoading && !loadError && !selectedEntry && (
@@ -2003,9 +2022,9 @@ export default function ApiConsolePage() {
                   </div>
                   <div className={styles.panelHeaderActions}>
                     <span className={styles.contractHint}>来自 OpenAPI</span>
-                    <button type="button" className={styles.secondaryButton} onClick={resetRequest}>
+                    <Button variant="outlined" type="button" onClick={resetRequest}>
                       重置
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 {parameterLocations.map(
@@ -2035,7 +2054,8 @@ export default function ApiConsolePage() {
                     {bodyContentTypes(selectedEntry.operation).length > 1 && (
                       <label className={styles.contentTypeSelect}>
                         <span>Content-Type</span>
-                        <select
+                        <TextField
+                          select
                           value={contentType}
                           onChange={(event) => {
                             const next = seedRequestState(selectedEntry, event.target.value);
@@ -2045,13 +2065,13 @@ export default function ApiConsolePage() {
                             setFile(null);
                           }}
                         >
-                          <option value="">选择类型</option>
+                          <MenuItem value="">选择类型</MenuItem>
                           {bodyContentTypes(selectedEntry.operation).map((type) => (
-                            <option key={type} value={type}>
+                            <MenuItem key={type} value={type}>
                               {type}
-                            </option>
+                            </MenuItem>
                           ))}
-                        </select>
+                        </TextField>
                       </label>
                     )}
                     {contentType !== "multipart/form-data" && bodySchema && (
@@ -2087,35 +2107,37 @@ export default function ApiConsolePage() {
                           <b>JSON Body</b>
                           <em>{contentType || "application/json"}</em>
                         </span>
-                        <textarea
+                        <TextField
+                          multiline
+                          minRows={10}
                           value={bodyText}
                           onChange={(event) => setBodyText(event.target.value)}
                           spellCheck={false}
-                          aria-label="JSON 请求体"
+                          slotProps={{ htmlInput: { "aria-label": "JSON 请求体" } }}
                         />
                       </label>
                     )}
                   </div>
                 )}
                 {requestError && (
-                  <div className={styles.requestError} role="alert">
-                    <strong>请求未发送</strong>
-                    <span>{requestError}</span>
-                  </div>
+                  <Alert severity="error" role="alert">
+                    请求未发送：{requestError}
+                  </Alert>
                 )}
                 <div className={styles.requestFooter}>
                   <div>
                     <span className={styles.safetyDot} />
                     当前请求不会修改 OpenAPI 契约
                   </div>
-                  <button
+                  <Button
+                    variant="contained"
                     type="button"
-                    className={styles.primaryButton}
+
                     onClick={() => void sendRequest()}
                     disabled={isSending}
                   >
                     {isSending ? "发送中…" : "发送请求 ↗"}
-                  </button>
+                  </Button>
                 </div>
               </section>
 
@@ -2127,35 +2149,39 @@ export default function ApiConsolePage() {
                   </div>
                   {response && (
                     <div className={styles.responseActions}>
-                      <button
+                      <Button
+                        variant="outlined"
                         type="button"
-                        className={styles.secondaryButton}
+
                         onClick={() => void copyValue(response.requestPreview, "请求内容")}
                       >
                         复制请求
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="outlined"
                         type="button"
-                        className={styles.secondaryButton}
+
                         onClick={() => void copyValue(responseContent, "响应内容")}
                       >
                         复制响应
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="outlined"
                         type="button"
-                        className={styles.secondaryButton}
+
                         onClick={() => void copyValue(response.curl, "cURL")}
                       >
                         复制 cURL
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="contained"
                         type="button"
-                        className={styles.primaryButton}
+
                         onClick={() => void sendRequest()}
                         disabled={isSending}
                       >
                         重新发送 ↗
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -2171,25 +2197,26 @@ export default function ApiConsolePage() {
                       {response.requestId && <span className={styles.requestId}>requestId · {response.requestId}</span>}
                     </div>
                     {response.errorCode && (
-                      <div className={styles.errorSummary} role="alert">
+                      <Alert severity="error" role="alert" className={styles.errorSummary}>
                         <strong>{response.errorCode}</strong>
                         <span>错误响应</span>
                         {response.errorDetails !== null && response.errorDetails !== undefined && (
                           <code>{formatJson(response.errorDetails)}</code>
                         )}
-                      </div>
+                      </Alert>
                     )}
                     <div className={styles.responseBody}>
                       <div className={styles.responseBlock}>
                         <div className={styles.subsectionTitle}>
                           <strong>JSON / Text</strong>
-                          <button
+                          <Button
+                            variant="text"
                             type="button"
-                            className={styles.textButton}
+
                             onClick={() => void copyValue(responseContent, "响应内容")}
                           >
                             复制
-                          </button>
+                          </Button>
                         </div>
                         <pre>{response.formatted}</pre>
                       </div>
@@ -2265,15 +2292,9 @@ export default function ApiConsolePage() {
               <span className={styles.eyebrow}>本地历史 LOCAL HISTORY</span>
               <h2>请求历史</h2>
             </div>
-            <button
-              type="button"
-              className={styles.iconButton}
-              onClick={clearHistory}
-              aria-label="清空请求历史"
-              title="清空历史"
-            >
-              ×
-            </button>
+            <IconButton onClick={clearHistory} aria-label="清空请求历史" title="清空历史">
+              <DeleteOutlineIcon fontSize="small" />
+            </IconButton>
           </div>
           <p className={styles.historyIntro}>只保存在当前浏览器。Authorization、Cookie、API Key 默认不会保存。</p>
           {history.length === 0 ? (
@@ -2285,7 +2306,7 @@ export default function ApiConsolePage() {
           ) : (
             <div className={styles.historyList}>
               {history.map((item) => (
-                <button type="button" className={styles.historyItem} key={item.id} onClick={() => restoreHistory(item)}>
+                <Button type="button" className={styles.historyItem} key={item.id} onClick={() => restoreHistory(item)}>
                   <div>
                     <span className={`${styles.method} ${styles[`method${item.method}`]}`}>{item.method}</span>
                     <strong>{item.path}</strong>
@@ -2301,7 +2322,7 @@ export default function ApiConsolePage() {
                       minute: "2-digit",
                     }).format(new Date(item.at))}
                   </time>
-                </button>
+                </Button>
               ))}
             </div>
           )}

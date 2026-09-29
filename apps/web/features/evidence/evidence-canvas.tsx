@@ -1,5 +1,7 @@
 "use client";
 
+import { Alert, Button, Chip } from "@mui/material";
+
 import type { ReactNode } from "react";
 import { RevisionExport, type RevisionExportStatus } from "./revision-export";
 
@@ -51,15 +53,90 @@ export function EvidenceCanvas({
   onToggleTrace,
   trace,
   showSubmit,
-  onSubmit
+  onSubmit,
 }: EvidenceCanvasProps) {
-  return <div className="evidence-canvas">
-    <div className="evidence-head"><div><div className="eyebrow">图表产物</div><h2>{title}</h2></div><span className={`result-status ${status}`}><i />{statusLabel}</span></div>
-    <div className="chart-stage">{chart}</div>
-    <div className="finding"><span className="eyebrow">发现</span><p>{finding}</p></div>
-    <div className="evidence-proof"><div><span>数据快照</span><strong>{snapshotId.slice(0, 8)}</strong></div><div><span>指标</span><strong>{metricName ?? "—"}</strong></div><div><span>版本</span><strong>R{revisionNumber}</strong></div></div>
-    {qualityWarnings.length > 0 && <div className="quality-warning" role="status"><strong>质量</strong><span>{qualityWarnings.slice(0, 3).join("；")}</span></div>}
-    <div className="result-actions"><button type="button" className="primary-button" onClick={onEdit} disabled={!canEdit}>编辑图表 <span>↗</span></button><button type="button" className="secondary-button" onClick={onToggleTrace}>{showTrace ? "收起依据" : "查看依据"}</button><RevisionExport revisionId={revisionId} revision={revisionNumber} status={status} />{showSubmit && <button type="button" className="secondary-button" onClick={onSubmit}>提交审核</button>}</div>
-    {showTrace && <div className="trace-grid"><div><span>变换计划</span><strong>{trace.transformStepCount} 步</strong><small>{trace.transformRationale}</small></div><div><span>字段血缘</span><strong>{trace.lineageCount} 个输出</strong><small>{trace.lineageText}</small></div><div><span>校验</span><strong>{trace.validationValue}</strong><small>{trace.validationDetail}</small></div><div><span>不可变</span><strong>{trace.immutableValue}</strong><small>{trace.immutableDetail}</small></div></div>}
-  </div>;
+  return (
+    <div className="evidence-canvas">
+      <div className="evidence-head">
+        <div>
+          <div className="eyebrow">图表产物</div>
+          <h2>{title}</h2>
+        </div>
+        <Chip
+          label={statusLabel}
+          color={
+            status === "approved"
+              ? "success"
+              : status === "changes_requested"
+                ? "error"
+                : status === "in_review"
+                  ? "warning"
+                  : "default"
+          }
+        />
+      </div>
+      <div className="chart-stage">{chart}</div>
+      <div className="finding">
+        <span className="eyebrow">发现</span>
+        <p>{finding}</p>
+      </div>
+      <div className="evidence-proof">
+        <div>
+          <span>数据快照</span>
+          <strong>{snapshotId.slice(0, 8)}</strong>
+        </div>
+        <div>
+          <span>指标</span>
+          <strong>{metricName ?? "—"}</strong>
+        </div>
+        <div>
+          <span>版本</span>
+          <strong>R{revisionNumber}</strong>
+        </div>
+      </div>
+      {qualityWarnings.length > 0 && (
+        <Alert severity="warning" role="status">
+          质量：{qualityWarnings.slice(0, 3).join("；")}
+        </Alert>
+      )}
+      <div className="result-actions">
+        <Button variant="contained" type="button" onClick={onEdit} disabled={!canEdit}>
+          编辑图表 <span>↗</span>
+        </Button>
+        <Button variant="outlined" type="button" onClick={onToggleTrace}>
+          {showTrace ? "收起依据" : "查看依据"}
+        </Button>
+        <RevisionExport revisionId={revisionId} revision={revisionNumber} status={status} />
+        {showSubmit && (
+          <Button variant="outlined" type="button" onClick={onSubmit}>
+            提交审核
+          </Button>
+        )}
+      </div>
+      {showTrace && (
+        <div className="trace-grid">
+          <div>
+            <span>变换计划</span>
+            <strong>{trace.transformStepCount} 步</strong>
+            <small>{trace.transformRationale}</small>
+          </div>
+          <div>
+            <span>字段血缘</span>
+            <strong>{trace.lineageCount} 个输出</strong>
+            <small>{trace.lineageText}</small>
+          </div>
+          <div>
+            <span>校验</span>
+            <strong>{trace.validationValue}</strong>
+            <small>{trace.validationDetail}</small>
+          </div>
+          <div>
+            <span>不可变</span>
+            <strong>{trace.immutableValue}</strong>
+            <small>{trace.immutableDetail}</small>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

@@ -1,0 +1,44 @@
+{
+  "allJs": {
+    "files": 21,
+    "raw": 1148363,
+    "gzip": 353619
+  },
+  "allCss": {
+    "files": 6,
+    "raw": 106318,
+    "gzip": 18725
+  },
+  "routes": {
+    "login": {
+      "files": 11,
+      "raw": 725910,
+      "gzip": 221386
+    },
+    "workbench": {
+      "files": 13,
+      "raw": 863328,
+      "gzip": 261341
+    },
+    "account": {
+      "files": 12,
+      "raw": 745399,
+      "gzip": 228801
+    },
+    "memory": {
+      "files": 12,
+      "raw": 775350,
+      "gzip": 236826
+    },
+    "plugins": {
+      "files": 12,
+      "raw": 765723,
+      "gzip": 233574
+    },
+    "api-console": {
+      "files": 12,
+      "raw": 788647,
+      "gzip": 239098
+    }
+  }
+}

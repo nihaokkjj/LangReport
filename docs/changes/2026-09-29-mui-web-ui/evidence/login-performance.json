@@ -1,0 +1,147 @@
+{
+  "summary": {
+    "baseline": {
+      "samples": 5,
+      "domContentLoadedMs": 28,
+      "loadMs": 75.69999999925494,
+      "firstContentfulPaintMs": 40,
+      "editable": true,
+      "pageErrors": []
+    },
+    "mui": {
+      "samples": 5,
+      "domContentLoadedMs": 39.5,
+      "loadMs": 98.90000000223517,
+      "firstContentfulPaintMs": 52,
+      "editable": true,
+      "pageErrors": []
+    }
+  },
+  "runs": [
+    {
+      "variant": "baseline",
+      "warmup": true,
+      "domContentLoadedMs": 20.600000001490116,
+      "loadMs": 90.80000000074506,
+      "editable": true,
+      "errors": []
+    },
+    {
+      "variant": "mui",
+      "warmup": true,
+      "domContentLoadedMs": 24.600000001490116,
+      "loadMs": 122.39999999850988,
+      "firstContentfulPaintMs": 104,
+      "editable": true,
+      "errors": []
+    },
+    {
+      "variant": "mui",
+      "warmup": true,
+      "domContentLoadedMs": 37.80000000074506,
+      "loadMs": 97,
+      "firstContentfulPaintMs": 44,
+      "editable": true,
+      "errors": []
+    },
+    {
+      "variant": "baseline",
+      "warmup": true,
+      "domContentLoadedMs": 31.699999999254942,
+      "loadMs": 65.59999999776483,
+      "firstContentfulPaintMs": 36,
+      "editable": true,
+      "errors": []
+    },
+    {
+      "variant": "baseline",
+      "warmup": false,
+      "domContentLoadedMs": 28,
+      "loadMs": 63.600000001490116,
+      "firstContentfulPaintMs": 32,
+      "editable": true,
+      "errors": []
+    },
+    {
+      "variant": "mui",
+      "warmup": false,
+      "domContentLoadedMs": 46.899999998509884,
+      "loadMs": 95,
+      "firstContentfulPaintMs": 52,
+      "editable": true,
+      "errors": []
+    },
+    {
+      "variant": "mui",
+      "warmup": false,
+      "domContentLoadedMs": 23,
+      "loadMs": 112.5,
+      "firstContentfulPaintMs": 64,
+      "editable": true,
+      "errors": []
+    },
+    {
+      "variant": "baseline",
+      "warmup": false,
+      "domContentLoadedMs": 18.300000000745058,
+      "loadMs": 88.80000000074506,
+      "firstContentfulPaintMs": 52,
+      "editable": true,
+      "errors": []
+    },
+    {
+      "variant": "baseline",
+      "warmup": false,
+      "domContentLoadedMs": 19.100000001490116,
+      "loadMs": 97.19999999925494,
+      "firstContentfulPaintMs": 56,
+      "editable": true,
+      "errors": []
+    },
+    {
+      "variant": "mui",
+      "warmup": false,
+      "domContentLoadedMs": 39.5,
+      "loadMs": 98.90000000223517,
+      "firstContentfulPaintMs": 44,
+      "editable": true,
+      "errors": []
+    },
+    {
+      "variant": "mui",
+      "warmup": false,
+      "domContentLoadedMs": 40.899999998509884,
+      "loadMs": 90.80000000074506,
+      "firstContentfulPaintMs": 48,
+      "editable": true,
+      "errors": []
+    },
+    {
+      "variant": "baseline",
+      "warmup": false,
+      "domContentLoadedMs": 33,
+      "loadMs": 67.20000000298023,
+      "firstContentfulPaintMs": 40,
+      "editable": true,
+      "errors": []
+    },
+    {
+      "variant": "baseline",
+      "warmup": false,
+      "domContentLoadedMs": 30.599999997764826,
+      "loadMs": 75.69999999925494,
+      "firstContentfulPaintMs": 36,
+      "editable": true,
+      "errors": []
+    },
+    {
+      "variant": "mui",
+      "warmup": false,
+      "domContentLoadedMs": 25.899999998509884,
+      "loadMs": 122.60000000149012,
+      "firstContentfulPaintMs": 68,
+      "editable": true,
+      "errors": []
+    }
+  ]
+}

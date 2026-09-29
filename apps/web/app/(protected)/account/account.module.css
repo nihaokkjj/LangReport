@@ -21,7 +21,7 @@
 }
 
 .backLink {
-  color: var(--body);
+  color: var(--ink-muted);
   font-size: 14px;
   text-decoration: none;
 }
@@ -41,10 +41,10 @@
 }
 
 .eyebrow {
-  color: var(--body-mid);
+  color: var(--ink-subtle);
   font-family: var(--font-mono);
   font-size: 12px;
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
 }
 
 .heading h1 {
@@ -63,11 +63,13 @@
   text-decoration: none;
 }
 
-.memoryLink:hover { text-decoration: underline; }
+.memoryLink:hover {
+  text-decoration: underline;
+}
 
 .card {
   display: grid;
-  grid-template-columns: minmax(180px, .72fr) minmax(0, 1.28fr);
+  grid-template-columns: minmax(180px, 0.72fr) minmax(0, 1.28fr);
   gap: 32px;
   border: 1px solid var(--border-soft);
   border-radius: 12px;
@@ -83,9 +85,8 @@
   padding-right: 24px;
 }
 
-.label,
-.form label span {
-  color: var(--body);
+.label {
+  color: var(--ink-muted);
   font-size: 14px;
   font-weight: 500;
 }
@@ -105,77 +106,6 @@
   margin: 0 0 2px;
   font-size: 20px;
   font-weight: 600;
-}
-
-.form label {
-  display: grid;
-  gap: 8px;
-}
-
-.form input {
-  width: 100%;
-  min-height: 48px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--canvas);
-  padding: 0 12px;
-  color: var(--ink);
-  font: inherit;
-}
-
-.form input:focus {
-  border-color: var(--primary);
-  outline: 2px solid var(--primary);
-  outline-offset: 3px;
-}
-
-.error,
-.success {
-  margin: 0;
-  border-left: 3px solid;
-  padding: 10px 12px;
-  font-size: 14px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.error {
-  border-color: var(--danger);
-  background: var(--danger-soft);
-  color: var(--ink);
-}
-
-.success {
-  border-color: var(--success);
-  background: var(--success-soft);
-  color: var(--ink);
-}
-
-.submit {
-  min-height: 48px;
-  justify-self: start;
-  border: 1px solid var(--primary);
-  border-radius: 12px;
-  background: var(--primary);
-  padding: 0 20px;
-  color: var(--on-primary);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color .16s ease, border-color .16s ease;
-}
-
-.submit:not(:disabled):hover,
-.submit:not(:disabled):active {
-  border-color: var(--primary-active);
-  background: var(--primary-active);
-}
-
-.submit:disabled {
-  border-color: var(--border);
-  background: var(--surface-muted);
-  color: var(--ink-muted);
-  cursor: not-allowed;
 }
 
 @media (max-width: 640px) {
@@ -203,11 +133,5 @@
 
   .heading h1 {
     font-size: 28px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .submit {
-    transition: none;
   }
 }

@@ -1,5 +1,8 @@
 "use client";
 
+import CloseIcon from "@mui/icons-material/Close";
+import { Alert, Button, IconButton, Paper } from "@mui/material";
+
 import { useEffect, useRef } from "react";
 import type { Cell } from "../../features/chart-editor/chart-editor-state";
 import type {
@@ -148,20 +151,19 @@ export function SnapshotPreviewModal({
   }, [onClose]);
   const selectedSummary = summaries.find((summary) => summary.id === selectedSnapshotId) ?? null;
   return (
-    <section
+    <Paper
+      component="section"
       className="right-drawer-view snapshot-preview-view"
-      role="dialog"
-      aria-modal="true"
+      role="region"
       aria-labelledby="snapshot-preview-title"
-      aria-describedby="snapshot-preview-description"
     >
       <div className="modal-head snapshot-preview-head">
         <div>
           <h2 id="snapshot-preview-title">查看数据</h2>
         </div>
-        <button ref={closeButtonRef} type="button" className="icon-button" aria-label="关闭数据预览" onClick={onClose}>
-          ×
-        </button>
+        <IconButton ref={closeButtonRef} aria-label="关闭数据预览" onClick={onClose}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
       </div>
       <div className="snapshot-preview-layout">
         <aside className="snapshot-version-panel" aria-label="Snapshot 版本列表">
@@ -177,7 +179,7 @@ export function SnapshotPreviewModal({
           ) : (
             <div className="snapshot-version-list">
               {summaries.map((summary) => (
-                <button
+                <Button
                   type="button"
                   className={`snapshot-version-item ${summary.id === selectedSnapshotId ? "selected" : ""}`}
                   aria-pressed={summary.id === selectedSnapshotId}
@@ -191,20 +193,20 @@ export function SnapshotPreviewModal({
                     </small>
                   </span>
                   <time>{formatDate(summary.createdAt)}</time>
-                </button>
+                </Button>
               ))}
             </div>
           )}
         </aside>
         <div className="snapshot-preview-content">
           {status === "error" && (
-            <div className="snapshot-preview-error" role="alert">
+            <Alert severity="error" role="alert" sx={{ alignItems: "flex-start" }}>
               <strong>预览暂时无法读取</strong>
               <span>{error ?? "请稍后重试。"}</span>
-              <button type="button" className="secondary-button" onClick={onRetry}>
+              <Button variant="outlined" type="button" onClick={onRetry}>
                 重新加载
-              </button>
-            </div>
+              </Button>
+            </Alert>
           )}
           {status === "loading-detail" && (
             <div className="snapshot-preview-state" role="status">
@@ -256,6 +258,6 @@ export function SnapshotPreviewModal({
           )}
         </div>
       </div>
-    </section>
+    </Paper>
   );
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, TextField } from "@mui/material";
 import { apiFetch, formatApiError, jsonHeaders } from "../../../../lib/http-client";
 import styles from "./memory.module.css";
 
@@ -56,6 +57,8 @@ type ProjectUsage = {
   admittedAt: string;
   completedAt: string | null;
 };
+type DeleteTarget =
+  { kind: "preference"; record: Preference } | { kind: "project-memory"; record: ProjectMemory; projectId: string };
 
 const memoryTypes: Array<{ value: ProjectMemory["memoryType"]; label: string }> = [
   { value: "business_rule", label: "业务规则" },
@@ -114,6 +117,7 @@ export default function MemorySettingsPage() {
   const [projectUsage, setProjectUsage] = useState<ProjectUsage[]>([]);
   const [showPreferenceUsage, setShowPreferenceUsage] = useState(false);
   const [showProjectUsage, setShowProjectUsage] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -182,7 +186,11 @@ export default function MemorySettingsPage() {
       await apiFetch("/api/v1/me/preferences", {
         method: "POST",
         headers: jsonHeaders,
-        body: JSON.stringify({ category: preferenceCategory, statement: preferenceStatement.trim(), value: {} }),
+        body: JSON.stringify({
+          category: availablePreferenceCategory,
+          statement: preferenceStatement.trim(),
+          value: {},
+        }),
       });
       setPreferenceStatement("");
       setNotice("个人偏好已保存，只对当前账号可见。");
@@ -219,7 +227,7 @@ export default function MemorySettingsPage() {
   }
 
   async function deletePreference(preference: Preference) {
-    if (!window.confirm("删除后，该偏好的所有历史正文和派生引用都会清除。继续删除？")) return;
+    if (isMutating) return;
     setIsMutating(true);
     setActionError(null);
     try {
@@ -229,6 +237,7 @@ export default function MemorySettingsPage() {
         body: JSON.stringify({ expectedVersion: preference.version }),
       });
       setNotice("个人偏好及其历史正文已清除。");
+      setDeleteTarget(null);
       refresh();
     } catch (error) {
       setActionError(errorText(error));
@@ -313,26 +322,35 @@ export default function MemorySettingsPage() {
     }
   }
 
-  async function deleteProjectMemory(memory: ProjectMemory) {
-    if (
-      !projectId ||
-      !window.confirm("删除后，该 Project Memory 将停止注入；项目中的原始对话和报告会继续保留。继续删除？")
-    )
-      return;
+  async function deleteProjectMemory(memory: ProjectMemory, targetProjectId: string) {
+    if (isMutating) return;
     setIsMutating(true);
     setActionError(null);
     try {
-      await apiFetch(`/api/v1/projects/${encodeURIComponent(projectId)}/memories/${encodeURIComponent(memory.id)}`, {
-        method: "DELETE",
-        headers: jsonHeaders,
-        body: JSON.stringify({ expectedVersion: memory.version }),
-      });
+      await apiFetch(
+        `/api/v1/projects/${encodeURIComponent(targetProjectId)}/memories/${encodeURIComponent(memory.id)}`,
+        {
+          method: "DELETE",
+          headers: jsonHeaders,
+          body: JSON.stringify({ expectedVersion: memory.version }),
+        },
+      );
       setNotice("Project Memory 已撤销，旧来源不会重新激活它。");
+      setDeleteTarget(null);
       refresh();
     } catch (error) {
       setActionError(errorText(error));
     } finally {
       setIsMutating(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget || isMutating) return;
+    if (deleteTarget.kind === "preference") {
+      await deletePreference(deleteTarget.record);
+    } else {
+      await deleteProjectMemory(deleteTarget.record, deleteTarget.projectId);
     }
   }
 
@@ -409,6 +427,9 @@ export default function MemorySettingsPage() {
   const unusedCategories = categories.filter(
     (category) => !preferences.some((preference) => preference.category === category.value),
   );
+  const availablePreferenceCategory = unusedCategories.some((category) => category.value === preferenceCategory)
+    ? preferenceCategory
+    : (unusedCategories[0]?.value ?? "");
 
   return (
     <main className={styles.page}>
@@ -426,28 +447,28 @@ export default function MemorySettingsPage() {
             <span className={styles.eyebrow}>MEMORY SETTINGS</span>
             <h1>记忆设置</h1>
           </div>
-          <button type="button" className={styles.secondaryButton} onClick={refresh} disabled={isLoading || isMutating}>
+          <Button type="button" variant="outlined" onClick={refresh} disabled={isLoading || isMutating}>
             刷新
-          </button>
+          </Button>
         </div>
         <p className={styles.intro}>
           长期记忆需要你明确确认。个人偏好与 Project Memory 分开保存；删除个人偏好会清除全部历史正文，删除 Project
           Memory 会撤销后续使用。
         </p>
         {pageError && (
-          <p className={styles.error} role="alert">
+          <Alert severity="error" role="alert">
             {pageError}
-          </p>
+          </Alert>
         )}
         {actionError && (
-          <p className={styles.error} role="alert">
+          <Alert severity="error" role="alert">
             {actionError}
-          </p>
+          </Alert>
         )}
         {notice && (
-          <p className={styles.success} role="status">
+          <Alert severity="success" role="status">
             {notice}
-          </p>
+          </Alert>
         )}
 
         <section className={styles.panel} aria-labelledby="preference-title">
@@ -464,36 +485,37 @@ export default function MemorySettingsPage() {
           <form className={styles.createForm} onSubmit={(event) => void submitPreference(event)} aria-busy={isMutating}>
             <label className={styles.field}>
               <span>偏好类别</span>
-              <select
-                value={preferenceCategory}
+              <TextField
+                select
+                value={availablePreferenceCategory}
                 onChange={(event) => setPreferenceCategory(event.target.value as Preference["category"])}
                 disabled={unusedCategories.length === 0 || isMutating}
               >
-                {unusedCategories.length === 0 && <option value="">所有类别都已设置</option>}
+                {unusedCategories.length === 0 && <MenuItem value="">所有类别都已设置</MenuItem>}
                 {unusedCategories.map((category) => (
-                  <option key={category.value} value={category.value}>
+                  <MenuItem key={category.value} value={category.value}>
                     {category.label}
-                  </option>
+                  </MenuItem>
                 ))}
-              </select>
+              </TextField>
             </label>
             <label className={styles.field}>
               <span>偏好内容</span>
-              <input
+              <TextField
                 value={preferenceStatement}
                 onChange={(event) => setPreferenceStatement(event.target.value)}
-                maxLength={1000}
+                slotProps={{ htmlInput: { maxLength: 1000 } }}
                 required
                 placeholder="例如：回答使用简体中文，语气简洁"
               />
             </label>
-            <button
-              className={styles.primaryButton}
+            <Button
+              variant="contained"
               type="submit"
               disabled={isMutating || unusedCategories.length === 0 || !preferenceStatement.trim()}
             >
               {isMutating ? "保存中…" : "确认添加"}
-            </button>
+            </Button>
           </form>
           {isLoading ? (
             <p className={styles.empty}>正在读取个人偏好…</p>
@@ -513,27 +535,23 @@ export default function MemorySettingsPage() {
                     </div>
                     {editingPreferenceId === preference.id ? (
                       <div className={styles.inlineEdit}>
-                        <input
+                        <TextField
                           value={editingPreferenceStatement}
                           onChange={(event) => setEditingPreferenceStatement(event.target.value)}
-                          maxLength={1000}
-                          aria-label="编辑个人偏好"
+                          slotProps={{ htmlInput: { maxLength: 1000, "aria-label": "编辑个人偏好" } }}
+                          sx={{ flex: "1 1 260px" }}
                         />
-                        <button
+                        <Button
                           type="button"
-                          className={styles.primaryButton}
+                          variant="contained"
                           disabled={isMutating || !editingPreferenceStatement.trim()}
                           onClick={() => void savePreference(preference)}
                         >
                           保存新版本
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.textButton}
-                          onClick={() => setEditingPreferenceId(null)}
-                        >
+                        </Button>
+                        <Button type="button" variant="text" onClick={() => setEditingPreferenceId(null)}>
                           取消
-                        </button>
+                        </Button>
                       </div>
                     ) : (
                       <p className={styles.statement}>{preference.statement}</p>
@@ -541,33 +559,39 @@ export default function MemorySettingsPage() {
                   </div>
                   {editingPreferenceId !== preference.id && (
                     <div className={styles.actions}>
-                      <button
+                      <Button
                         type="button"
-                        className={styles.textButton}
+                        variant="text"
                         onClick={() => {
                           setEditingPreferenceId(preference.id);
                           setEditingPreferenceStatement(preference.statement);
                         }}
                       >
                         编辑
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className={styles.dangerButton}
+                        variant="text"
+                        color="error"
                         disabled={isMutating}
-                        onClick={() => void deletePreference(preference)}
+                        onClick={() => setDeleteTarget({ kind: "preference", record: preference })}
                       >
                         删除
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </li>
               ))}
             </ul>
           )}
-          <button type="button" className={styles.historyToggle} onClick={() => void togglePreferenceUsage()}>
+          <Button
+            type="button"
+            variant="text"
+            sx={{ justifySelf: "start" }}
+            onClick={() => void togglePreferenceUsage()}
+          >
             {showPreferenceUsage ? "收起实际使用记录" : "查看个人偏好实际使用记录"}
-          </button>
+          </Button>
           {showPreferenceUsage && (
             <div className={styles.usageList}>
               {preferenceUsage.length === 0 ? (
@@ -598,9 +622,10 @@ export default function MemorySettingsPage() {
               <span className={styles.eyebrow}>PROJECT · 成员可见</span>
               <h2 id="project-memory-title">Project Memory</h2>
             </div>
-            <label className={styles.projectSelect}>
-              <span className={styles.visuallyHidden}>选择 Project</span>
-              <select
+            <div className={styles.projectSelect}>
+              <TextField
+                select
+                label="选择 Project"
                 value={projectId}
                 onChange={(event) => {
                   setProjectId(event.target.value);
@@ -610,25 +635,26 @@ export default function MemorySettingsPage() {
                 disabled={projects.length === 0 || isMutating}
               >
                 {projects.map((project) => (
-                  <option value={project.id} key={project.id}>
+                  <MenuItem value={project.id} key={project.id}>
                     {project.name}
-                  </option>
+                  </MenuItem>
                 ))}
-                {projects.length === 0 && <option value="">没有可访问的 Project</option>}
-              </select>
-            </label>
+                {projects.length === 0 && <MenuItem value="">没有可访问的 Project</MenuItem>}
+              </TextField>
+            </div>
           </div>
           <p className={styles.panelNote}>
             Project Memory 可被该项目中有权限的成员读取。确认后会作为项目长期规则；临时要求应留在当前 Task。
           </p>
-          <button
+          <Button
             type="button"
-            className={styles.historyToggle}
+            variant="text"
+            sx={{ justifySelf: "start" }}
             onClick={() => void toggleProjectUsage()}
             disabled={!projectId}
           >
             {showProjectUsage ? "收起实际使用记录" : "查看 Project Memory 实际使用记录"}
-          </button>
+          </Button>
           {showProjectUsage && (
             <div className={styles.usageList}>
               {projectUsage.length === 0 ? (
@@ -663,44 +689,45 @@ export default function MemorySettingsPage() {
             >
               <label className={styles.field}>
                 <span>记忆键</span>
-                <input
+                <TextField
                   value={projectMemoryKey}
                   onChange={(event) => setProjectMemoryKey(event.target.value)}
-                  maxLength={160}
+                  slotProps={{ htmlInput: { maxLength: 160 } }}
                   required
                   placeholder="例如：metric.revenue.tax_rule"
                 />
               </label>
               <label className={styles.field}>
                 <span>类别</span>
-                <select
+                <TextField
+                  select
                   value={projectMemoryType}
                   onChange={(event) => setProjectMemoryType(event.target.value as ProjectMemory["memoryType"])}
                 >
                   {memoryTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
+                    <MenuItem key={type.value} value={type.value}>
                       {type.label}
-                    </option>
+                    </MenuItem>
                   ))}
-                </select>
+                </TextField>
               </label>
               <label className={`${styles.field} ${styles.wideField}`}>
                 <span>已确认规则或事实</span>
-                <input
+                <TextField
                   value={projectMemoryStatement}
                   onChange={(event) => setProjectMemoryStatement(event.target.value)}
-                  maxLength={2000}
+                  slotProps={{ htmlInput: { maxLength: 2000 } }}
                   required
                   placeholder="写入后将在本 Project 内持续生效"
                 />
               </label>
-              <button
-                className={styles.primaryButton}
+              <Button
+                variant="contained"
                 type="submit"
                 disabled={isMutating || !projectId || !projectMemoryKey.trim() || !projectMemoryStatement.trim()}
               >
                 {isMutating ? "保存中…" : "确认添加"}
-              </button>
+              </Button>
             </form>
           )}
           {!projectId ? (
@@ -725,23 +752,23 @@ export default function MemorySettingsPage() {
                     </div>
                     {editingMemoryId === memory.id ? (
                       <div className={styles.inlineEdit}>
-                        <input
+                        <TextField
                           value={editingMemoryStatement}
                           onChange={(event) => setEditingMemoryStatement(event.target.value)}
-                          maxLength={2000}
-                          aria-label="编辑 Project Memory"
+                          slotProps={{ htmlInput: { maxLength: 2000, "aria-label": "编辑 Project Memory" } }}
+                          sx={{ flex: "1 1 260px" }}
                         />
-                        <button
+                        <Button
                           type="button"
-                          className={styles.primaryButton}
+                          variant="contained"
                           disabled={isMutating || !editingMemoryStatement.trim()}
                           onClick={() => void saveProjectMemory(memory)}
                         >
                           保存新版本
-                        </button>
-                        <button type="button" className={styles.textButton} onClick={() => setEditingMemoryId(null)}>
+                        </Button>
+                        <Button type="button" variant="text" onClick={() => setEditingMemoryId(null)}>
                           取消
-                        </button>
+                        </Button>
                       </div>
                     ) : (
                       <p className={styles.statement}>{memory.statement}</p>
@@ -768,22 +795,22 @@ export default function MemorySettingsPage() {
                           ))
                         )}
                         <div className={styles.asOfForm}>
-                          <label>
-                            <span>按业务有效时间查询</span>
-                            <input
-                              type="datetime-local"
-                              value={asOfInput}
-                              onChange={(event) => setAsOfInput(event.target.value)}
-                            />
-                          </label>
-                          <button
+                          <TextField
+                            label="按业务有效时间查询"
+                            type="datetime-local"
+                            value={asOfInput}
+                            onChange={(event) => setAsOfInput(event.target.value)}
+                            slotProps={{ inputLabel: { shrink: true } }}
+                            sx={{ width: "auto" }}
+                          />
+                          <Button
                             type="button"
-                            className={styles.textButton}
+                            variant="text"
                             disabled={!asOfInput}
                             onClick={() => void queryAsOf(memory)}
                           >
                             查询
-                          </button>
+                          </Button>
                         </div>
                         {asOfResult !== undefined && (
                           <p className={styles.asOfResult}>
@@ -797,30 +824,33 @@ export default function MemorySettingsPage() {
                   </div>
                   {editingMemoryId !== memory.id && (
                     <div className={styles.actions}>
-                      <button
+                      <Button
                         type="button"
-                        className={styles.textButton}
+                        variant="text"
                         onClick={() => {
                           setEditingMemoryId(memory.id);
                           setEditingMemoryStatement(memory.statement);
                         }}
                       >
                         编辑
-                      </button>
-                      <button type="button" className={styles.textButton} onClick={() => void changeConflict(memory)}>
+                      </Button>
+                      <Button type="button" variant="text" onClick={() => void changeConflict(memory)}>
                         {memory.conflictStatus === "disputed" ? "解除冲突" : "标记冲突"}
-                      </button>
-                      <button type="button" className={styles.textButton} onClick={() => void toggleHistory(memory)}>
+                      </Button>
+                      <Button type="button" variant="text" onClick={() => void toggleHistory(memory)}>
                         {historyMemoryId === memory.logicalMemoryId ? "收起历史" : "版本历史"}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className={styles.dangerButton}
+                        variant="text"
+                        color="error"
                         disabled={isMutating}
-                        onClick={() => void deleteProjectMemory(memory)}
+                        onClick={() =>
+                          projectId && setDeleteTarget({ kind: "project-memory", record: memory, projectId })
+                        }
                       >
                         删除
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </li>
@@ -829,6 +859,33 @@ export default function MemorySettingsPage() {
           )}
         </section>
       </div>
+      <Dialog
+        open={deleteTarget !== null}
+        onClose={() => {
+          if (!isMutating) setDeleteTarget(null);
+        }}
+        aria-labelledby="memory-delete-title"
+      >
+        <DialogTitle id="memory-delete-title">
+          {deleteTarget?.kind === "preference" ? "删除个人偏好" : "删除 Project Memory"}
+        </DialogTitle>
+        <DialogContent>
+          <p>
+            {deleteTarget?.kind === "preference"
+              ? `将删除“${deleteTarget.record.statement}”及其全部历史正文和派生引用。此操作无法撤销。`
+              : `将撤销“${deleteTarget?.record.statement ?? ""}”后续注入；原始对话和报告会保留。`}
+          </p>
+          {actionError && <Alert severity="error">{actionError}</Alert>}
+        </DialogContent>
+        <DialogActions>
+          <Button variant="text" onClick={() => setDeleteTarget(null)} disabled={isMutating}>
+            取消
+          </Button>
+          <Button variant="contained" color="error" onClick={() => void confirmDelete()} disabled={isMutating}>
+            {isMutating ? "删除中…" : "确认删除"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </main>
   );
 }
