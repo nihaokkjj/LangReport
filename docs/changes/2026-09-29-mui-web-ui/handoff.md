@@ -16,6 +16,7 @@
 - MUI 9.4.0、Next 16.3.3、React 19.2.8；通用控件静态扫描无原生 button/select/textarea、旧 dialog 或 `window.confirm`，仅保留隐藏文件 input。
 - 最终四视口 E2E：60 passed、4 skipped（真实同源 HTTPS 后端条件），原始输出见 [e2e-final.log](./evidence/e2e-final.log)，无 hydration/MUI 告警。Web unit 24/24、typecheck、test:typecheck、build、docs:check、git diff --check 通过。
 - 本地 `main` 合并后已重新运行 Web `typecheck`、`test:typecheck`、unit（24/24）、生产 build、`docs:check` 和四视口 E2E（60 passed / 4 skipped），均通过；原有 `apps/web/next-env.d.ts` 字节在 Next.js 自动改写后恢复。E2E 的 mock 登出场景会向未启动的本地 API 代理输出 `ECONNREFUSED` 日志，但该用例各视口通过；这不代表真实 HTTPS 后端已验证。
+- 用户截图反馈的登录输入框双橙色聚焦边框已在统一 MUI 主题中修正：保留外层 `2px` 橙色焦点环，聚焦内层 fieldset 使用 `1px` 中性色。Chromium 在 390px 和 1440px 点击账号、密码框均验证只剩一层橙色；Web typecheck 通过。
 - `evidence/capture.log` 是中途截图脚本误把空表单的登录提交按钮预期为可用时产生的历史失败日志；测试改为等待账号输入可用后，最终完整 E2E 与四视口登录截图均通过，以 `e2e-final.log` 为准。
 - 六类页面每类四视口共 24 张截图见 [截图索引](./evidence/README.md)；独立验证见 [test-report.md](./test-report.md)。全量 Prettier 检查命中 20 个本次未改的旧文件，本次改动文件已单独格式化。
 - [TP-09 同基线性能对照](./performance.md)完成：全量静态 JS gzip 251,294→353,619 B；六路由引用 JS 各增加 77–87 KB gzip。本地登录 FCP 中位数 40→52 ms，首次输入 5/5 可操作、无 `pageerror`。体积代价明显，实际部署 Web Vitals 仍需观察。
