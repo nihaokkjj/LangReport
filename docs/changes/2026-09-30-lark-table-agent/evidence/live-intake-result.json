@@ -1,0 +1,102 @@
+{
+  "startedAt": "2026-10-02T08:38:58.190Z",
+  "cliVersion": "1.0.97",
+  "profile": "langreport",
+  "fixture": "synthetic XLSX only",
+  "apiTransport": "Fastify inject; real multipart handler, local DB/S3, real CLI and model",
+  "authentication": "local owner context supplied to in-process verification app; Feishu OAuth verified separately",
+  "checks": [
+    "multipart 202",
+    "remote import",
+    "real model decisions",
+    "non-first sheet",
+    "row-3 header",
+    "duplicate column position",
+    "001 text preserved",
+    "numeric cells preserved",
+    "totals excluded",
+    "immutable snapshot published",
+    "public status succeeds and hides remote reference"
+  ],
+  "sourceBytes": 17943,
+  "projectId": "d1985ca8-5662-4177-bd6c-957af3e29ff1",
+  "conversationId": "7e59db19-5252-45bf-8f3b-f7c8ef079d23",
+  "uploadHttpStatus": 202,
+  "intakeJobId": "3640c1cb-b28a-4df4-90b5-1289dbc5063c",
+  "assetId": "3c698afd-9b9c-4c95-8152-cdbced0f8128",
+  "status": "succeeded",
+  "errorCode": null,
+  "errorMessage": null,
+  "remoteReferenceSaved": true,
+  "importTicketSaved": true,
+  "trace": [
+    {
+      "step": 0,
+      "action": {
+        "range": null,
+        "action": "inspect_sheet",
+        "sheetId": "1ckwky"
+      },
+      "rowCount": 7,
+      "observedRange": "A1:F7"
+    },
+    {
+      "step": 1,
+      "action": {
+        "range": "A3:F6",
+        "action": "select_table",
+        "reason": "第3行为真实列名，第4至6行是连续数据；排除第1行标题、第2行空行和第7行合计。B、C两列重名“销售额”按实际列位置保留并由工具分配唯一标识。",
+        "sheetId": "1ckwky"
+      }
+    }
+  ],
+  "modelInvocations": [
+    {
+      "status": "received",
+      "modelId": "qwen3.8-27b",
+      "inputTokens": 1083,
+      "outputTokens": 23,
+      "routeFingerprint": "686ef4e47c560c2e01ce225c07a6ebe6a4f2dc2fca2a44d653a7b35ccf517821"
+    },
+    {
+      "status": "received",
+      "modelId": "qwen3.8-27b",
+      "inputTokens": 1282,
+      "outputTokens": 85,
+      "routeFingerprint": "686ef4e47c560c2e01ce225c07a6ebe6a4f2dc2fca2a44d653a7b35ccf517821"
+    }
+  ],
+  "snapshotId": "0f276375-28b7-461c-82aa-4fb929b9484d",
+  "columns": ["编号", "销售额 [B]", "销售额 [C]", "区域", "月份", "利润"],
+  "rows": [
+    {
+      "编号": "001",
+      "销售额 [B]": 100,
+      "销售额 [C]": 120,
+      "区域": "华东",
+      "月份": "2026-01",
+      "利润": 20
+    },
+    {
+      "编号": "002",
+      "销售额 [B]": 200,
+      "销售额 [C]": 230,
+      "区域": "华南",
+      "月份": "2026-01",
+      "利润": 30
+    },
+    {
+      "编号": "003",
+      "销售额 [B]": 150,
+      "销售额 [C]": 170,
+      "区域": "华东",
+      "月份": "2026-02",
+      "利润": 25
+    }
+  ],
+  "sheetTitle": "销售明细",
+  "selectedRange": "A3:F6",
+  "revision": "0",
+  "passed": true,
+  "finishedAt": "2026-10-02T08:39:15.177Z"
+}

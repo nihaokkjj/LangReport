@@ -557,3 +557,4 @@ function textValue(value: unknown): string | null {
 function providerErrorMessage(_error: unknown, fallback: string): string {
   return fallback;
 }
+export * from "./table-agent.js";

@@ -8,6 +8,8 @@ import {
 } from "@langreport/contracts";
 import {
   createBailianQwenGateway,
+  freezeTableAgentRoute,
+  planTableAction,
   decryptWorkspaceModelCredential,
   encryptWorkspaceModelCredential,
   ModelCredentialEncryptionError,
@@ -26,6 +28,55 @@ const baseEnvironment = {
   BAILIAN_STRUCTURED_OUTPUT: "json_schema",
   BAILIAN_TEMPERATURE: "0.1",
 };
+
+test("table Agent route survives JSONB key order changes; model receives only the bounded observation", async () => {
+  const frozen = freezeTableAgentRoute(resolveModelRouteSnapshot(baseEnvironment));
+  const reordered = Object.fromEntries(Object.entries(frozen).reverse()) as typeof frozen;
+  const calls: unknown[] = [];
+  const decision = await planTableAction({
+    route: reordered,
+    context: { filename: "sales.xlsx", sheets: [], observations: [] },
+    apiKey: "worker-only-secret",
+    signal: new AbortController().signal,
+    deadlineAt: Date.now() + 5000,
+    recordInvocation: async (value) => {
+      calls.push(value);
+    },
+    fetcher: async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.response_format.json_schema.name, "table_agent_v1");
+      assert.ok(!JSON.stringify(body).includes("worker-only-secret"));
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: JSON.stringify({ action: "clarify", question: "选择哪张表？" }) },
+            },
+          ],
+          usage: { prompt_tokens: 110, completion_tokens: 15 },
+        }),
+        { status: 200 },
+      );
+    },
+  });
+  assert.equal(decision.action, "clarify");
+  assert.equal((calls[0] as { inputTokens: number }).inputTokens, 110);
+  await assert.rejects(
+    planTableAction({
+      route: { ...frozen, modelId: "tampered" },
+      context: {},
+      apiKey: "key",
+      signal: new AbortController().signal,
+      deadlineAt: Date.now() + 5000,
+      recordInvocation: async () => {},
+      fetcher: async () => {
+        throw new Error("must not be called");
+      },
+    }),
+    /版本已变化/,
+  );
+});
 
 test("freezes a non-secret Bailian JSON Schema route and rejects incomplete production config", () => {
   const route = resolveModelRouteSnapshot(baseEnvironment, capturedAt);

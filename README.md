@@ -39,6 +39,7 @@ Consulting Project
 - [Phase 4 设计与实施](./docs/history/phase4-design.md)
 - [Phase 5 设计与实施](./docs/history/phase5-design.md)
 - [开发环境](./docs/operations/development-setup.md)
+- [飞书 CLI 表格 Agent 配置与限额](./docs/operations/lark-table-intake.md)
 - [ECS 发布与真实百炼门禁](./docs/operations/deploy-ecs.md)
 - [登录网关变更设计](./docs/changes/2026-09-22-login-gateway/proposal.md)
 - [数据库账号管理变更设计](./docs/changes/2026-09-26-database-user-accounts/proposal.md)

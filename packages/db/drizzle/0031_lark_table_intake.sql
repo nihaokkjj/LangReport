@@ -1,0 +1,30 @@
+CREATE TABLE "data_intake_jobs" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "asset_id" uuid NOT NULL REFERENCES "data_assets"("id") ON DELETE CASCADE,
+  "project_id" uuid NOT NULL REFERENCES "projects"("id") ON DELETE CASCADE,
+  "workspace_id" uuid NOT NULL,
+  "source_conversation_id" uuid NOT NULL,
+  "created_by" text NOT NULL,
+  "snapshot_id" uuid NOT NULL,
+  "source_name" text NOT NULL,
+  "source_type" text NOT NULL CHECK ("source_type" IN ('csv', 'xlsx')),
+  "mime_type" text NOT NULL,
+  "size_bytes" integer NOT NULL,
+  "source_object_key" text NOT NULL,
+  "normalized_object_key" text NOT NULL,
+  "table_hint" text DEFAULT '' NOT NULL,
+  "status" text DEFAULT 'queued' NOT NULL CHECK ("status" IN ('queued', 'running', 'succeeded', 'failed', 'needs_clarification')),
+  "is_new_asset" boolean NOT NULL,
+  "model_route" jsonb NOT NULL,
+  "connection" jsonb NOT NULL,
+  "remote_token" text,
+  "audit" jsonb DEFAULT '{}'::jsonb NOT NULL,
+  "error_code" text,
+  "error_message" text,
+  "execution_token" uuid,
+  "deadline_at" timestamptz,
+  "created_at" timestamptz DEFAULT now() NOT NULL,
+  "finished_at" timestamptz
+);
+--> statement-breakpoint
+CREATE INDEX "data_intake_jobs_status_created_idx" ON "data_intake_jobs" ("status", "created_at");

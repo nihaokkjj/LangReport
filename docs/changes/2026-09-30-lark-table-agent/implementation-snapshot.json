@@ -1,0 +1,166 @@
+{
+  "base": "1e279bc63d8300e31b839c4c45b33fdbfae0cbc4",
+  "createdAt": "2026-09-30T11:22:15.827Z",
+  "files": [
+    {
+      "path": "apps/api/package.json",
+      "sha256": "41ffc46d3a36c1705980b7f5f14f30d622e5e20b34524e36f2652cf54042abc9"
+    },
+    {
+      "path": "apps/api/src/data-assets.ts",
+      "sha256": "2e248f5b2f7407a55ab39be34c68a8f2d3fb053617953bf24dccf851510f7c43"
+    },
+    {
+      "path": "apps/api/src/routes.ts",
+      "sha256": "34aaf50687e9dbdc0692835e4ec92cc65c79987d7bb5d8a5be55b9d200598535"
+    },
+    {
+      "path": "apps/api/src/table-intake.ts",
+      "sha256": "1be1b15385cdbb2135cd7025f1f890d4f93f4335175549911e4feb8083d1ff00"
+    },
+    {
+      "path": "apps/api/test/integration/table-intake.integration.test.ts",
+      "sha256": "0bf3fff0e4a9a607e4bd7d1a65a6022be900b4987ff7e14f9714926065ee6efd"
+    },
+    {
+      "path": "apps/generation-worker/package.json",
+      "sha256": "769c821d7756d6a757914b30b1e7b59a18f99d52a33b80c72e92d989354d864f"
+    },
+    {
+      "path": "apps/generation-worker/src/index.ts",
+      "sha256": "24bd7efa5589dc3f6cc94b1f1c1252c1c1dfa7ea90eb6eccbdc57c565da1044a"
+    },
+    {
+      "path": "apps/generation-worker/src/table-intake.ts",
+      "sha256": "b8565464dbaa03c790b4a08fe90cb92ffed563211379408febe3b0499b221191"
+    },
+    {
+      "path": "apps/web/app/(protected)/page.tsx",
+      "sha256": "32360c3e86f1760932c6d72c279849d888e815484b27bd7a09d108c7605c04bd"
+    },
+    {
+      "path": "apps/web/app/globals.css",
+      "sha256": "3936e61dc34c442fadc6d33820ef16eac03c590f3a336d2e5cf7bd4f1c98a6e3"
+    },
+    {
+      "path": "apps/web/features/data-snapshot/data-asset-panel.tsx",
+      "sha256": "77d61d8756879f27880febc6f127212bf83cc32db4f1b1c0a4e8ffc97034b513"
+    },
+    {
+      "path": "apps/web/features/data-snapshot/table-intake.ts",
+      "sha256": "f83287aaed0876d1ed49521f68b39895301c85e604b4fab11f5377fd9378a107"
+    },
+    {
+      "path": "apps/web/features/project/use-project-server-state.ts",
+      "sha256": "f0279e63469b6e8b95aa751093b4b85e0a2bff79013af418854e120fb359c906"
+    },
+    {
+      "path": "apps/web/test/e2e/consulting-report.spec.ts",
+      "sha256": "3f5bf42ee582626b927889f77c8328e3f8a97f613c003e2baff1b4c4c35c26da"
+    },
+    {
+      "path": "package.json",
+      "sha256": "6a888bb55881d8c55977568ed9c4a59de08578800898410bf9bb4100f9fb908b"
+    },
+    {
+      "path": "packages/contracts/src/http.ts",
+      "sha256": "efc1859940642541843700115e84759aebc49904793f7882b05ce68e67b2a702"
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "sha256": "09eef6d1560a61dcd43d36f0a2920cd75c4428881fae58bc9f78620a928a7ee0"
+    },
+    {
+      "path": "packages/contracts/src/table-agent.ts",
+      "sha256": "9add4dfd8a57660ada2ea21d57e4c2db14f922595b04c155bd64e17c30e356cf"
+    },
+    {
+      "path": "packages/contracts/test/unit/http.test.ts",
+      "sha256": "9ef483d46f9e559d3d134c4c8a1b258079c658240093c3c31652103ff2a2abeb"
+    },
+    {
+      "path": "packages/db/drizzle/0031_lark_table_intake.sql",
+      "sha256": "c1b7091f7470de7bd01ba28e4058363dbecf2103fcf47a91dde7cb273ad39e8f"
+    },
+    {
+      "path": "packages/db/drizzle/meta/_journal.json",
+      "sha256": "637cae6f6116e46459ea3ac63e8d8893cc27365f0a3ef30bdbff595f2564b04d"
+    },
+    {
+      "path": "packages/db/src/schema.ts",
+      "sha256": "e3f8dbc3b113f409b6e695610173e9f24da1b4ec5949da3670cf08b58c581e89"
+    },
+    {
+      "path": "packages/generation/src/index.ts",
+      "sha256": "c67c5fbc7840d1b81f98ba03b903cf57a626e0c46137982549e2997e7cfc17da"
+    },
+    {
+      "path": "packages/generation/test/unit/index.test.ts",
+      "sha256": "cb3411698b1413985310f0ab934c0c3cf229a2710b4135208fae7e42e61b7527"
+    },
+    {
+      "path": "packages/lark-data/package.json",
+      "sha256": "03545137be2bfbb21fc19639693893d0ab949b0f0435756482e55e7fc3deb186"
+    },
+    {
+      "path": "packages/lark-data/src/check.ts",
+      "sha256": "101c4efc71165eb8b71e23b6cd2d9efefdf9a67c2c80c001f3e67d75118fcffb"
+    },
+    {
+      "path": "packages/lark-data/src/cli.ts",
+      "sha256": "cdb96f45dbaa3d19803aeb248439bcffb572ed27282a95f2a8a48291204d10e5"
+    },
+    {
+      "path": "packages/lark-data/src/index.ts",
+      "sha256": "68b8623e7301034d5e29a0eb53d1da692fb945ba1bd1b643a3c0225d0504da9d"
+    },
+    {
+      "path": "packages/lark-data/src/table-agent.ts",
+      "sha256": "9ba5452d0262ac815df98824a547ff910399c64550ae9de0d99184a98a5fe773"
+    },
+    {
+      "path": "packages/lark-data/test/unit/table-agent.test.ts",
+      "sha256": "ccbe1f75aa94bf3f0e7cb1e3eaebcd3c0798cc55b8622a2d22aae7f8e6798e53"
+    },
+    {
+      "path": "packages/lark-data/tsconfig.json",
+      "sha256": "96877be49c836acb8e4fd2d3a1c0e35a156a9fdf386a86ab1bccc23fe1b4a42e"
+    },
+    {
+      "path": "packages/model-gateway/src/index.ts",
+      "sha256": "377d8fa602858f7eb1b169e3231f72e41a1a1f13192908b751618dbc8fb92c0e"
+    },
+    {
+      "path": "packages/model-gateway/src/table-agent.ts",
+      "sha256": "6d2ca4c9efbb8635e048626047f5116a05f242153eb10bbb86eec35f7f4f9891"
+    },
+    {
+      "path": "packages/model-gateway/test/unit/index.test.ts",
+      "sha256": "1fb7d4f711990b646ce0747a31017b00aceb4003af13fd5c350809fd62a03a9f"
+    },
+    {
+      "path": "packages/storage/src/index.ts",
+      "sha256": "92e102536c3ee71e615688afaae44ccd17f7fb7652d4252a8a5d534706e3bdff"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "f500c5fff7018e69f8c366337b918b1ce22bbb6be1ee7720120a48ca1a7e5926"
+    },
+    {
+      "path": "pnpm-workspace.yaml",
+      "sha256": "0bb482d3953b770bbe125c1ec215f6d433d1d9da402379bc458bd2294f4b6728"
+    },
+    {
+      "path": "scripts/integration-environment.mjs",
+      "sha256": "d8a223bc8903d52ce67e02f028320f6cc4990e44082ca403197ccc5a59766cf8"
+    },
+    {
+      "path": "scripts/test-integration.mjs",
+      "sha256": "de454501f7e4bfa37817c45956406233d9ee25d8899bb23f911e6889b5e1b34c"
+    },
+    {
+      "path": "scripts/test-offline.mjs",
+      "sha256": "e1bc0c7f31eaf3ece77e963df584d2fead31523af095240e99b9316d84c64a48"
+    }
+  ]
+}

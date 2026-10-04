@@ -17,6 +17,7 @@
     "typescript": "7.0.2"
   },
   "dependencies": {
+    "@langreport/lark-data": "workspace:*",
     "@langreport/contracts": "workspace:*",
     "@langreport/chart": "workspace:*",
     "@langreport/data-engine": "workspace:*",

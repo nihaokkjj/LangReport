@@ -1,0 +1,25 @@
+{
+  "name": "@langreport/lark-data",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx --test test/unit/*.test.ts",
+    "test:typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:coverage": "tsx --test --experimental-test-coverage test/unit/*.test.ts"
+  },
+  "dependencies": {
+    "@langreport/contracts": "workspace:*",
+    "@langreport/data-engine": "workspace:*",
+    "@larksuite/cli": "1.0.97"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.0",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2"
+  }
+}

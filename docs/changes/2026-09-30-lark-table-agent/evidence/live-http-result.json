@@ -1,0 +1,169 @@
+{
+  "startedAt": "2026-10-02T08:57:49.288Z",
+  "passed": true,
+  "scope": "running localhost API + background Worker + real CLI/model + chart renderer",
+  "authentication": "short-lived local test JWT signed in memory; normal API verification; password login not retested",
+  "projectId": "d1985ca8-5662-4177-bd6c-957af3e29ff1",
+  "assetId": "3c698afd-9b9c-4c95-8152-cdbced0f8128",
+  "checks": [
+    "normal API JWT/account authorization",
+    "running API returned 202 with lark provider",
+    "background Worker completed real import",
+    "new immutable snapshot has 3 rows and 6 columns",
+    "old snapshot preserved",
+    "001 and duplicate columns preserved",
+    "chart created from new snapshot",
+    "plan and render validations passed",
+    "profit y field has source lineage to 利润 only",
+    "regional sums exactly 45 and 30",
+    "PNG exported with authenticated API"
+  ],
+  "intakeJobId": "32f858cc-4a62-41e0-934b-623e48a0efe2",
+  "intakeStatus": "succeeded",
+  "intakeError": null,
+  "snapshotId": "2ba94693-4a14-4dda-8fb4-499fe23b7f78",
+  "generationJobId": "a672626b-3c25-47a6-8e5f-bd88b40d91dd",
+  "generationStatus": "succeeded",
+  "generationError": null,
+  "revisionId": "9c7c2e50-12a9-4d49-a82a-3cbe9adaeadb",
+  "transformPlan": {
+    "steps": [
+      {
+        "kind": "aggregate",
+        "groupBy": ["区域"],
+        "measures": [
+          {
+            "column": "利润",
+            "operation": "sum",
+            "outputColumn": "利润合计"
+          }
+        ]
+      },
+      {
+        "kind": "sort",
+        "column": "利润合计",
+        "direction": "desc"
+      }
+    ],
+    "version": "v1",
+    "rationale": "用户明确要求按区域汇总利润并绘制柱状图，且不使用时间维度分组；因此仅对“区域”做 groupBy，并对“利润”执行 sum 聚合得到 Y 轴指标。销售额字段明确排除在计算之外。",
+    "expectedColumns": ["区域", "利润合计"]
+  },
+  "fieldLineage": [
+    {
+      "operation": "source",
+      "stepIndex": -1,
+      "outputColumn": "区域",
+      "sourceColumns": ["区域"],
+      "directInputColumns": ["区域"]
+    },
+    {
+      "operation": "aggregate:sum",
+      "stepIndex": 0,
+      "outputColumn": "利润合计",
+      "sourceColumns": ["利润"],
+      "directInputColumns": ["利润"]
+    }
+  ],
+  "flintSpec": {
+    "data": {
+      "values": [
+        {
+          "区域": "华东",
+          "利润合计": 45
+        },
+        {
+          "区域": "华南",
+          "利润合计": 30
+        }
+      ]
+    },
+    "theme": "economist",
+    "version": "v1",
+    "chartSpec": {
+      "title": "按区域利润合计（2026-01至2026-02）",
+      "baseSize": {
+        "width": 920,
+        "height": 520
+      },
+      "subtitle": "按区域查看利润合计",
+      "chartType": "Bar Chart",
+      "encodings": {
+        "x": {
+          "type": "nominal",
+          "field": "区域"
+        },
+        "y": {
+          "type": "quantitative",
+          "field": "利润合计"
+        }
+      }
+    },
+    "themeConfig": {},
+    "themeVersion": "project-v1",
+    "semanticTypes": {
+      "区域": "Category",
+      "利润合计": "Quantity"
+    }
+  },
+  "previewData": {
+    "rows": [
+      {
+        "区域": "华东",
+        "利润合计": 45
+      },
+      {
+        "区域": "华南",
+        "利润合计": 30
+      }
+    ],
+    "steps": [
+      {
+        "kind": "aggregate",
+        "columns": ["区域", "利润合计"],
+        "stepIndex": 0,
+        "inputRowCount": 3,
+        "outputRowCount": 2
+      },
+      {
+        "kind": "sort",
+        "columns": ["区域", "利润合计"],
+        "stepIndex": 1,
+        "inputRowCount": 2,
+        "outputRowCount": 2
+      }
+    ],
+    "columns": ["区域", "利润合计"]
+  },
+  "planValidation": {
+    "errors": [],
+    "status": "passed",
+    "checkedAt": "2026-10-02T08:58:13.543Z",
+    "validatorVersion": "plan-validator-v1"
+  },
+  "renderValidation": {
+    "errors": [],
+    "status": "passed",
+    "checkedAt": "2026-10-02T08:58:14.849Z",
+    "validatorVersion": "flint-render-v1+langreport-static-svg-html-v1"
+  },
+  "finishedAt": "2026-10-02T08:58:15.022Z",
+  "intakeModelInvocations": [
+    {
+      "status": "received",
+      "modelId": "qwen3.8-27b",
+      "inputTokens": 1067,
+      "outputTokens": 23,
+      "routeFingerprint": "686ef4e47c560c2e01ce225c07a6ebe6a4f2dc2fca2a44d653a7b35ccf517821"
+    },
+    {
+      "status": "received",
+      "modelId": "qwen3.8-27b",
+      "inputTokens": 1266,
+      "outputTokens": 58,
+      "routeFingerprint": "686ef4e47c560c2e01ce225c07a6ebe6a4f2dc2fca2a44d653a7b35ccf517821"
+    }
+  ],
+  "intakeDuration": "00:00:12.964372",
+  "chartPngSha256": "1446db017c71bd204cf01f4dba955ca60e55fd3760333dda8b2de04fc8088ba4"
+}

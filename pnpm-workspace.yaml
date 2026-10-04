@@ -2,4 +2,5 @@ packages:
   - apps/*
   - packages/*
 allowBuilds:
+  "@larksuite/cli": true
   esbuild: true

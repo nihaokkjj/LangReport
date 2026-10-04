@@ -2,6 +2,8 @@
   "name": "langreport",
   "private": true,
   "scripts": {
+    "lark": "pnpm --filter @langreport/lark-data exec lark-cli",
+    "lark:check": "pnpm --filter @langreport/lark-data exec tsx src/check.ts",
     "dev": "pnpm --parallel --filter @langreport/web --filter @langreport/api dev",
     "dev:all": "pnpm --parallel --filter @langreport/web --filter @langreport/api --filter @langreport/generation-worker --filter @langreport/render-worker dev",
     "build": "pnpm -r build",

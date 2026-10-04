@@ -5,6 +5,7 @@ import {
   jsonb,
   check,
   bigint,
+  boolean,
   pgEnum,
   pgTable,
   primaryKey,
@@ -236,6 +237,43 @@ export const dataSnapshots = pgTable(
     uniqueIndex("data_snapshots_asset_version_unique").on(table.assetId, table.version),
     index("data_snapshots_asset_idx").on(table.assetId),
   ],
+);
+
+export const dataIntakeJobs = pgTable(
+  "data_intake_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => dataAssets.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id").notNull(),
+    sourceConversationId: uuid("source_conversation_id").notNull(),
+    createdBy: text("created_by").notNull(),
+    snapshotId: uuid("snapshot_id").notNull(),
+    sourceName: text("source_name").notNull(),
+    sourceType: text("source_type").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sourceObjectKey: text("source_object_key").notNull(),
+    normalizedObjectKey: text("normalized_object_key").notNull(),
+    tableHint: text("table_hint").notNull().default(""),
+    status: text("status").notNull().default("queued"),
+    isNewAsset: boolean("is_new_asset").notNull(),
+    modelRoute: jsonb("model_route").notNull(),
+    connection: jsonb("connection").notNull(),
+    remoteToken: text("remote_token"),
+    audit: jsonb("audit").notNull().default({}),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    executionToken: uuid("execution_token"),
+    deadlineAt: timestamp("deadline_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (table) => [index("data_intake_jobs_status_created_idx").on(table.status, table.createdAt)],
 );
 
 export const conversations = pgTable(
