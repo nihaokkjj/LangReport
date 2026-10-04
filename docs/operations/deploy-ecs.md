@@ -13,7 +13,21 @@ chmod 600 .env.production
 
 填写强随机的 `POSTGRES_PASSWORD`、`S3_SECRET_KEY`、`AUTH_JWT_SECRET`，并将 `WEB_ORIGIN` 改为 Vercel 生产域名。设置 `AUTH_BOOTSTRAP_USERNAME` 和至少 15 个字符的随机 `AUTH_SHARED_DEFAULT_PASSWORD`；首次启动时，API 只会在 `users` 表为空时创建该账号。共享密码同时供 CLI 创建账号和重置密码使用，应通过部署 secret 管理，并且用户首次登录后应在账号页改密。不要把密码写入命令参数或 Git。迁移旧单账号数据库时，将旧 `AUTH_LOGIN_USER_ID` 填入 `AUTH_LEGACY_USER_ID`，让首次引导把原成员关系转给新账号。内置登录网关从 PostgreSQL 读取账号并签发 HS256 JWT，只通过 HttpOnly `langreport_session` Cookie 返回浏览器；默认有效期为 7 天，部署侧只允许缩短。
 
-## 2. 启动 API、基础服务和 Workers
+## 2. 初始化撤销账本并启动 API、基础服务和 Workers
+
+生产 Compose 要求预先存在 Docker external volume `langreport-memory-revocation-prod`。它位于同一 ECS，与 Postgres volume 分开；API 可读写，Workers 只读。该卷不经 MinIO、外部托管或新 IAM 身份，也不会由 `docker compose down -v` 清理。首次初始化前停掉 API、Nginx 和 Workers；确认没有待处理记忆提取后，依次执行：
+
+```sh
+docker volume create langreport-memory-revocation-prod
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml up -d postgres
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm --no-deps migrate
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm --no-deps api \
+  pnpm --filter @langreport/memory memory:revocation:init
+```
+
+`memory:revocation:init` 会从现有撤销、删除状态和来源抑制导入最小元数据；它不会复制记忆正文。初始化失败时不要启动 API 或 Workers。以上是部署操作说明，本轮没有在生产执行。
+
+完成初始化后启动全部服务：
 
 ```sh
 cd /opt/langreport
@@ -51,6 +65,22 @@ docker compose --env-file .env.production -f infra/docker-compose.prod.yml run -
 
 `db:verify` 只在目标数据库创建并删除 `migration_verify_*` 临时 schema，重放完整迁移链并检查历史 Phase 2–4 Job/Revision/Theme；生产发布仍需由运维确认备份、回滚窗口和数据库权限。
 
+## 4. PostgreSQL 备份恢复
+
+PostgreSQL 逻辑备份恢复时，必须保留 `langreport-memory-revocation-prod` 卷。先停止 API、Nginx 和两个 Worker，再恢复数据库并应用所需迁移；在任何 API 或 Worker 开放前执行账本重放：
+
+```sh
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml stop nginx generation-worker render-worker api
+<按已批准的运维备份流程恢复 PostgreSQL 逻辑备份>
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm --no-deps migrate
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm --no-deps api \
+  pnpm --filter @langreport/memory memory:revocation:replay
+docker compose --env-file .env.production -f infra/docker-compose.prod.yml up -d api generation-worker render-worker nginx
+curl --fail http://127.0.0.1:8080/ready
+```
+
+重放命令非零退出、账本卷缺失/损坏或 `/ready` 非 200 时，保持 API、Workers 和 Nginx 关闭并调查，不得初始化一个新空账本来绕过校验。应用 API 在监听前也会重放；Worker 依赖 API healthy 后才启动轮询。该设计保证 Postgres 逻辑备份恢复期间不复活已撤销记忆。整台 ECS 或包含账本卷的磁盘快照回滚可能同时回滚数据库与账本，不在保证范围内；若部署采用这种恢复方式，须另行批准独立存储或防回滚 anchor。
+
 首次部署完成后，先读取数据库生成的新账号 ID：
 
 ```sh
@@ -85,7 +115,7 @@ docker compose --env-file .env.production -f infra/docker-compose.prod.yml run -
 
 停用账号不会删除 Workspace/Project 数据；管理员重置密码和用户自助改密不会撤销已签发 JWT，各会话仍有效至原始 `exp`，最长 7 天。公开流量必须经过生产 Nginx/WAF 限速，不能直接暴露 API 端口。
 
-## 4. 第一阶段发布前真实百炼门禁
+## 5. 第一阶段发布前真实百炼门禁
 
 正式发布不能使用 `.env.production.example` 的 deterministic 默认值。发布环境必须先在应用仓库目录设置以下变量，并让它们与即将启动的 Generation Worker 使用同一套路由配置：
 
@@ -110,7 +140,7 @@ pnpm phase1:release-gate
 
 该命令会产生一次真实模型调用费用，应使用合成上下文和发布预算执行。业务质量、模型延迟和配额由运维另行监控，但认证和结构化响应门禁不能跳过。
 
-## 5. Phase 5 生产 Smoke 验收
+## 6. Phase 5 生产 Smoke 验收
 
 完成登录网关配置和数据库初始化后，在可访问 API 的环境执行一次：
 
@@ -137,7 +167,7 @@ pnpm phase5:e2e
 
 脚本会验证精确插件上下文、插件 Theme、Generation Worker → Render Worker → Revision、SVG 导出以及撤销后的历史快照保留；认证凭据不会打印。
 
-## 6. Vercel 环境变量
+## 7. Vercel 环境变量
 
 在 Vercel 的 Production 环境设置：
 

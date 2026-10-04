@@ -26,8 +26,18 @@ Copy-Item .env.example .env
 pnpm install
 pnpm infra:up
 pnpm db:push
+```
+
+记忆删除依赖独立撤销账本。启动应用前，在同一 PowerShell 会话中建立本机账本目录并显式初始化；该目录只存撤销元数据，不提交 Git：
+
+```powershell
+$env:MEMORY_REVOCATION_LEDGER_DIR = Join-Path (Get-Location) '.local\memory-revocations'
+New-Item -ItemType Directory -Force -Path $env:MEMORY_REVOCATION_LEDGER_DIR | Out-Null
+pnpm --filter @langreport/memory memory:revocation:init
 pnpm dev:all
 ```
+
+新 PowerShell 会话需重新设置 `MEMORY_REVOCATION_LEDGER_DIR`，或在本地 `.env` 中提供该绝对路径。应用启动不会自动创建账本；路径缺失、账本损坏或数据库重放未完成时，API 与 Workers 会保持关闭。
 
 首次使用空数据库时，在 `.env` 中配置 `AUTH_JWT_SECRET`、`AUTH_BOOTSTRAP_USERNAME`
 和至少 15 个字符的随机 `AUTH_SHARED_DEFAULT_PASSWORD`。API 首次启动会创建该账号；
