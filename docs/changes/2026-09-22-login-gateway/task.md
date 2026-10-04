@@ -3,7 +3,7 @@
 - 变更编号：`CHG-2026-09-22-login-gateway`
 - 状态：`VERIFYING`
 - 创建时间：2026-09-22
-- 更新时间：2026-09-22
+- 更新时间：2026-09-24
 
 ## 执行前提
 
@@ -23,7 +23,7 @@
 | T3 | 同步 Contracts、OpenAPI、API Console 和 Nginx 入口限速 | T2 | 可与 T4 后半并行 | 主 Agent | 已完成 | contract tests、`pnpm docs:check` | 路由契约完整、Console 可调试、登录入口有限速 |
 | T4 | 新增 Web 登录页、401 跳转和登出入口 | T2 | 可与 T3 后半并行 | 主 Agent | 已完成 | web typecheck、E2E | 登录/刷新/登出可用，密码不持久化，桌面/390px 可操作 |
 | T5 | 更新 Compose、env 示例、部署文档、哈希脚本和 Smoke | T3–T4 | 否 | 主 Agent | 已完成 | docs/check、smoke dry checks | 生产配置可复现，敏感值不进入输出 |
-| T6 | 独立验证、修复、验收和交接 | T1–T5 | 否 | 验证角色 + 主 Agent | 本地已完成；部署待验收 | test-plan 全部命令 | 本地场景通过；真实 HTTPS smoke 与用户验收待部署环境 |
+| T6 | 独立验证、修复、验收和交接 | T1–T5 | 否 | 验证角色 + 主 Agent | 本地已完成；真实 HTTPS smoke 按用户要求跳过 | test-plan 全部命令 | 本地场景通过；线上 Cookie 安全属性保留未验证风险 |
 | T7 | 移除开发身份绕过并统一登录跳转、配置和测试 | 用户范围调整 | 否 | 主 Agent | 已完成 | API/Web/contracts tests | 开发 `x-user-id` 返回 401，登录后 Cookie 可恢复身份，Web 所有环境均跳转登录 |
 
 ## 执行顺序
