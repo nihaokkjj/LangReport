@@ -6,19 +6,14 @@ import {
   dataAssets,
   dataSnapshots,
   db,
-  projects
+  projects,
 } from "@langreport/db";
-import {
-  DataParseError,
-  parseData,
-  type DataSourceType,
-  type ParsedTable
-} from "@langreport/data-engine";
+import { DataParseError, parseData, type DataSourceType, type ParsedTable } from "@langreport/data-engine";
 import {
   conversationUploadObjectKey,
   deleteObject as deleteStorageObject,
   putObject as putStorageObject,
-  snapshotSourceObjectKey
+  snapshotSourceObjectKey,
 } from "@langreport/storage";
 
 export const MAX_DATA_ASSET_BYTES = 50 * 1024 * 1024;
@@ -39,7 +34,9 @@ export type DataAssetErrorCode =
   | "SNAPSHOT_NOT_FOUND"
   | "SNAPSHOT_PREVIEW_UNAVAILABLE"
   | "SNAPSHOT_PERSIST_FAILED"
-  | "DATA_ASSET_CLEANUP_FAILED";
+  | "DATA_ASSET_CLEANUP_FAILED"
+  | "LARK_CONNECTION_FORBIDDEN"
+  | "LARK_NOT_CONFIGURED";
 
 const knownErrorCodes = new Set<DataAssetErrorCode>([
   "INVALID_INPUT",
@@ -56,7 +53,9 @@ const knownErrorCodes = new Set<DataAssetErrorCode>([
   "SNAPSHOT_NOT_FOUND",
   "SNAPSHOT_PREVIEW_UNAVAILABLE",
   "SNAPSHOT_PERSIST_FAILED",
-  "DATA_ASSET_CLEANUP_FAILED"
+  "DATA_ASSET_CLEANUP_FAILED",
+  "LARK_CONNECTION_FORBIDDEN",
+  "LARK_NOT_CONFIGURED",
 ]);
 
 const defaultStatusByCode: Record<DataAssetErrorCode, number> = {
@@ -74,7 +73,9 @@ const defaultStatusByCode: Record<DataAssetErrorCode, number> = {
   SNAPSHOT_NOT_FOUND: 404,
   SNAPSHOT_PREVIEW_UNAVAILABLE: 409,
   SNAPSHOT_PERSIST_FAILED: 500,
-  DATA_ASSET_CLEANUP_FAILED: 500
+  DATA_ASSET_CLEANUP_FAILED: 500,
+  LARK_CONNECTION_FORBIDDEN: 403,
+  LARK_NOT_CONFIGURED: 503,
 };
 
 /**
@@ -118,7 +119,7 @@ function toPublicSnapshot(snapshot: typeof dataSnapshots.$inferSelect): PublicDa
 export function toPublicDataAsset(
   asset: typeof dataAssets.$inferSelect,
   latestSnapshot: typeof dataSnapshots.$inferSelect | null,
-  sourceConversationDeleted = false
+  sourceConversationDeleted = false,
 ): PublicDataAsset {
   if (!latestSnapshot) return { ...asset, sourceConversationDeleted, latestSnapshot: null };
   return { ...asset, sourceConversationDeleted, latestSnapshot: toPublicSnapshot(latestSnapshot) };
@@ -151,14 +152,14 @@ type SnapshotPersistenceInput = {
   schema: ParsedTable["profiles"];
   preview: ParsedTable["preview"];
   sourceName: string;
-  sourceType: typeof dataAssetSourceType.enumValues[number];
+  sourceType: (typeof dataAssetSourceType.enumValues)[number];
   mimeType: string;
   sizeBytes: number;
   sourceObjectKey: string;
   normalizedObjectKey: string;
   assetMetadata: {
     name: string;
-    sourceType: typeof dataAssetSourceType.enumValues[number];
+    sourceType: (typeof dataAssetSourceType.enumValues)[number];
     mimeType: string;
     sizeBytes: number;
   };
@@ -215,10 +216,7 @@ const productionRepository: IntakeRepository = {
     const [conversation] = await db
       .select({ id: conversations.id })
       .from(conversations)
-      .where(and(
-        eq(conversations.id, conversationId),
-        eq(conversations.projectId, projectId)
-      ))
+      .where(and(eq(conversations.id, conversationId), eq(conversations.projectId, projectId)))
       .limit(1);
     return Boolean(conversation);
   },
@@ -257,21 +255,24 @@ const productionRepository: IntakeRepository = {
         .limit(1);
       const version = (latestSnapshot?.version ?? 0) + 1;
 
-      const [snapshot] = await transaction.insert(dataSnapshots).values({
-        id: input.snapshotId,
-        assetId: input.assetId,
-        version,
-        rowCount: input.rowCount,
-        columnCount: input.columnCount,
-        schema: input.schema,
-        preview: input.preview,
-        sourceName: input.assetMetadata.name,
-        sourceType: input.assetMetadata.sourceType,
-        mimeType: input.assetMetadata.mimeType,
-        sizeBytes: input.assetMetadata.sizeBytes,
-        sourceObjectKey: input.sourceObjectKey,
-        normalizedObjectKey: input.normalizedObjectKey
-      }).returning();
+      const [snapshot] = await transaction
+        .insert(dataSnapshots)
+        .values({
+          id: input.snapshotId,
+          assetId: input.assetId,
+          version,
+          rowCount: input.rowCount,
+          columnCount: input.columnCount,
+          schema: input.schema,
+          preview: input.preview,
+          sourceName: input.assetMetadata.name,
+          sourceType: input.assetMetadata.sourceType,
+          mimeType: input.assetMetadata.mimeType,
+          sizeBytes: input.assetMetadata.sizeBytes,
+          sourceObjectKey: input.sourceObjectKey,
+          normalizedObjectKey: input.normalizedObjectKey,
+        })
+        .returning();
       if (!snapshot) throw new Error("Snapshot 元数据保存失败");
 
       const [asset] = await transaction
@@ -280,7 +281,7 @@ const productionRepository: IntakeRepository = {
           ...input.assetMetadata,
           status: "ready",
           errorCode: null,
-          errorMessage: null
+          errorMessage: null,
         })
         .where(eq(dataAssets.id, input.assetId))
         .returning();
@@ -295,12 +296,12 @@ const productionRepository: IntakeRepository = {
       .update(dataAssets)
       .set({ status: "failed", errorCode: code, errorMessage: message })
       .where(eq(dataAssets.id, assetId));
-  }
+  },
 };
 
 const productionStorage = {
   putObject: putStorageObject,
-  deleteObject: deleteStorageObject
+  deleteObject: deleteStorageObject,
 };
 
 async function recordCleanupFailure(input: IntakeAuditInput): Promise<void> {
@@ -316,9 +317,9 @@ async function recordCleanupFailure(input: IntakeAuditInput): Promise<void> {
       phase: "cleanup",
       objectKind: input.objectKind,
       failureCode: input.failureCode,
-      cleanupCode: "DATA_ASSET_CLEANUP_FAILED"
+      cleanupCode: "DATA_ASSET_CLEANUP_FAILED",
     },
-    requestId: input.requestId
+    requestId: input.requestId,
   });
 }
 
@@ -413,7 +414,7 @@ export function createDataAssetIntake(dependencies: IntakeDependencies = {}) {
         conversationId: keyConversationId,
         assetId,
         snapshotId,
-        filename: normalizedName
+        filename: normalizedName,
       });
       const normalizedObjectKey = conversationUploadObjectKey({
         workspaceId: project.workspaceId,
@@ -421,7 +422,7 @@ export function createDataAssetIntake(dependencies: IntakeDependencies = {}) {
         conversationId: keyConversationId,
         assetId,
         kind: "normalized",
-        filename: `${snapshotId}.json`
+        filename: `${snapshotId}.json`,
       });
 
       if (!targetAsset) {
@@ -431,13 +432,13 @@ export function createDataAssetIntake(dependencies: IntakeDependencies = {}) {
             projectId: command.projectId,
             sourceConversationId: command.sourceConversationId,
             name: command.source.name.trim() || normalizedName,
-            sourceType: command.source.sourceType as typeof dataAssetSourceType.enumValues[number],
+            sourceType: command.source.sourceType as (typeof dataAssetSourceType.enumValues)[number],
             mimeType,
             sizeBytes: bytes.byteLength,
             status: "processing",
             errorCode: null,
             errorMessage: null,
-            createdBy: command.createdBy
+            createdBy: command.createdBy,
           });
         } catch (error) {
           throw persistenceFailure(error);
@@ -469,8 +470,14 @@ export function createDataAssetIntake(dependencies: IntakeDependencies = {}) {
           normalizedWritten = true;
           await storage.putObject({
             key: normalizedObjectKey,
-            body: JSON.stringify({ columns: parsed.columns, rows: parsed.rows }),
-            contentType: "application/json"
+            body: JSON.stringify({
+              columns: parsed.columns,
+              rows: parsed.rows,
+              parserVersion: parsed.parserVersion,
+              columnMapping: parsed.columnMapping,
+              warnings: parsed.warnings,
+            }),
+            contentType: "application/json",
           });
         } catch (error) {
           throw intakeError("SNAPSHOT_OBJECT_WRITE_FAILED", "Data Snapshot 暂时无法保存，请稍后重试", { cause: error });
@@ -486,17 +493,17 @@ export function createDataAssetIntake(dependencies: IntakeDependencies = {}) {
             schema: parsed.profiles,
             preview: parsed.preview,
             sourceName: command.source.name.trim() || normalizedName,
-            sourceType: command.source.sourceType as typeof dataAssetSourceType.enumValues[number],
+            sourceType: command.source.sourceType as (typeof dataAssetSourceType.enumValues)[number],
             mimeType,
             sizeBytes: bytes.byteLength,
             sourceObjectKey,
             assetMetadata: {
               name: command.source.name.trim() || normalizedName,
-              sourceType: command.source.sourceType as typeof dataAssetSourceType.enumValues[number],
+              sourceType: command.source.sourceType as (typeof dataAssetSourceType.enumValues)[number],
               mimeType,
-              sizeBytes: bytes.byteLength
+              sizeBytes: bytes.byteLength,
             },
-            normalizedObjectKey
+            normalizedObjectKey,
           });
         } catch (error) {
           throw persistenceFailure(error);
@@ -518,7 +525,7 @@ export function createDataAssetIntake(dependencies: IntakeDependencies = {}) {
           normalizedWritten,
           failureCode: failure.code,
           storage,
-          writeCleanupAudit
+          writeCleanupAudit,
         });
         if (!targetAsset) {
           try {
@@ -530,7 +537,7 @@ export function createDataAssetIntake(dependencies: IntakeDependencies = {}) {
         }
         throw failure;
       }
-    }
+    },
   };
 }
 
@@ -551,7 +558,7 @@ async function cleanupWrittenObjects(input: {
 }): Promise<void> {
   const objects: Array<{ kind: CleanupObjectKind; key: string; written: boolean }> = [
     { kind: "normalized", key: input.normalizedObjectKey, written: input.normalizedWritten },
-    { kind: "source", key: input.sourceObjectKey, written: input.sourceWritten }
+    { kind: "source", key: input.sourceObjectKey, written: input.sourceWritten },
   ];
 
   for (const object of objects) {
@@ -568,7 +575,7 @@ async function cleanupWrittenObjects(input: {
           actorId: input.actorId,
           requestId: input.requestId,
           objectKind: object.kind,
-          failureCode: input.failureCode
+          failureCode: input.failureCode,
         });
       } catch {
         // Audit is best-effort here; do not replace the original intake error.
@@ -616,15 +623,17 @@ export async function listDataAssets(projectId: string): Promise<PublicDataAsset
       .where(eq(dataAssets.projectId, projectId))
       .orderBy(desc(dataAssets.createdAt));
 
-    return Promise.all(assets.map(async ({ asset, sourceConversationId }) => {
-      const [latestSnapshot] = await db
-        .select()
-        .from(dataSnapshots)
-        .where(eq(dataSnapshots.assetId, asset.id))
-        .orderBy(desc(dataSnapshots.version))
-        .limit(1);
-      return toPublicDataAsset(asset, latestSnapshot ?? null, sourceConversationId === null);
-    }));
+    return Promise.all(
+      assets.map(async ({ asset, sourceConversationId }) => {
+        const [latestSnapshot] = await db
+          .select()
+          .from(dataSnapshots)
+          .where(eq(dataSnapshots.assetId, asset.id))
+          .orderBy(desc(dataSnapshots.version))
+          .limit(1);
+        return toPublicDataAsset(asset, latestSnapshot ?? null, sourceConversationId === null);
+      }),
+    );
   } catch (error) {
     if (error instanceof DataAssetError) throw error;
     throw new DataAssetError("数据资产暂时无法读取，请稍后重试", "DATA_ASSET_READ_FAILED", 500, { cause: error });

@@ -15,7 +15,11 @@ test("Fastify registers every route with its HTTP contract", async () => {
   await app.ready();
   try {
     for (const contract of routeContracts) {
-      assert.equal(app.hasRoute({ method: contract.method, url: contract.path }), true, `${contract.method} ${contract.path}`);
+      assert.equal(
+        app.hasRoute({ method: contract.method, url: contract.path }),
+        true,
+        `${contract.method} ${contract.path}`,
+      );
     }
   } finally {
     await app.close();
@@ -34,8 +38,14 @@ test("snapshot re-ingest contracts expose the target Asset path and multipart sh
   assert.ok(upload);
   assert.ok(paste);
   assert.equal(runtimeRouteSchema(upload).body, undefined);
-  assert.deepEqual(Object.keys((upload.request?.params as { properties: Record<string, unknown> }).properties).sort(), ["assetId", "projectId"]);
-  assert.deepEqual(Object.keys((paste.request?.params as { properties: Record<string, unknown> }).properties).sort(), ["assetId", "projectId"]);
+  assert.deepEqual(Object.keys((upload.request?.params as { properties: Record<string, unknown> }).properties).sort(), [
+    "assetId",
+    "projectId",
+  ]);
+  assert.deepEqual(Object.keys((paste.request?.params as { properties: Record<string, unknown> }).properties).sort(), [
+    "assetId",
+    "projectId",
+  ]);
 });
 
 test("database account contracts expose session identity and the current-password change route", () => {

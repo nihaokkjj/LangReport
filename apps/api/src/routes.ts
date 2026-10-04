@@ -112,7 +112,6 @@ import {
   getDataAsset,
   getDataAssetProjectId,
   getDataSnapshot,
-  inferSourceType,
   ingestDataAsset,
   listDataAssets,
   listDataSnapshots,
@@ -167,14 +166,6 @@ function assertGenerationDecisionMatchesParent(
 
 function assertProjectId(projectId: string): void {
   if (!projectIdPattern.test(projectId)) throw new DataAssetError("项目 ID 无效");
-}
-
-function multipartTextField(fields: Record<string, unknown>, name: string): string | undefined {
-  const raw = fields[name];
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  if (!value || typeof value !== "object" || !("value" in value)) return undefined;
-  const text = (value as { value?: unknown }).value;
-  return typeof text === "string" && text.trim() ? text.trim() : undefined;
 }
 
 export async function registerRoutes(
@@ -571,6 +562,23 @@ export async function registerRoutes(
     }
   });
 
+  app.get<{ Params: { projectId: string; intakeJobId: string } }>(
+    "/api/v1/projects/:projectId/data-intake-jobs/:intakeJobId",
+    async (request, reply) => {
+      try {
+        assertProjectId(request.params.projectId);
+        assertProjectId(request.params.intakeJobId);
+        const actorId = userIdFromRequest(request);
+        await assertChartAction(request.params.projectId, actorId, "manage_data");
+        return reply.send({
+          job: await getTableIntakeJob(request.params.projectId, request.params.intakeJobId, actorId),
+        });
+      } catch (error) {
+        return sendDataError(reply, error);
+      }
+    },
+  );
+
   app.post<{ Params: { projectId: string } }>(
     "/api/v1/projects/:projectId/data-assets/upload",
     async (request, reply) => {
@@ -579,26 +587,12 @@ export async function registerRoutes(
         await assertChartAction(request.params.projectId, userIdFromRequest(request), "manage_data");
         const part = await request.file();
         if (!part) return sendHttpError(reply, 400, "请上传文件", "INVALID_INPUT");
-        const bytes = await part.toBuffer();
-        if (part.file.truncated) return sendHttpError(reply, 413, "文件不能超过 50 MB", "DATA_ASSET_TOO_LARGE");
-        const sourceConversationId = multipartTextField(part.fields as Record<string, unknown>, "conversationId");
-        if (!sourceConversationId)
-          throw new DataAssetError("上传数据必须指定 Conversation", "SOURCE_CONVERSATION_INVALID");
-
-        const command: DataAssetIntakeCommand = {
+        const result = await ingestUploadedDataAsset(part, {
           projectId: request.params.projectId,
-          sourceConversationId,
           createdBy: userIdFromRequest(request),
           requestId: request.id,
-          source: {
-            name: part.filename,
-            sourceType: inferSourceType(part.filename, part.mimetype),
-            mimeType: part.mimetype,
-            bytes,
-          },
-        };
-        const asset = await ingestDataAsset(command);
-        return reply.code(201).send({ asset });
+        });
+        return reply.code("intakeJobId" in result ? 202 : 201).send(result);
       } catch (error) {
         return sendDataError(reply, error);
       }
@@ -640,26 +634,13 @@ export async function registerRoutes(
         await assertChartAction(request.params.projectId, userIdFromRequest(request), "manage_data");
         const part = await request.file();
         if (!part) return sendHttpError(reply, 400, "请上传文件", "INVALID_INPUT");
-        const bytes = await part.toBuffer();
-        if (part.file.truncated) return sendHttpError(reply, 413, "文件不能超过 50 MB", "DATA_ASSET_TOO_LARGE");
-        const sourceConversationId = multipartTextField(part.fields as Record<string, unknown>, "conversationId");
-        if (!sourceConversationId)
-          throw new DataAssetError("更新数据必须指定 Conversation", "SOURCE_CONVERSATION_INVALID");
-
-        const asset = await ingestDataAsset({
+        const result = await ingestUploadedDataAsset(part, {
           projectId: request.params.projectId,
-          sourceConversationId,
           createdBy: userIdFromRequest(request),
           requestId: request.id,
           target: { assetId: request.params.assetId },
-          source: {
-            name: part.filename,
-            sourceType: inferSourceType(part.filename, part.mimetype),
-            mimeType: part.mimetype,
-            bytes,
-          },
         });
-        return reply.code(201).send({ asset });
+        return reply.code("intakeJobId" in result ? 202 : 201).send(result);
       } catch (error) {
         return sendDataError(reply, error);
       }
@@ -2501,3 +2482,4 @@ function isDataAssetTooLargeValidation(error: Error): boolean {
     (issue) => issue.code === "too_big" && issue.path?.[0] === "content",
   );
 }
+import { getTableIntakeJob, ingestUploadedDataAsset } from "./table-intake.js";

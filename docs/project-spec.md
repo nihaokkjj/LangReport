@@ -108,6 +108,7 @@ Generation Job 状态同步由 `statusVersion/statusChangedAt` 表示用户可�
 | 我该用什么业务术语？ | [CONTEXT.md](../CONTEXT.md) |
 | 第一阶段做什么、不做什么？ | [phase1-consulting-report.md](./product/phase1-consulting-report.md) |
 | 当前代码有哪些模块？ | 本文件 |
+| CSV/Excel 如何通过 Agent 调用飞书 CLI？ | [配置与处理链路](./operations/lark-table-intake.md)，[ADR-0031](./adr/0031-lark-cli-table-intake.md) |
 | Agent 如何启动、循环和停止？ | [agent-loop-spec.md](./agent/agent-loop-spec.md) |
 | 为什么采用某个架构取舍？ | [docs/adr/](./adr/) |
 | 如何接收和执行一次中大型变更？ | [docs/changes/README.md](./changes/README.md) |

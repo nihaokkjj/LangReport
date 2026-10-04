@@ -40,6 +40,7 @@ const expectedRoutes = [
   "GET /api/v1/projects/:projectId/capabilities",
   "GET /api/v1/chart-revisions/:revisionId/plugin-context",
   "GET /api/v1/projects/:projectId/data-assets",
+  "GET /api/v1/projects/:projectId/data-intake-jobs/:intakeJobId",
   "POST /api/v1/projects/:projectId/data-assets/upload",
   "POST /api/v1/projects/:projectId/data-assets/paste",
   "POST /api/v1/projects/:projectId/data-assets/:assetId/snapshots/upload",

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   conversationQueryKeys,
   fetchConversationList,
-  fetchConversationMessages
+  fetchConversationMessages,
 } from "../conversation/conversation-queries";
 import { dataAssetQueryKeys, fetchDataAssetList } from "../data-snapshot/data-asset-queries";
 import { evidenceQueryKeys, fetchEvidenceList } from "../evidence/evidence-queries";
@@ -13,7 +13,7 @@ import {
   fetchMemoryContext,
   fetchMetricDefinition,
   fetchProjectTheme,
-  projectResourceQueryKeys
+  projectResourceQueryKeys,
 } from "./project-resource-queries";
 
 export function useProjectServerState(userId: string | null, projectId: string | null, conversationId: string | null) {
@@ -23,42 +23,43 @@ export function useProjectServerState(userId: string | null, projectId: string |
   const conversations = useQuery({
     queryKey: conversationQueryKeys.list(userId, projectId),
     queryFn: ({ signal }) => fetchConversationList(projectId as string, { signal }),
-    enabled: projectEnabled
+    enabled: projectEnabled,
   });
   const messages = useQuery({
     queryKey: conversationQueryKeys.messages(userId, conversationId),
     queryFn: ({ signal }) => fetchConversationMessages(conversationId as string, { signal }),
-    enabled: conversationEnabled
+    enabled: conversationEnabled,
   });
   const assets = useQuery({
     queryKey: dataAssetQueryKeys.list(userId, projectId),
     queryFn: ({ signal }) => fetchDataAssetList(projectId as string, { signal }),
-    enabled: projectEnabled
+    refetchInterval: (query) => (query.state.data?.some((asset) => asset.status === "processing") ? 2000 : false),
+    enabled: projectEnabled,
   });
   const evidence = useQuery({
     queryKey: evidenceQueryKeys.list(userId, projectId),
     queryFn: ({ signal }) => fetchEvidenceList(projectId as string, { signal }),
-    enabled: projectEnabled
+    enabled: projectEnabled,
   });
   const metric = useQuery({
     queryKey: projectResourceQueryKeys.metric(userId, projectId),
     queryFn: ({ signal }) => fetchMetricDefinition(projectId as string, { signal }),
-    enabled: projectEnabled
+    enabled: projectEnabled,
   });
   const brief = useQuery({
     queryKey: projectResourceQueryKeys.brief(userId, projectId),
     queryFn: ({ signal }) => fetchAnalysisBrief(projectId as string, { signal }),
-    enabled: projectEnabled
+    enabled: projectEnabled,
   });
   const memory = useQuery({
     queryKey: projectResourceQueryKeys.memory(userId, projectId),
     queryFn: ({ signal }) => fetchMemoryContext(projectId as string, { signal }),
-    enabled: projectEnabled
+    enabled: projectEnabled,
   });
   const theme = useQuery({
     queryKey: projectResourceQueryKeys.theme(userId, projectId),
     queryFn: ({ signal }) => fetchProjectTheme(projectId as string, { signal }),
-    enabled: projectEnabled
+    enabled: projectEnabled,
   });
 
   const queries = [conversations, assets, evidence, metric, brief, memory, theme];
@@ -74,6 +75,6 @@ export function useProjectServerState(userId: string | null, projectId: string |
     memory,
     theme,
     isPending: projectEnabled && queries.some((query) => query.isPending),
-    error
+    error,
   };
 }

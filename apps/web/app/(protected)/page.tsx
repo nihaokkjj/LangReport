@@ -1,5 +1,7 @@
 "use client";
 
+import { waitForTableIntake } from "../../features/data-snapshot/table-intake";
+
 import CloseIcon from "@mui/icons-material/Close";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
@@ -691,6 +693,14 @@ export default function Home() {
   const [isBooting, setIsBooting] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [tableHint, setTableHint] = useState("");
+  const intakeController = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      intakeController.current?.abort();
+    },
+    [projectId, authUserId],
+  );
   const [isSavingBrief, setIsSavingBrief] = useState(false);
   const [isSavingMetric, setIsSavingMetric] = useState(false);
   const [isSavingEditor, setIsSavingEditor] = useState(false);
@@ -1262,19 +1272,38 @@ export default function Home() {
   }
   async function uploadFile(file: File) {
     if (!projectId) return;
+    const controller = new AbortController();
+    intakeController.current?.abort();
+    intakeController.current = controller;
     const targetAssetId = uploadTargetAssetRef.current;
     setIsUploading(true);
     setError(null);
     try {
       const targetConversationId = conversationId ?? (await createConversation());
-      if (!targetConversationId) return;
+      if (!targetConversationId || controller.signal.aborted) return;
       const formData = new FormData();
       formData.append("conversationId", targetConversationId);
+      formData.append("tableHint", tableHint);
       formData.append("file", file);
       const path = targetAssetId
         ? `/api/v1/projects/${projectId}/data-assets/${targetAssetId}/snapshots/upload`
         : `/api/v1/projects/${projectId}/data-assets/upload`;
-      const payload = await apiFetch<{ asset: Asset }>(path, { method: "POST", headers: devHeaders, body: formData });
+      const payload = await apiFetch<{ asset: Asset; intakeJobId?: string }>(path, {
+        method: "POST",
+        headers: devHeaders,
+        body: formData,
+        signal: controller.signal,
+      });
+      if (payload.intakeJobId) {
+        setNotice(`已接收「${payload.asset.name}」，正在通过飞书识别工作表和列名。`);
+        await waitForTableIntake(projectId, payload.intakeJobId, controller.signal);
+        const refreshed = await apiFetch<{ assets: Asset[] }>(`/api/v1/projects/${projectId}/data-assets`, {
+          signal: controller.signal,
+        });
+        const ready = refreshed.assets.find((asset) => asset.id === payload.asset.id);
+        if (!ready?.latestSnapshot) throw new Error("快照尚不可用，请刷新数据列表");
+        payload.asset = ready;
+      }
       if (targetAssetId) {
         queryClient.setQueryData<Asset[]>(dataAssetQueryKeys.list(authUserId, projectId), (current = []) =>
           current.map((item) => (item.id === payload.asset.id ? payload.asset : item)),
@@ -1289,11 +1318,17 @@ export default function Home() {
       }
       setSelectedAssetId(payload.asset.id);
     } catch (uploadError) {
-      setError(formatApiError(uploadError, "文件上传失败"));
+      if (!controller.signal.aborted) {
+        setNotice(null);
+        setError(formatApiError(uploadError, "文件上传失败"));
+      }
     } finally {
-      setIsUploading(false);
-      uploadTargetAssetRef.current = null;
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (intakeController.current === controller) {
+        intakeController.current = null;
+        setIsUploading(false);
+        uploadTargetAssetRef.current = null;
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
     }
   }
   async function pasteData(content: string, name: string) {
@@ -1557,6 +1592,8 @@ export default function Home() {
             onCreate={() => void createConversation()}
           />
           <DataAssetRail
+            tableHint={tableHint}
+            onTableHintChange={setTableHint}
             selectedAsset={selectedAsset}
             isUploading={isUploading}
             isBooting={isBooting}

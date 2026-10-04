@@ -16,6 +16,7 @@ const rows = [
 
 function createFixture(
   options: {
+    intakeResult?: "succeeded" | "needs_clarification";
     initialMessages?: Array<{
       id: string;
       conversationId: string;
@@ -26,6 +27,7 @@ function createFixture(
   } = {},
 ) {
   const initialMessages = options.initialMessages ?? [];
+  let intakePolls = 0;
   let asset: Record<string, unknown> | null = null;
   let snapshots: Record<string, unknown>[] = [];
   let metric: Record<string, unknown> | null = null;
@@ -239,6 +241,21 @@ function createFixture(
         };
         return route.fulfill({ status: 201, json: { asset } });
       }
+      if (path === `/api/v1/projects/${projectId}/data-intake-jobs/intake-test`) {
+        const status = ++intakePolls === 1 ? "running" : (options.intakeResult ?? "succeeded");
+        return route.fulfill({
+          json: {
+            job: {
+              id: "intake-test",
+              assetId,
+              status,
+              snapshotId: status === "succeeded" ? "snapshot-sales-v1" : null,
+              errorCode: status === "needs_clarification" ? "LARK_NEEDS_CLARIFICATION" : null,
+              errorMessage: status === "needs_clarification" ? "请指定工作表和真实表头行" : null,
+            },
+          },
+        });
+      }
       if (path === `/api/v1/projects/${projectId}/data-assets/upload` && request.method() === "POST") {
         const snapshot = createSnapshot(1, "sales-v1.csv", "csv");
         snapshots = [snapshot];
@@ -254,6 +271,11 @@ function createFixture(
           createdAt: now,
           latestSnapshot: snapshot,
         };
+        if (options.intakeResult)
+          return route.fulfill({
+            status: 202,
+            json: { asset: { ...asset, status: "processing", latestSnapshot: null }, intakeJobId: "intake-test" },
+          });
         return route.fulfill({ status: 201, json: { asset } });
       }
       if (
@@ -438,6 +460,44 @@ function createFixture(
 }
 
 test.describe.configure({ mode: "serial" });
+
+test("飞书异步接入等待成功才显示快照，澄清问题可见", async ({ page }) => {
+  for (const intakeResult of ["succeeded", "needs_clarification"] as const) {
+    const fixture = createFixture({ intakeResult });
+    await page.unroute("**/api/**");
+    await page.route("**/api/**", fixture.route);
+    await page.goto("/");
+    const tableHint = page.getByRole("textbox", { name: "表格说明（可选）" });
+    await expect(tableHint).toBeEnabled();
+    if (await page.locator(".app-shell.left-collapsed").count())
+      await page.getByRole("button", { name: /打开对话历史|显示对话历史/ }).click();
+    await expect(tableHint).toBeVisible();
+    await expect(tableHint).toBeInViewport();
+    await tableHint.fill("使用销售明细，第 3 行是列名");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: test.info().outputPath(`table-hint-${intakeResult}.png`), animations: "disabled" });
+    const chooser = page.waitForEvent("filechooser");
+    await page.locator(".rail-source").getByText("导入文件", { exact: true }).click();
+    const uploadRequest = page.waitForRequest(
+      (request) => request.method() === "POST" && request.url().endsWith("/data-assets/upload"),
+    );
+    await (
+      await chooser
+    ).setFiles({
+      name: "sales.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      buffer: Buffer.from("mock-workbook"),
+    });
+    expect((await uploadRequest).postDataBuffer()?.toString("utf8")).toContain("使用销售明细，第 3 行是列名");
+    const closeDrawer = page.locator(".history-drawer-close");
+    if (await closeDrawer.isVisible()) await closeDrawer.click();
+    await expect(page.getByRole("status").filter({ hasText: "正在通过飞书识别" })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "创建为数据快照" })).toHaveCount(0);
+    if (intakeResult === "succeeded")
+      await expect(page.getByRole("status").filter({ hasText: "创建为数据快照 v1" })).toBeVisible();
+    else await expect(page.getByText("请指定工作表和真实表头行", { exact: false })).toBeVisible();
+  }
+});
 
 test("导入文件与更新当前数据保持显式分流", async ({ page }) => {
   const fixture = createFixture();

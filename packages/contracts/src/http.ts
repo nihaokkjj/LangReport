@@ -1,5 +1,6 @@
 import { z, type ZodType } from "zod";
 import {
+  tableIntakeJobDtoSchema,
   acceptMemoryCandidateRequestSchema,
   chartGenerationRequestSchema,
   chartRevisionCommandSchema,
@@ -1324,18 +1325,35 @@ export const routeContracts: RouteContract[] = [
     { 200: dto({ assets: array(assetDto) }, ["assets"]) },
   ),
   contract(
+    "GET",
+    "/api/v1/projects/:projectId/data-intake-jobs/:intakeJobId",
+    "getTableIntakeJob",
+    ["Data Assets"],
+    "查询本人提交的飞书表格接入任务",
+    { 200: dto({ job: zodJson(tableIntakeJobDtoSchema) }, ["job"]) },
+    { permission: "任务提交者，且拥有当前 Project 的 manage_data 权限", idempotency: "只读；不会重试远端导入" },
+  ),
+  contract(
     "POST",
     "/api/v1/projects/:projectId/data-assets/upload",
     "uploadDataAsset",
     ["Data Assets"],
-    "上传并解析数据文件",
-    { 201: dto({ asset: assetDto }, ["asset"]) },
+    "上传数据文件；飞书接入模式异步创建快照",
+    {
+      201: dto({ asset: assetDto }, ["asset"]),
+      202: dto({ asset: assetDto, intakeJobId: uuid() }, ["asset", "intakeJobId"]),
+    },
     {
       request: pathRequest("/api/v1/projects/:projectId/data-assets/upload", {
         body: json(
           {
             file: { type: "string", format: "binary", description: "待解析的数据文件" },
             conversationId: { type: "string", format: "uuid", description: "来源 Conversation" },
+            tableHint: {
+              type: "string",
+              maxLength: 2000,
+              description: "可选：目标工作表、真实表头行、数据区域说明。CSV/Excel 将导入绑定的飞书云空间。",
+            },
           },
           ["file", "conversationId"],
         ),
@@ -1360,14 +1378,18 @@ export const routeContracts: RouteContract[] = [
     "/api/v1/projects/:projectId/data-assets/:assetId/snapshots/upload",
     "uploadDataAssetSnapshot",
     ["Data Assets"],
-    "上传文件并追加 Data Snapshot",
-    { 201: dto({ asset: assetDto }, ["asset"]) },
+    "上传文件并追加 Data Snapshot；飞书模式返回异步任务",
+    {
+      201: dto({ asset: assetDto }, ["asset"]),
+      202: dto({ asset: assetDto, intakeJobId: uuid() }, ["asset", "intakeJobId"]),
+    },
     {
       request: pathRequest("/api/v1/projects/:projectId/data-assets/:assetId/snapshots/upload", {
         body: json(
           {
             file: { type: "string", format: "binary", description: "待解析的数据文件" },
             conversationId: { type: "string", format: "uuid", description: "更新请求来源 Conversation" },
+            tableHint: { type: "string", maxLength: 2000, description: "可选的工作表、表头和范围说明" },
           },
           ["file", "conversationId"],
         ),

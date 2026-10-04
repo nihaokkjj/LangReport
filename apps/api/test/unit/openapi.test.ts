@@ -6,7 +6,7 @@ const developmentEnvironment = {
   ...process.env,
   NODE_ENV: "development",
   APP_ENV: "development",
-  API_PUBLIC_URL: "http://localhost:4000"
+  API_PUBLIC_URL: "http://localhost:4000",
 };
 
 test("serves OpenAPI JSON and a standard Swagger UI page", async () => {
@@ -17,7 +17,7 @@ test("serves OpenAPI JSON and a standard Swagger UI page", async () => {
     const openApiResponse = await app.inject({
       method: "GET",
       url: "/openapi.json",
-      headers: { "x-request-id": "openapi-test" }
+      headers: { "x-request-id": "openapi-test" },
     });
     assert.equal(openApiResponse.statusCode, 200);
     assert.equal(openApiResponse.headers["x-request-id"], "openapi-test");
@@ -72,12 +72,16 @@ test("serves OpenAPI JSON and a standard Swagger UI page", async () => {
 test("hides internal documentation and bootstrap routes in production", async () => {
   const app = await buildApp({
     environment: { ...developmentEnvironment, NODE_ENV: "production", APP_ENV: "production" },
-    logger: false
+    logger: false,
   });
   await app.ready();
 
   try {
-    for (const [method, url] of [["GET", "/openapi.json"], ["GET", "/docs"], ["POST", "/api/v1/dev/bootstrap"]] as const) {
+    for (const [method, url] of [
+      ["GET", "/openapi.json"],
+      ["GET", "/docs"],
+      ["POST", "/api/v1/dev/bootstrap"],
+    ] as const) {
       const response = await app.inject({ method, url });
       assert.equal(response.statusCode, 404, url);
       assert.deepEqual(Object.keys(response.json()).sort(), ["code", "details", "error", "requestId"]);
@@ -94,7 +98,19 @@ test("documents the Generation Job async state and failure trace contract", asyn
   try {
     const response = await app.inject({ method: "GET", url: "/openapi.json" });
     const document = response.json() as {
-      paths: Record<string, Record<string, { requestBody?: { content?: Record<string, { schema?: { properties?: Record<string, unknown> } }> }; responses?: Record<string, { content?: Record<string, { schema?: { properties?: Record<string, unknown> } }> }> }>>;
+      paths: Record<
+        string,
+        Record<
+          string,
+          {
+            requestBody?: { content?: Record<string, { schema?: { properties?: Record<string, unknown> } }> };
+            responses?: Record<
+              string,
+              { content?: Record<string, { schema?: { properties?: Record<string, unknown> } }> }
+            >;
+          }
+        >
+      >;
     };
     const createOperation = document.paths["/api/v1/projects/{projectId}/generation-jobs"]?.post;
     const getOperation = document.paths["/api/v1/generation-jobs/{jobId}"]?.get;
@@ -107,11 +123,25 @@ test("documents the Generation Job async state and failure trace contract", asyn
     const createJobSchema = createOperation.responses?.["202"]?.content?.["application/json"]?.schema;
     const getJobSchema = getOperation.responses?.["200"]?.content?.["application/json"]?.schema;
     const statusJobSchema = statusOperation.responses?.["200"]?.content?.["application/json"]?.schema;
-    const createJobProperties = createJobSchema?.properties?.job as { properties?: Record<string, { enum?: unknown[] }> } | undefined;
+    const createJobProperties = createJobSchema?.properties?.job as
+      { properties?: Record<string, { enum?: unknown[] }> } | undefined;
     const getJobProperties = getJobSchema?.properties?.job as { properties?: Record<string, unknown> } | undefined;
-    const statusJobProperties = statusJobSchema?.properties?.job as { properties?: Record<string, unknown> } | undefined;
+    const statusJobProperties = statusJobSchema?.properties?.job as
+      { properties?: Record<string, unknown> } | undefined;
     const statusEnum = createJobProperties?.properties?.status?.enum ?? [];
-    assert.deepEqual(statusEnum, ["queued", "profiling", "planning", "transforming", "compiling", "rendering", "validating", "needs_clarification", "succeeded", "failed", "cancelled"]);
+    assert.deepEqual(statusEnum, [
+      "queued",
+      "profiling",
+      "planning",
+      "transforming",
+      "compiling",
+      "rendering",
+      "validating",
+      "needs_clarification",
+      "succeeded",
+      "failed",
+      "cancelled",
+    ]);
     assert.ok(getJobProperties?.properties?.errorCode);
     assert.ok(getJobProperties?.properties?.errorMessage);
     assert.ok(getJobProperties?.properties?.snapshotId);

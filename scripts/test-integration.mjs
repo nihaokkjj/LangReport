@@ -49,9 +49,11 @@ try {
       "test/integration/database-user-accounts.integration.test.ts",
       "test/integration/memory-management.integration.test.ts",
       "test/integration/memory-revocation-recovery.integration.test.ts",
+      "test/integration/memory-revocation-startup.integration.test.ts",
       "test/integration/message-generation.integration.test.ts",
       "test/integration/plugins.integration.test.ts",
       "test/integration/data-assets.integration.test.ts",
+      "test/integration/table-intake.integration.test.ts",
       "test/integration/generation-job-status.integration.test.ts",
     ]);
   if (status === 0)

@@ -1,12 +1,14 @@
 "use client";
 
-import { Button } from "@mui/material";
+import { Button, TextField } from "@mui/material";
 
 import type { RefObject } from "react";
 
 type Asset = { id: string; status: string; latestSnapshot: { version: number } | null };
 
 type DataAssetRailProps = {
+  tableHint: string;
+  onTableHintChange: (value: string) => void;
   selectedAsset: Asset | null;
   isUploading: boolean;
   isBooting: boolean;
@@ -17,6 +19,8 @@ type DataAssetRailProps = {
 };
 
 export function DataAssetRail({
+  tableHint,
+  onTableHintChange,
   selectedAsset,
   isUploading,
   isBooting,
@@ -30,6 +34,17 @@ export function DataAssetRail({
       <div className="rail-divider" />
       <div className="rail-source">
         <div className="eyebrow">数据</div>
+        <TextField
+          label="表格说明（可选）"
+          value={tableHint}
+          onChange={(event) => onTableHintChange(event.target.value)}
+          placeholder="例如：使用销售明细，第 3 行是列名"
+          fullWidth
+          size="small"
+          slotProps={{ htmlInput: { maxLength: 2000 } }}
+          disabled={isUploading || isBooting}
+          helperText="可填写工作表、表头位置和数据范围"
+        />
         <div className="result-actions">
           <Button component="label" variant="outlined" onClick={onPrepareUpload} disabled={isUploading || isBooting}>
             <input

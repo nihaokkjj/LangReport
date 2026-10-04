@@ -72,7 +72,9 @@ LangReport 第一阶段的核心目标，是把咨询顾问的客户数据和 An
 
 ### Memory
 
-负责 Conversation Memory、Memory Candidate、Project Memory 和当前用户私有 Workspace Memory。长期记忆写入必须经过确认，并保存来源、创建人、更新时间、置信度和删除状态；Workspace Memory 不跨用户共享。
+实现状态：A 批已增加 Project Memory 版本、私有 User Preference 存储、逐调用撤销和完整请求预算门；适用自动化测试通过，独立复核与用户验收待完成。B 批的 Task/Cycle 来源边界、压缩与 Conversation 归档尚未实施。详细设计见[记忆系统变更](../changes/2026-09-24-memory-system/design.md)。应用层由 Memory Invocation Gateway 适配私有上下文，通用 Harness/Provider 不依赖数据库或用户权限；Worker 不重新读取实时 Conversation 的不变量继续成立。
+
+负责现有 Conversation/Candidate 路径、Project Memory 和独立 owner-scoped User Preference Memory。长期记忆写入必须经过确认并保存来源、创建人、时间与状态；Workspace Memory 首期不参与读写，既有行保留。
 
 ### Generation
 
@@ -220,6 +222,7 @@ packages/
   memory/               # Memory Candidate 与分层记忆服务
   db/                   # Drizzle Schema、迁移和数据库访问
   storage/              # 私有对象存储 Adapter
+  lark-data/            # 固定身份的飞书 CLI 工具和有界表格接入 Agent
 infra/                  # 数据库、对象存储和部署配置
 docs/
   adr/

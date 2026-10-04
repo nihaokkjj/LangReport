@@ -1485,3 +1485,4 @@ export type ModelResult<T> =
 export interface ModelGateway {
   generateStructured<T>(request: RuntimeModelRequest<T>): Promise<ModelResult<T>>;
 }
+export * from "./table-agent.js";

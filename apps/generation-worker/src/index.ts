@@ -35,6 +35,7 @@ import { ensureMemoryRevocationReady, processMemoryExtractionJob } from "@langre
 import { decryptWorkspaceModelCredential } from "@langreport/model-gateway";
 import { PluginServiceError } from "@langreport/plugins";
 import { EvidenceGenerationWorkflow } from "./evidence-generation-workflow.js";
+import { pollTableIntake } from "./table-intake.js";
 import { loadFrozenSnapshot, SnapshotAccessError, type FrozenSnapshotInput } from "./snapshot-access.js";
 
 const workerName = "generation-worker";
@@ -433,6 +434,13 @@ function pendingRenderValidation(): ValidationRecord {
 if (process.env.LANGREPORT_WORKER_TEST !== "1") {
   await ensureMemoryRevocationReady();
   console.log(`${workerName} ready; polling PostgreSQL-backed Generation Jobs.`);
+  // Separate lane: a slow cloud import must not block the chart-generation queue.
+  const pollIntake = () =>
+    void pollTableIntake(workspaceApiKeyForGeneration).catch(() =>
+      console.error(`${workerName} table intake poll failed`),
+    );
+  pollIntake();
+  setInterval(pollIntake, pollIntervalMs);
   void pollOnce().catch((error) => console.error(`${workerName} initial poll failed`, error));
   setInterval(() => {
     void pollOnce().catch((error) => console.error(`${workerName} poll failed`, error));
