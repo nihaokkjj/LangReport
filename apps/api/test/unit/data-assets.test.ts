@@ -8,7 +8,7 @@ import {
   toPublicDataAsset,
   type DataAssetIntakeCommand,
   type IntakeDependencies,
-  type IntakeRepository
+  type IntakeRepository,
 } from "../../src/data-assets.js";
 import { conversationUploadObjectKey, snapshotSourceObjectKey } from "@langreport/storage";
 
@@ -25,7 +25,7 @@ test("public data asset DTO omits storage object keys and reports source status"
     errorCode: null,
     errorMessage: null,
     createdBy: "user-1",
-    createdAt: new Date("2026-09-03T00:00:00.000Z")
+    createdAt: new Date("2026-09-03T00:00:00.000Z"),
   };
   const snapshot = {
     id: "snapshot-1",
@@ -41,7 +41,7 @@ test("public data asset DTO omits storage object keys and reports source status"
     sizeBytes: 12,
     sourceObjectKey: "private/source-key",
     normalizedObjectKey: "private/normalized-key",
-    createdAt: new Date("2026-09-03T00:00:00.000Z")
+    createdAt: new Date("2026-09-03T00:00:00.000Z"),
   };
 
   const result = toPublicDataAsset(asset, snapshot, true);
@@ -62,9 +62,9 @@ test("conversation uploads use an isolated, snapshot-addressable object path", (
       conversationId: "conversation-1",
       assetId: "asset-1",
       kind: "normalized",
-      filename: "snapshot-1.json"
+      filename: "snapshot-1.json",
     }),
-    "workspaces/workspace-1/projects/project-1/conversations/conversation-1/user-data/uploads/asset-1/snapshots/snapshot-1.json"
+    "workspaces/workspace-1/projects/project-1/conversations/conversation-1/user-data/uploads/asset-1/snapshots/snapshot-1.json",
   );
   assert.equal(
     snapshotSourceObjectKey({
@@ -73,9 +73,9 @@ test("conversation uploads use an isolated, snapshot-addressable object path", (
       conversationId: "conversation-1",
       assetId: "asset-1",
       snapshotId: "snapshot-1",
-      filename: "sales v2.csv"
+      filename: "sales v2.csv",
     }),
-    "workspaces/workspace-1/projects/project-1/conversations/conversation-1/user-data/uploads/asset-1/snapshots/snapshot-1/source/sales_v2.csv"
+    "workspaces/workspace-1/projects/project-1/conversations/conversation-1/user-data/uploads/asset-1/snapshots/snapshot-1/source/sales_v2.csv",
   );
 });
 
@@ -107,16 +107,19 @@ function createRepository(options: { persistError?: Error } = {}): {
         errorCode: null,
         errorMessage: null,
         createdBy: input.createdBy as string,
-        createdAt: new Date("2026-09-16T00:00:00.000Z")
+        createdAt: new Date("2026-09-16T00:00:00.000Z"),
       });
     },
     persistSnapshotAndReady: async (input) => {
       if (options.persistError) throw options.persistError;
       const asset = assets.get(input.assetId);
       if (!asset) throw new Error("asset missing");
-      const latestVersion = Math.max(0, ...[...snapshots.values()]
-        .filter((snapshot) => snapshot.assetId === input.assetId)
-        .map((snapshot) => snapshot.version));
+      const latestVersion = Math.max(
+        0,
+        ...[...snapshots.values()]
+          .filter((snapshot) => snapshot.assetId === input.assetId)
+          .map((snapshot) => snapshot.version),
+      );
       const snapshot: Snapshot = {
         id: input.snapshotId,
         assetId: input.assetId,
@@ -131,7 +134,7 @@ function createRepository(options: { persistError?: Error } = {}): {
         sizeBytes: input.sizeBytes,
         sourceObjectKey: input.sourceObjectKey,
         normalizedObjectKey: input.normalizedObjectKey,
-        createdAt: new Date("2026-09-16T00:00:00.000Z")
+        createdAt: new Date("2026-09-16T00:00:00.000Z"),
       };
       snapshots.set(snapshot.id, snapshot);
       asset.status = "ready";
@@ -149,7 +152,7 @@ function createRepository(options: { persistError?: Error } = {}): {
       asset.status = "failed";
       asset.errorCode = code;
       asset.errorMessage = message;
-    }
+    },
   };
   return { repository, assets, snapshots };
 }
@@ -168,7 +171,7 @@ function createStorage(options: { failPutAt?: number; failDeletes?: boolean } = 
       deletedKeys.push(key);
       if (options.failDeletes) throw new Error(`delete failed for ${key}`);
       objects.delete(key);
-    }
+    },
   };
   return { storage, objects, deletedKeys };
 }
@@ -184,15 +187,14 @@ function command(overrides: Partial<DataAssetIntakeCommand["source"]> = {}): Dat
       sourceType: "csv",
       mimeType: "text/csv",
       bytes: Buffer.from("month,sales\n2026-01,100\n", "utf8"),
-      ...overrides
-    }
+      ...overrides,
+    },
   };
 }
 
-function fixedIds(values = [
-    "00000000-0000-4000-8000-000000000010",
-    "00000000-0000-4000-8000-000000000011"
-  ]): () => string {
+function fixedIds(
+  values = ["00000000-0000-4000-8000-000000000010", "00000000-0000-4000-8000-000000000011"],
+): () => string {
   const ids = [...values];
   return () => {
     const id = ids.shift();
@@ -205,14 +207,21 @@ test("intake validates the source relation before creating processing state", as
   const fixture = createRepository();
   fixture.repository.hasConversationInProject = async () => false;
   const storage = createStorage();
-  const intake = createDataAssetIntake({ repository: fixture.repository, storage: storage.storage, createId: fixedIds() });
-
-  await assert.rejects(() => intake.ingest(command()), (error: unknown) => {
-    assert.ok(error instanceof DataAssetError);
-    assert.equal(error.code, "SOURCE_CONVERSATION_INVALID");
-    assert.equal(error.statusCode, 400);
-    return true;
+  const intake = createDataAssetIntake({
+    repository: fixture.repository,
+    storage: storage.storage,
+    createId: fixedIds(),
   });
+
+  await assert.rejects(
+    () => intake.ingest(command()),
+    (error: unknown) => {
+      assert.ok(error instanceof DataAssetError);
+      assert.equal(error.code, "SOURCE_CONVERSATION_INVALID");
+      assert.equal(error.statusCode, 400);
+      return true;
+    },
+  );
   assert.equal(fixture.assets.size, 0);
   assert.equal(storage.objects.size, 0);
 });
@@ -220,7 +229,11 @@ test("intake validates the source relation before creating processing state", as
 test("intake writes both objects and commits one ready snapshot", async () => {
   const fixture = createRepository();
   const storage = createStorage();
-  const asset = await createDataAssetIntake({ repository: fixture.repository, storage: storage.storage, createId: fixedIds() }).ingest(command());
+  const asset = await createDataAssetIntake({
+    repository: fixture.repository,
+    storage: storage.storage,
+    createId: fixedIds(),
+  }).ingest(command());
 
   assert.equal(asset.status, "ready");
   assert.equal(asset.sourceConversationDeleted, false);
@@ -231,25 +244,36 @@ test("intake writes both objects and commits one ready snapshot", async () => {
   assert.equal(storage.objects.size, 2);
   assert.equal("objectKey" in asset, false);
   assert.equal("normalizedObjectKey" in (asset.latestSnapshot ?? {}), false);
+  const snapshot = fixture.snapshots.get(asset.latestSnapshot!.id)!;
+  const payload = JSON.parse(String(storage.objects.get(snapshot.normalizedObjectKey)));
+  assert.equal(payload.parserVersion, "local-table-v2");
+  assert.deepEqual(payload.columnMapping, [
+    { position: 0, originalName: "month", name: "month" },
+    { position: 1, originalName: "sales", name: "sales" },
+  ]);
 });
 
 test("intake updates one asset by appending a new snapshot and preserving v1", async () => {
   const fixture = createRepository();
   const storage = createStorage();
-  const intake = createDataAssetIntake({ repository: fixture.repository, storage: storage.storage, createId: fixedIds() });
+  const intake = createDataAssetIntake({
+    repository: fixture.repository,
+    storage: storage.storage,
+    createId: fixedIds(),
+  });
   const first = await intake.ingest(command());
   const firstSnapshot = fixture.snapshots.get(first.latestSnapshot?.id ?? "");
 
   const second = await createDataAssetIntake({
     repository: fixture.repository,
     storage: storage.storage,
-    createId: fixedIds(["00000000-0000-4000-8000-000000000012"])
+    createId: fixedIds(["00000000-0000-4000-8000-000000000012"]),
   }).ingest({
     ...command({
       name: "sales-v2.csv",
-      bytes: Buffer.from("month,sales\n2026-01,120\n2026-02,150\n", "utf8")
+      bytes: Buffer.from("month,sales\n2026-01,120\n2026-02,150\n", "utf8"),
     }),
-    target: { assetId: first.id }
+    target: { assetId: first.id },
   });
 
   assert.equal(second.id, first.id);
@@ -266,24 +290,33 @@ test("intake updates one asset by appending a new snapshot and preserving v1", a
 test("failed updates clean up only new objects and preserve the ready asset", async () => {
   const fixture = createRepository();
   const storage = createStorage();
-  const intake = createDataAssetIntake({ repository: fixture.repository, storage: storage.storage, createId: fixedIds() });
+  const intake = createDataAssetIntake({
+    repository: fixture.repository,
+    storage: storage.storage,
+    createId: fixedIds(),
+  });
   const first = await intake.ingest(command());
   const firstSnapshotId = first.latestSnapshot?.id;
 
   const updateIntake = createDataAssetIntake({
     repository: fixture.repository,
     storage: storage.storage,
-    createId: fixedIds(["00000000-0000-4000-8000-000000000012"])
+    createId: fixedIds(["00000000-0000-4000-8000-000000000012"]),
   });
   storage.storage.putObject = async (input) => {
-    if (input.key.includes("/snapshots/00000000-0000-4000-8000-000000000012/source/")) throw new Error("source provider failed");
+    if (input.key.includes("/snapshots/00000000-0000-4000-8000-000000000012/source/"))
+      throw new Error("source provider failed");
     throw new Error("unexpected object write");
   };
 
-  await assert.rejects(() => updateIntake.ingest({
-    ...command({ name: "sales-v2.csv" }),
-    target: { assetId: first.id }
-  }), (error: unknown) => error instanceof DataAssetError && error.code === "SOURCE_OBJECT_WRITE_FAILED");
+  await assert.rejects(
+    () =>
+      updateIntake.ingest({
+        ...command({ name: "sales-v2.csv" }),
+        target: { assetId: first.id },
+      }),
+    (error: unknown) => error instanceof DataAssetError && error.code === "SOURCE_OBJECT_WRITE_FAILED",
+  );
 
   assert.equal(fixture.assets.get(first.id)?.status, "ready");
   assert.equal(fixture.assets.get(first.id)?.errorCode, null);
@@ -295,14 +328,21 @@ test("failed updates clean up only new objects and preserve the ready asset", as
 test("source object failure persists a typed failure without creating a snapshot", async () => {
   const fixture = createRepository();
   const storage = createStorage({ failPutAt: 1 });
-  const intake = createDataAssetIntake({ repository: fixture.repository, storage: storage.storage, createId: fixedIds() });
-
-  await assert.rejects(() => intake.ingest(command()), (error: unknown) => {
-    assert.ok(error instanceof DataAssetError);
-    assert.equal(error.code, "SOURCE_OBJECT_WRITE_FAILED");
-    assert.equal(error.statusCode, 503);
-    return true;
+  const intake = createDataAssetIntake({
+    repository: fixture.repository,
+    storage: storage.storage,
+    createId: fixedIds(),
   });
+
+  await assert.rejects(
+    () => intake.ingest(command()),
+    (error: unknown) => {
+      assert.ok(error instanceof DataAssetError);
+      assert.equal(error.code, "SOURCE_OBJECT_WRITE_FAILED");
+      assert.equal(error.statusCode, 503);
+      return true;
+    },
+  );
   const failed = [...fixture.assets.values()][0];
   assert.equal(failed?.status, "failed");
   assert.equal(failed?.errorCode, "SOURCE_OBJECT_WRITE_FAILED");
@@ -314,15 +354,22 @@ test("source object failure persists a typed failure without creating a snapshot
 test("normalized object failure compensates the source object and persists a typed failure", async () => {
   const fixture = createRepository();
   const storage = createStorage({ failPutAt: 2 });
-  const intake = createDataAssetIntake({ repository: fixture.repository, storage: storage.storage, createId: fixedIds() });
-
-  await assert.rejects(() => intake.ingest(command()), (error: unknown) => {
-    assert.ok(error instanceof DataAssetError);
-    assert.equal(error.code, "SNAPSHOT_OBJECT_WRITE_FAILED");
-    assert.equal(error.statusCode, 503);
-    assert.doesNotMatch(error.message, /provider|00000000/);
-    return true;
+  const intake = createDataAssetIntake({
+    repository: fixture.repository,
+    storage: storage.storage,
+    createId: fixedIds(),
   });
+
+  await assert.rejects(
+    () => intake.ingest(command()),
+    (error: unknown) => {
+      assert.ok(error instanceof DataAssetError);
+      assert.equal(error.code, "SNAPSHOT_OBJECT_WRITE_FAILED");
+      assert.equal(error.statusCode, 503);
+      assert.doesNotMatch(error.message, /provider|00000000/);
+      return true;
+    },
+  );
   const failed = [...fixture.assets.values()][0];
   assert.equal(failed?.status, "failed");
   assert.equal(failed?.errorCode, "SNAPSHOT_OBJECT_WRITE_FAILED");
@@ -333,15 +380,22 @@ test("normalized object failure compensates the source object and persists a typ
 test("snapshot persistence failure compensates both objects and never reaches ready", async () => {
   const fixture = createRepository({ persistError: new Error("database failed with provider key") });
   const storage = createStorage();
-  const intake = createDataAssetIntake({ repository: fixture.repository, storage: storage.storage, createId: fixedIds() });
-
-  await assert.rejects(() => intake.ingest(command()), (error: unknown) => {
-    assert.ok(error instanceof DataAssetError);
-    assert.equal(error.code, "SNAPSHOT_PERSIST_FAILED");
-    assert.equal(error.statusCode, 500);
-    assert.doesNotMatch(error.message, /database|provider|key/);
-    return true;
+  const intake = createDataAssetIntake({
+    repository: fixture.repository,
+    storage: storage.storage,
+    createId: fixedIds(),
   });
+
+  await assert.rejects(
+    () => intake.ingest(command()),
+    (error: unknown) => {
+      assert.ok(error instanceof DataAssetError);
+      assert.equal(error.code, "SNAPSHOT_PERSIST_FAILED");
+      assert.equal(error.statusCode, 500);
+      assert.doesNotMatch(error.message, /database|provider|key/);
+      return true;
+    },
+  );
   const failed = [...fixture.assets.values()][0];
   assert.equal(failed?.status, "failed");
   assert.equal(failed?.errorCode, "SNAPSHOT_PERSIST_FAILED");
@@ -360,28 +414,46 @@ test("cleanup failures are audited without replacing the original storage error"
     createId: fixedIds(),
     recordCleanupFailure: async (event) => {
       cleanupFailures.push(event);
-    }
+    },
   });
 
-  await assert.rejects(() => intake.ingest(command()), (error: unknown) => error instanceof DataAssetError && error.code === "SNAPSHOT_OBJECT_WRITE_FAILED");
+  await assert.rejects(
+    () => intake.ingest(command()),
+    (error: unknown) => error instanceof DataAssetError && error.code === "SNAPSHOT_OBJECT_WRITE_FAILED",
+  );
   assert.equal(cleanupFailures.length, 2);
   assert.deepEqual(
     cleanupFailures.map((failure) => (failure as { objectKind: string }).objectKind),
-    ["normalized", "source"]
+    ["normalized", "source"],
   );
 });
 
 test("parse failures become safe 422 errors and leave no objects", async () => {
   const fixture = createRepository();
   const storage = createStorage();
-  const intake = createDataAssetIntake({ repository: fixture.repository, storage: storage.storage, createId: fixedIds() });
-
-  await assert.rejects(() => intake.ingest(command({ sourceType: "json", name: "sales.json", mimeType: "application/json", bytes: Buffer.from("not-json") })), (error: unknown) => {
-    assert.ok(error instanceof DataAssetError);
-    assert.equal(error.code, "DATA_PARSE_FAILED");
-    assert.equal(error.statusCode, 422);
-    return true;
+  const intake = createDataAssetIntake({
+    repository: fixture.repository,
+    storage: storage.storage,
+    createId: fixedIds(),
   });
+
+  await assert.rejects(
+    () =>
+      intake.ingest(
+        command({
+          sourceType: "json",
+          name: "sales.json",
+          mimeType: "application/json",
+          bytes: Buffer.from("not-json"),
+        }),
+      ),
+    (error: unknown) => {
+      assert.ok(error instanceof DataAssetError);
+      assert.equal(error.code, "DATA_PARSE_FAILED");
+      assert.equal(error.statusCode, 422);
+      return true;
+    },
+  );
   const failed = [...fixture.assets.values()][0];
   assert.equal(failed?.status, "failed");
   assert.equal(failed?.errorCode, "DATA_PARSE_FAILED");
@@ -391,13 +463,20 @@ test("parse failures become safe 422 errors and leave no objects", async () => {
 test("the module enforces the 50 MB boundary independently of HTTP multipart limits", async () => {
   const fixture = createRepository();
   const storage = createStorage();
-  const intake = createDataAssetIntake({ repository: fixture.repository, storage: storage.storage, createId: fixedIds() });
-
-  await assert.rejects(() => intake.ingest(command({ bytes: Buffer.alloc(MAX_DATA_ASSET_BYTES + 1) })), (error: unknown) => {
-    assert.ok(error instanceof DataAssetError);
-    assert.equal(error.code, "DATA_ASSET_TOO_LARGE");
-    assert.equal(error.statusCode, 413);
-    return true;
+  const intake = createDataAssetIntake({
+    repository: fixture.repository,
+    storage: storage.storage,
+    createId: fixedIds(),
   });
+
+  await assert.rejects(
+    () => intake.ingest(command({ bytes: Buffer.alloc(MAX_DATA_ASSET_BYTES + 1) })),
+    (error: unknown) => {
+      assert.ok(error instanceof DataAssetError);
+      assert.equal(error.code, "DATA_ASSET_TOO_LARGE");
+      assert.equal(error.statusCode, 413);
+      return true;
+    },
+  );
   assert.equal(fixture.assets.size, 0);
 });

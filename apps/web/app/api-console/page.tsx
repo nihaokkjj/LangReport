@@ -1215,9 +1215,16 @@ export default function ApiConsolePage() {
       const jobResult = await requestScenario(entries, "createGenerationJob", { projectId }, generationInput);
       rememberScenarioRequest(jobResult.requestId);
       const initialJob = scenarioJobFromPayload(jobResult.payload);
+      const rawJob = isRecord(jobResult.payload.job) ? jobResult.payload.job : null;
+      const assembly = rawJob && isRecord(rawJob.executionAssembly) ? rawJob.executionAssembly : null;
+      if (assembly?.transformExecutorVersion !== "v2") throw new Error("新任务未冻结 v2 数据变换执行器");
       successJobId = initialJob.id;
       setScenario((current) => ({ ...current, job: initialJob, statusHistory: [initialJob.status] }));
-      updateScenarioStep("job", "running", `HTTP ${jobResult.status} · ${initialJob.id} · ${initialJob.status}`);
+      updateScenarioStep(
+        "job",
+        "running",
+        `HTTP ${jobResult.status} · ${initialJob.id} · ${initialJob.status} · 变换 v2（周期单位 day/month/quarter/year）`,
+      );
 
       updateScenarioStep("idempotency", "running", "使用相同幂等键再次提交");
       const reusedResult = await requestScenario(entries, "createGenerationJob", { projectId }, generationInput);
@@ -2027,6 +2034,12 @@ export default function ApiConsolePage() {
                     </Button>
                   </div>
                 </div>
+                {selectedEntry?.operation.operationId === "createChartRevisionCommand" && (
+                  <p className={styles.contractHint}>
+                    编辑任务继承来源版本的分析问题、指标口径与执行快照；仅复制公开项目记忆引用。 来源缺失返回 409
+                    REVISION_PROVENANCE_INCOMPLETE，请重新确认输入后生成。
+                  </p>
+                )}
                 {parameterLocations.map(
                   (location) =>
                     parametersByLocation[location].length > 0 && (

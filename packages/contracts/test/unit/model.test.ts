@@ -5,6 +5,7 @@ import {
   chartPlanDecisionSchema,
   createChartPlanOutputDescriptor,
   executionAssemblySchema,
+  transformPlanSchema,
   historyPolicySchema,
   modelErrorCodeSchema,
   modelProfileSchema,
@@ -33,6 +34,31 @@ const validIntent = {
   title: "各区域月度销售额",
   confidence: 0.92,
 };
+
+test("calendar comparison units are explicit and bounded while old plans remain valid", () => {
+  const base = {
+    version: "v1",
+    rationale: "周期单位合同",
+    steps: [
+      {
+        kind: "derive",
+        expression: "percent_change",
+        inputColumns: ["amount"],
+        outputColumn: "change",
+        periodColumn: "date",
+        periodOffset: 1,
+      },
+    ],
+    expectedColumns: ["change"],
+  };
+  assert.ok(transformPlanSchema.safeParse(base).success);
+  for (const periodUnit of ["day", "month", "quarter", "year"])
+    assert.ok(transformPlanSchema.safeParse({ ...base, steps: [{ ...base.steps[0], periodUnit }] }).success);
+  assert.equal(
+    transformPlanSchema.safeParse({ ...base, steps: [{ ...base.steps[0], periodUnit: "week" }] }).success,
+    false,
+  );
+});
 
 const validPlan = {
   version: "v1" as const,
@@ -352,6 +378,12 @@ test("execution assembly is versioned, non-secret, and does not fabricate legacy
   });
 
   assert.equal(assembly.graph.checkpointerMode, "none");
+  assert.equal(assembly.transformExecutorVersion, undefined);
+  assert.equal(
+    executionAssemblySchema.parse({ ...assembly, transformExecutorVersion: "v2" }).transformExecutorVersion,
+    "v2",
+  );
+  assert.throws(() => executionAssemblySchema.parse({ ...assembly, transformExecutorVersion: "v3" }));
   assert.equal(assembly.modelRoute.routeSnapshotId, "route-001");
   assert.throws(() => executionAssemblySchema.parse({ ...assembly, apiKey: "must-not-persist" }));
   assert.throws(() =>

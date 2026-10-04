@@ -1,0 +1,20 @@
+[
+  {
+    "mark": "line",
+    "sourceRows": 8,
+    "sceneItems": 8,
+    "nullGaps": 2,
+    "ascendingOrder": true,
+    "serverBrowserEqual": true,
+    "areaFill": false
+  },
+  {
+    "mark": "area",
+    "sourceRows": 8,
+    "sceneItems": 8,
+    "nullGaps": 2,
+    "ascendingOrder": true,
+    "serverBrowserEqual": true,
+    "areaFill": true
+  }
+]

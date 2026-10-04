@@ -22,10 +22,16 @@ import {
   type GenerationJobStatus,
 } from "@langreport/db";
 import { getObject } from "@langreport/storage";
-import { applyRevisionPatch } from "@langreport/chart";
+import {
+  applyRevisionPatch,
+  freezeDerivedProvenance,
+  freezeVisualRevisionInput,
+  ChartServiceError,
+} from "@langreport/chart";
 import { executeTransformPlan, summarizeTransformResult } from "@langreport/data-engine";
 import {
   chartEditPatchSchema,
+  executionAssemblySchema,
   flintSpecSchema,
   transformPlanSchema,
   type ValidationRecord,
@@ -224,12 +230,43 @@ async function processEditJob(jobId: string, record: GenerationJobRecord, lease:
   }
   await setStatus(jobId, lease, "planning", { errorCode: null, errorMessage: null });
   const [source] = await db.select().from(chartRevisions).where(eq(chartRevisions.id, job.baseRevisionId)).limit(1);
-  if (!source || source.artifactId !== job.artifactId) {
+  if (!source || source.artifactId !== job.artifactId || source.snapshotId !== job.snapshotId) {
     await failJob(jobId, lease, "EDIT_SOURCE_NOT_FOUND", "基础 Revision 不属于当前图表产物");
     return;
   }
   try {
     let frozenSnapshot: FrozenSnapshotInput;
+    const frozenProvenance = freezeDerivedProvenance(source);
+    const patch = chartEditPatchSchema.parse(job.editPatch);
+    const visual = freezeVisualRevisionInput(source, patch);
+    if (visual) {
+      const validation = validateGenerationRevision(visual.flintSpec);
+      const planValidation = planValidationFromReport(validation);
+      const renderValidation = pendingRenderValidation();
+      await setStatus(jobId, lease, "transforming", {
+        ...frozenProvenance,
+        transformPlan: visual.transformPlan,
+        fieldLineage: visual.fieldLineage,
+        resultSummary: visual.resultSummary,
+        previewData: {
+          columns: visual.resultSummary.columns,
+          rows: visual.flintSpec.data.values.slice(0, 500),
+          steps: [],
+        },
+      });
+      await setStatus(jobId, lease, "compiling", {
+        flintSpec: visual.flintSpec,
+        validation,
+        planValidation,
+        renderValidation,
+      });
+      if (!validation.valid) {
+        await failJob(jobId, lease, "VALIDATION_FAILED", "编辑后的 Flint Spec 未通过必要校验", validation);
+        return;
+      }
+      await setStatus(jobId, lease, "rendering", {}, true);
+      return;
+    }
     try {
       frozenSnapshot = await loadFrozenSnapshot({
         job: {
@@ -251,9 +288,10 @@ async function processEditJob(jobId: string, record: GenerationJobRecord, lease:
       throw error;
     }
     const spec = flintSpecSchema.parse(source.flintSpec);
-    const patch = chartEditPatchSchema.parse(job.editPatch);
     const plan = transformPlanSchema.parse(patch.transformPlan ?? source.transformPlan);
-    const transform = executeTransformPlan(plan, frozenSnapshot.rows);
+    const sourceAssembly =
+      source.executionAssembly === null ? null : executionAssemblySchema.parse(source.executionAssembly);
+    const transform = executeTransformPlan(plan, frozenSnapshot.rows, sourceAssembly?.transformExecutorVersion ?? "v1");
     const editedSpec = applyRevisionPatch(spec, patch);
     editedSpec.data.values = transform.rows;
     editedSpec.semanticTypes = semanticTypesForEditedSpec(spec.semanticTypes, transform.columns, transform.lineage);
@@ -271,7 +309,7 @@ async function processEditJob(jobId: string, record: GenerationJobRecord, lease:
     await setStatus(jobId, lease, "transforming", {
       transformPlan: plan,
       fieldLineage: transform.lineage,
-      memoryContext: job.memoryContext ?? source.memorySnapshot ?? [],
+      ...frozenProvenance,
       validation,
       planValidation,
       renderValidation,
@@ -289,7 +327,12 @@ async function processEditJob(jobId: string, record: GenerationJobRecord, lease:
     }
     await setStatus(jobId, lease, "rendering", {}, true);
   } catch (error) {
-    await failJob(jobId, lease, "EDIT_INVALID", error instanceof Error ? error.message : "图表编辑失败");
+    await failJob(
+      jobId,
+      lease,
+      error instanceof ChartServiceError ? error.code : "EDIT_INVALID",
+      error instanceof Error ? error.message : "图表编辑失败",
+    );
   }
 }
 

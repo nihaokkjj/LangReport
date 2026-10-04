@@ -1,0 +1,113 @@
+{
+  "node": "v22.22.2",
+  "report": [
+    {
+      "count": 600,
+      "mode": "native",
+      "inputCount": 215,
+      "lastValue": 215,
+      "svgBytes": 98324,
+      "svgWidth": "1340",
+      "svgHeight": "232",
+      "pngBytes": 14408,
+      "durationMs": 128.85609999999997,
+      "memory": {
+        "rss": 97144832,
+        "heapTotal": 59351040,
+        "heapUsed": 24763168,
+        "external": 2569342,
+        "arrayBuffers": 339335
+      }
+    },
+    {
+      "count": 600,
+      "mode": "fixed-size",
+      "inputCount": 215,
+      "lastValue": 215,
+      "svgBytes": 104012,
+      "svgWidth": "900",
+      "svgHeight": "360",
+      "pngBytes": 28319,
+      "durationMs": 63.841999999999985,
+      "memory": {
+        "rss": 113143808,
+        "heapTotal": 61399040,
+        "heapUsed": 26763792,
+        "external": 2605765,
+        "arrayBuffers": 345023
+      }
+    },
+    {
+      "count": 600,
+      "mode": "unbounded-layout",
+      "inputCount": 600,
+      "lastValue": 600,
+      "svgBytes": 281217,
+      "svgWidth": "900",
+      "svgHeight": "360",
+      "pngBytes": 40578,
+      "durationMs": 113.38930000000005,
+      "memory": {
+        "rss": 124870656,
+        "heapTotal": 65376256,
+        "heapUsed": 30507928,
+        "external": 2809140,
+        "arrayBuffers": 522228
+      }
+    },
+    {
+      "count": 100000,
+      "mode": "native",
+      "inputCount": 215,
+      "lastValue": 215,
+      "svgBytes": 98326,
+      "svgWidth": "1340",
+      "svgHeight": "232",
+      "pngBytes": 14432,
+      "durationMs": 676.8901999999999,
+      "memory": {
+        "rss": 135368704,
+        "heapTotal": 71168000,
+        "heapUsed": 33197952,
+        "external": 2612362,
+        "arrayBuffers": 339337
+      }
+    },
+    {
+      "count": 100000,
+      "mode": "fixed-size",
+      "inputCount": 215,
+      "lastValue": 215,
+      "svgBytes": 104014,
+      "svgWidth": "900",
+      "svgHeight": "360",
+      "pngBytes": 28329,
+      "durationMs": 659.4739999999999,
+      "memory": {
+        "rss": 147046400,
+        "heapTotal": 82468864,
+        "heapUsed": 49000752,
+        "external": 2605801,
+        "arrayBuffers": 345025
+      }
+    },
+    {
+      "count": 100000,
+      "mode": "unbounded-layout",
+      "inputCount": 100000,
+      "lastValue": 100000,
+      "svgBytes": 44138174,
+      "svgWidth": "900",
+      "svgHeight": "360",
+      "pngBytes": 17079,
+      "durationMs": 14445.551200000002,
+      "memory": {
+        "rss": 1448394752,
+        "heapTotal": 645013504,
+        "heapUsed": 609154008,
+        "external": 46638930,
+        "arrayBuffers": 44379185
+      }
+    }
+  ]
+}

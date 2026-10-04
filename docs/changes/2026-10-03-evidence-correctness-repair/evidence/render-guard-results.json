@@ -1,0 +1,6 @@
+{
+  "rejectedInputs": 8,
+  "escapedTitle": true,
+  "supportedMarks": ["bar", "line", "area"],
+  "note": "实验守卫；尚未接入产品；时间和峰值内存隔离未验证"
+}

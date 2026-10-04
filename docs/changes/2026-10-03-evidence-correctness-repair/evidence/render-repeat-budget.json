@@ -1,0 +1,202 @@
+{
+  "node": "v22.22.2",
+  "cpu": "13th Gen Intel(R) Core(TM) i5-13500HX",
+  "memoryBytes": 16886128640,
+  "runs": [
+    [
+      {
+        "count": 100000,
+        "chartType": "Bar Chart",
+        "svgBytes": 17930661,
+        "pngBytes": 20212,
+        "elapsedMs": 4696.9872,
+        "rss": 740503552
+      },
+      {
+        "count": 100000,
+        "chartType": "Line Chart",
+        "svgBytes": 1529178,
+        "pngBytes": 22770,
+        "elapsedMs": 12398.395799999998,
+        "rss": 1003810816
+      },
+      {
+        "count": 100000,
+        "chartType": "Area Chart",
+        "svgBytes": 2703879,
+        "pngBytes": 26741,
+        "elapsedMs": 10880.5114,
+        "rss": 942624768
+      },
+      {
+        "browser": "chromium",
+        "hover": "passed",
+        "viewports": ["1280x720", "390x844"],
+        "gzipBytes": {
+          "vega": 180641,
+          "vegaLite": 79733
+        }
+      },
+      {
+        "peakRssBytes": 1096945664,
+        "node": "v22.22.2"
+      }
+    ],
+    [
+      {
+        "count": 100000,
+        "chartType": "Bar Chart",
+        "svgBytes": 17930661,
+        "pngBytes": 20212,
+        "elapsedMs": 4617.2356,
+        "rss": 739639296
+      },
+      {
+        "count": 100000,
+        "chartType": "Line Chart",
+        "svgBytes": 1529178,
+        "pngBytes": 22770,
+        "elapsedMs": 11222.0116,
+        "rss": 1005940736
+      },
+      {
+        "count": 100000,
+        "chartType": "Area Chart",
+        "svgBytes": 2703879,
+        "pngBytes": 26741,
+        "elapsedMs": 10697.5811,
+        "rss": 970215424
+      },
+      {
+        "browser": "chromium",
+        "hover": "passed",
+        "viewports": ["1280x720", "390x844"],
+        "gzipBytes": {
+          "vega": 180641,
+          "vegaLite": 79733
+        }
+      },
+      {
+        "peakRssBytes": 1081040896,
+        "node": "v22.22.2"
+      }
+    ],
+    [
+      {
+        "count": 100000,
+        "chartType": "Bar Chart",
+        "svgBytes": 17930661,
+        "pngBytes": 20212,
+        "elapsedMs": 4350.3333,
+        "rss": 736333824
+      },
+      {
+        "count": 100000,
+        "chartType": "Line Chart",
+        "svgBytes": 1529178,
+        "pngBytes": 22770,
+        "elapsedMs": 11176.9717,
+        "rss": 993972224
+      },
+      {
+        "count": 100000,
+        "chartType": "Area Chart",
+        "svgBytes": 2703879,
+        "pngBytes": 26741,
+        "elapsedMs": 9539.6872,
+        "rss": 941260800
+      },
+      {
+        "browser": "chromium",
+        "hover": "passed",
+        "viewports": ["1280x720", "390x844"],
+        "gzipBytes": {
+          "vega": 180641,
+          "vegaLite": 79733
+        }
+      },
+      {
+        "peakRssBytes": 1085968384,
+        "node": "v22.22.2"
+      }
+    ],
+    [
+      {
+        "count": 100000,
+        "chartType": "Bar Chart",
+        "svgBytes": 17930661,
+        "pngBytes": 20212,
+        "elapsedMs": 4541.2803,
+        "rss": 740298752
+      },
+      {
+        "count": 100000,
+        "chartType": "Line Chart",
+        "svgBytes": 1529178,
+        "pngBytes": 22770,
+        "elapsedMs": 11355.8641,
+        "rss": 1007190016
+      },
+      {
+        "count": 100000,
+        "chartType": "Area Chart",
+        "svgBytes": 2703879,
+        "pngBytes": 26741,
+        "elapsedMs": 9729.600000000002,
+        "rss": 945094656
+      },
+      {
+        "browser": "chromium",
+        "hover": "passed",
+        "viewports": ["1280x720", "390x844"],
+        "gzipBytes": {
+          "vega": 180641,
+          "vegaLite": 79733
+        }
+      },
+      {
+        "peakRssBytes": 1085825024,
+        "node": "v22.22.2"
+      }
+    ],
+    [
+      {
+        "count": 100000,
+        "chartType": "Bar Chart",
+        "svgBytes": 17930661,
+        "pngBytes": 20212,
+        "elapsedMs": 4173.5217,
+        "rss": 739323904
+      },
+      {
+        "count": 100000,
+        "chartType": "Line Chart",
+        "svgBytes": 1529178,
+        "pngBytes": 22770,
+        "elapsedMs": 10651.9938,
+        "rss": 1004261376
+      },
+      {
+        "count": 100000,
+        "chartType": "Area Chart",
+        "svgBytes": 2703879,
+        "pngBytes": 26741,
+        "elapsedMs": 9499.852699999998,
+        "rss": 941879296
+      },
+      {
+        "browser": "chromium",
+        "hover": "passed",
+        "viewports": ["1280x720", "390x844"],
+        "gzipBytes": {
+          "vega": 180641,
+          "vegaLite": 79733
+        }
+      },
+      {
+        "peakRssBytes": 1096818688,
+        "node": "v22.22.2"
+      }
+    ]
+  ]
+}

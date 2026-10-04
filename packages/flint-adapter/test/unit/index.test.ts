@@ -1,17 +1,85 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStaticSvgHtml, DESIGN_CHART_COLORS, DESIGN_FONT_FAMILIES, renderChart, resolveRendererAdapter, toFlintAssemblyInput, validateRenderedChart, validateStaticSvgHtml } from "../../src/index.js";
+import {
+  compileVegaLite,
+  createStaticSvgHtml,
+  DESIGN_CHART_COLORS,
+  DESIGN_FONT_FAMILIES,
+  renderChart,
+  resolveRendererAdapter,
+  toFlintAssemblyInput,
+  validateRenderedChart,
+  validateStaticSvgHtml,
+} from "../../src/index.js";
 import { validateFlintTemplatePayload, validateFlintThemePayload } from "../../src/validation.js";
 
 const spec = {
   version: "v1" as const,
-  data: { values: [{ 月份: "2026-01", 销售额: 10 }, { 月份: "2026-02", 销售额: 20 }] },
+  data: {
+    values: [
+      { 月份: "2026-01", 销售额: 10 },
+      { 月份: "2026-02", 销售额: 20 },
+    ],
+  },
   semanticTypes: { 月份: "Month", 销售额: "Quantity" },
-  chartSpec: { chartType: "Line Chart" as const, title: "销售趋势", encodings: { x: { field: "月份" }, y: { field: "销售额" } }, baseSize: { width: 500, height: 300 } },
+  chartSpec: {
+    chartType: "Line Chart" as const,
+    title: "销售趋势",
+    encodings: { x: { field: "月份" }, y: { field: "销售额" } },
+    baseSize: { width: 500, height: 300 },
+  },
   theme: "economist" as const,
   themeVersion: "v1",
-  themeConfig: { ink: { series: { single: "#2563EB" } } }
+  themeConfig: { ink: { series: { single: "#2563EB" } } },
 };
+
+// CHG-2026-10-03-evidence-correctness-repair: TP02/TP03.
+test("compiled chart retains the complete 600-row input", () => {
+  const rows = Array.from({ length: 600 }, (_, index) => ({ category: `C${index + 1}`, amount: index + 1 }));
+  const compiled = compileVegaLite({
+    ...spec,
+    data: { values: rows },
+    semanticTypes: { category: "Category", amount: "Quantity" },
+    chartSpec: {
+      ...spec.chartSpec,
+      chartType: "Bar Chart",
+      encodings: { x: { field: "category" }, y: { field: "amount" } },
+    },
+  });
+  const values = (compiled.data as { values: Array<{ amount: number }> }).values;
+  assert.equal(values.length, 600);
+  assert.equal(Math.max(...values.map((row) => row.amount)), 600);
+});
+
+test("Area exports have a filled data mark", async () => {
+  const rendered = await renderChart({ ...spec, chartSpec: { ...spec.chartSpec, chartType: "Area Chart" } });
+  const filledPaths = [...rendered.svg.matchAll(/<path\b[^>]*\bfill="([^\"]+)"[^>]*>/g)].filter(
+    (match) => match[1] !== "none",
+  );
+  assert.ok(filledPaths.length > 0, "Area must contain filled paths, not only a line");
+});
+
+test("negative and positive bars have proportional heights and stay inside the canvas", async () => {
+  const rendered = await renderChart({
+    ...spec,
+    data: {
+      values: [
+        { 月份: "A", 销售额: -10 },
+        { 月份: "B", 销售额: 20 },
+      ],
+    },
+    chartSpec: { ...spec.chartSpec, chartType: "Bar Chart" },
+  });
+  const rectangles = [...rendered.svg.matchAll(/<rect\b([^>]+)>\s*<title>/g)].map((match) => {
+    const attribute = (name: string) => Number(new RegExp(`\\b${name}="([^\"]+)"`).exec(match[1])?.[1]);
+    return { x: attribute("x"), y: attribute("y"), width: attribute("width"), height: attribute("height") };
+  });
+  assert.equal(rectangles.length, 2);
+  assert.ok(Math.abs(rectangles[0].height / rectangles[1].height - 0.5) < 0.01);
+  assert.ok(
+    rectangles.every((rect) => rect.x >= 0 && rect.x + rect.width <= 500 && rect.y >= 0 && rect.y + rect.height <= 300),
+  );
+});
 
 test("plugin theme config reaches Flint and deterministic SVG output", async () => {
   const input = toFlintAssemblyInput(spec);
@@ -36,8 +104,8 @@ test("display annotations and value labels remain present in deterministic SVG e
       ...spec.chartSpec,
       annotations: [{ text: "重点月份" }],
       showValues: true,
-      showLegend: false
-    }
+      showLegend: false,
+    },
   });
   assert.match(rendered.svg, /重点月份/);
   assert.match(rendered.svg, />10<|>20</);
@@ -52,7 +120,10 @@ test("render validation records concrete Vega-Lite, SVG, and PNG artifacts indep
 
   const invalid = validateRenderedChart({ vegaLiteSpec: {}, svg: "<svg>", png: Buffer.from("not-a-png") });
   assert.equal(invalid.status, "failed");
-  assert.deepEqual(invalid.errors.map((error) => error.code), ["RENDER_VEGA_LITE_EMPTY", "RENDER_SVG_INVALID", "RENDER_PNG_INVALID"]);
+  assert.deepEqual(
+    invalid.errors.map((error) => error.code),
+    ["RENDER_VEGA_LITE_EMPTY", "RENDER_SVG_INVALID", "RENDER_PNG_INVALID"],
+  );
 });
 
 test("static HTML wraps trusted SVG and escapes evidence metadata without scripts", async () => {
@@ -66,7 +137,7 @@ test("static HTML wraps trusted SVG and escapes evidence metadata without script
     snapshotId: "snapshot-001",
     metricDefinition: { name: "销售额", formula: "sum(销售额)" },
     theme: "economist",
-    themeVersion: "v1"
+    themeVersion: "v1",
   });
 
   assert.match(html, /<!doctype html>/i);
@@ -78,24 +149,43 @@ test("static HTML wraps trusted SVG and escapes evidence metadata without script
   assert.doesNotMatch(html, /<script\b|javascript:/i);
   assert.equal(validateStaticSvgHtml(html).status, "passed");
   assert.equal(validateStaticSvgHtml(html.replace("</svg>", "<script>alert(1)</script></svg>")).status, "failed");
-  assert.equal(validateStaticSvgHtml(html.replace("</svg>", '<image href="https://example.com/pixel.png"></image></svg>')).status, "failed");
+  assert.equal(
+    validateStaticSvgHtml(html.replace("</svg>", '<image href="https://example.com/pixel.png"></image></svg>')).status,
+    "failed",
+  );
 });
 
 test("render validation explains every missing artifact before a Chart Revision can be drafted", () => {
   const invalid = validateRenderedChart({ vegaLiteSpec: {}, svg: "", png: Buffer.alloc(0) });
 
   assert.equal(invalid.status, "failed");
-  assert.deepEqual(invalid.errors.map((error) => error.code), ["RENDER_VEGA_LITE_EMPTY", "RENDER_SVG_EMPTY", "RENDER_PNG_EMPTY"]);
-  assert.deepEqual(invalid.errors.map((error) => error.path), ["vegaLiteSpec", "svg", "png"]);
+  assert.deepEqual(
+    invalid.errors.map((error) => error.code),
+    ["RENDER_VEGA_LITE_EMPTY", "RENDER_SVG_EMPTY", "RENDER_PNG_EMPTY"],
+  );
+  assert.deepEqual(
+    invalid.errors.map((error) => error.path),
+    ["vegaLiteSpec", "svg", "png"],
+  );
 });
 
 test("default theme accepts adapter overrides without inventing a Flint preset", () => {
-  const input = toFlintAssemblyInput({ ...spec, theme: "default", themeConfig: { ink: { series: { single: "#2563EB" } } } });
+  const input = toFlintAssemblyInput({
+    ...spec,
+    theme: "default",
+    themeConfig: { ink: { series: { single: "#2563EB" } } },
+  });
   assert.deepEqual(input.theme_spec, { ink: { series: { single: "#2563EB" } } });
 });
 
 test("adapter payload validation rejects unknown fields and accepts the builtin fragments", () => {
-  assert.deepEqual(validateFlintTemplatePayload({ chartType: "Line Chart", encodings: { x: { fieldRole: "time" }, y: { fieldRole: "measure" } } }), []);
+  assert.deepEqual(
+    validateFlintTemplatePayload({
+      chartType: "Line Chart",
+      encodings: { x: { fieldRole: "time" }, y: { fieldRole: "measure" } },
+    }),
+    [],
+  );
   assert.equal(validateFlintTemplatePayload({ chartType: "Line Chart", unsupported: true })[0]?.path, "unsupported");
   assert.deepEqual(validateFlintThemePayload({ extends: "economist", ink: { series: { single: "#2563EB" } } }), []);
   assert.equal(validateFlintThemePayload({ extends: "economist", unsupported: true })[0]?.path, "unsupported");

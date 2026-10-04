@@ -1,0 +1,295 @@
+Scope: 2 of 19 workspace projects
+packages/data-engine test$ tsx --test test/unit/index.test.ts
+packages/data-engine test: TAP version 13
+packages/data-engine test: # Subtest: explicit calendar units match days across leap years without substituting another day
+packages/data-engine test: ok 1 - explicit calendar units match days across leap years without substituting another day
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 10.6883
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: JSON whitespace-colliding keys and XLSX positional headers preserve typed cells
+packages/data-engine test: ok 2 - JSON whitespace-colliding keys and XLSX positional headers preserve typed cells
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 27.4136
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: percent change respects orderBy while retaining the source row order
+packages/data-engine test: ok 3 - percent change respects orderBy while retaining the source row order
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.4128
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: ambiguous duplicate calendar periods require aggregation
+packages/data-engine test: ok 4 - ambiguous duplicate calendar periods require aggregation
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.1971
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: explicit legacy execution preserves the frozen v1 ordering semantics
+packages/data-engine test: ok 5 - explicit legacy execution preserves the frozen v1 ordering semantics
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.5063
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: calendar comparison handles partitions, missing periods and negative or zero bases
+packages/data-engine test: ok 6 - calendar comparison handles partitions, missing periods and negative or zero bases
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.591
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: XLSX ISO dates and date-only inputs retain monthly offset semantics
+packages/data-engine test: ok 7 - XLSX ISO dates and date-only inputs retain monthly offset semantics
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.547
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: parser metadata maps each duplicate header and records conservative inference
+packages/data-engine test: ok 8 - parser metadata maps each duplicate header and records conservative inference
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 2.3113
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: numeric aggregation never silently drops invalid mixed-column cells
+packages/data-engine test: ok 9 - numeric aggregation never silently drops invalid mixed-column cells
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 1.0509
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: duplicate and normalized headers preserve every positional cell
+packages/data-engine test: ok 10 - duplicate and normalized headers preserve every positional cell
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.6151
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: CSV rows wider than the header fail explicitly instead of losing cells
+packages/data-engine test: ok 11 - CSV rows wider than the header fail explicitly instead of losing cells
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.4894
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: pasted identifiers and unsafe integers stay text while plain amounts stay numeric
+packages/data-engine test: ok 12 - pasted identifiers and unsafe integers stay text while plain amounts stay numeric
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.2971
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: mixed CSV columns preserve numeric-looking text without per-cell coercion
+packages/data-engine test: ok 13 - mixed CSV columns preserve numeric-looking text without per-cell coercion
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.1963
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: monthly YoY uses the prior calendar year across the year boundary
+packages/data-engine test: ok 14 - monthly YoY uses the prior calendar year across the year boundary
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.7197
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: a missing month is not synthesized as a zero row
+packages/data-engine test: ok 15 - a missing month is not synthesized as a zero row
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.2354
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: a CSV Data Snapshot remains immutable while its fixed TransformPlan reproduces rows and field lineage
+packages/data-engine test: ok 16 - a CSV Data Snapshot remains immutable while its fixed TransformPlan reproduces rows and field lineage
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 1.7799
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: unsupported source types and missing TransformPlan fields fail with an actionable boundary error
+packages/data-engine test: ok 17 - unsupported source types and missing TransformPlan fields fail with an actionable boundary error
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.6289
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: result summary uses all transformed rows while preview remains bounded
+packages/data-engine test: ok 18 - result summary uses all transformed rows while preview remains bounded
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 1.9557
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: 1..18
+packages/data-engine test: # tests 18
+packages/data-engine test: # suites 0
+packages/data-engine test: # pass 18
+packages/data-engine test: # fail 0
+packages/data-engine test: # cancelled 0
+packages/data-engine test: # skipped 0
+packages/data-engine test: # todo 0
+packages/data-engine test: # duration_ms 601.7964
+packages/data-engine test: Done
+packages/generation test$ tsx --test test/unit/index.test.ts test/unit/readiness-gate.test.ts test/unit/model-baseline.test.ts test/unit/context-projection.test.ts
+packages/generation test: TAP version 13
+packages/generation test: # Subtest: canonical_text_context 保留规范角色和顺序，并生成稳定哈希
+packages/generation test: ok 1 - canonical_text_context 保留规范角色和顺序，并生成稳定哈希
+packages/generation test:   ---
+packages/generation test:   duration_ms: 12.028
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: canonical_text_context 仅保留最近消息，并把截断事实写入投影和哈希
+packages/generation test: ok 2 - canonical_text_context 仅保留最近消息，并把截断事实写入投影和哈希
+packages/generation test:   ---
+packages/generation test:   duration_ms: 1.1114
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: 模型选择 avg 时编译器不得静默改用 sum，未知纵轴必须失败
+packages/generation test: ok 3 - 模型选择 avg 时编译器不得静默改用 sum，未知纵轴必须失败
+packages/generation test:   ---
+packages/generation test:   duration_ms: 71.0927
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: v2 deterministic calendar plans aggregate months and compare quarters and years
+packages/generation test: ok 4 - v2 deterministic calendar plans aggregate months and compare quarters and years
+packages/generation test:   ---
+packages/generation test:   duration_ms: 43.458
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: v2 normalizes every time value before aggregating, including unsampled dates and intraday timestamps
+packages/generation test: ok 5 - v2 normalizes every time value before aggregating, including unsampled dates and intraday timestamps
+packages/generation test:   ---
+packages/generation test:   duration_ms: 23.1538
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: legacy deterministic jobs retain plans without the new calendar-unit field
+packages/generation test: ok 6 - legacy deterministic jobs retain plans without the new calendar-unit field
+packages/generation test:   ---
+packages/generation test:   duration_ms: 13.4395
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 通过确定性 adapter 产出 drafted 和完整审计
+packages/generation test: ok 7 - Generation Cycle 通过确定性 adapter 产出 drafted 和完整审计
+packages/generation test:   ---
+packages/generation test:   duration_ms: 45.1244
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 将冻结的 Conversation 投影交给 Model Gateway，并在审计中保留版本和哈希
+packages/generation test: ok 8 - Generation Cycle 将冻结的 Conversation 投影交给 Model Gateway，并在审计中保留版本和哈希
+packages/generation test:   ---
+packages/generation test:   duration_ms: 6.0539
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 将 Gateway 的有界模型调用摘要保留在审计中
+packages/generation test: ok 9 - Generation Cycle 将 Gateway 的有界模型调用摘要保留在审计中
+packages/generation test:   ---
+packages/generation test:   duration_ms: 7.5502
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 在 Compile 缺少横轴时返回可执行的 Clarification Proposal
+packages/generation test: ok 10 - Generation Cycle 在 Compile 缺少横轴时返回可执行的 Clarification Proposal
+packages/generation test:   ---
+packages/generation test:   duration_ms: 6.3144
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 只在当前周期应用用户选择的候选横轴
+packages/generation test: ok 11 - Generation Cycle 只在当前周期应用用户选择的候选横轴
+packages/generation test:   ---
+packages/generation test:   duration_ms: 7.2341
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 在无法识别指标时返回 needs_clarification 而不是抛出异常
+packages/generation test: ok 12 - Generation Cycle 在无法识别指标时返回 needs_clarification 而不是抛出异常
+packages/generation test:   ---
+packages/generation test:   duration_ms: 5.181
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 将跨 seam 的非法模型输出归一为 failed
+packages/generation test: ok 13 - Generation Cycle 将跨 seam 的非法模型输出归一为 failed
+packages/generation test:   ---
+packages/generation test:   duration_ms: 6.7544
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 将破损的 Model Gateway envelope 归一为 failed
+packages/generation test: ok 14 - Generation Cycle 将破损的 Model Gateway envelope 归一为 failed
+packages/generation test:   ---
+packages/generation test:   duration_ms: 6.979
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle deterministically turns one frozen sales Snapshot into a validated draft with fixed TransformPlan lineage
+packages/generation test: ok 15 - Generation Cycle deterministically turns one frozen sales Snapshot into a validated draft with fixed TransformPlan lineage
+packages/generation test:   ---
+packages/generation test:   duration_ms: 9.6407
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle stops after two public repair attempts when a fixed validator remains unsatisfied
+packages/generation test: ok 16 - Generation Cycle stops after two public repair attempts when a fixed validator remains unsatisfied
+packages/generation test:   ---
+packages/generation test:   duration_ms: 30.2343
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation revision validation returns field-specific errors instead of a draftable result
+packages/generation test: ok 17 - Generation revision validation returns field-specific errors instead of a draftable result
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.2406
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: the regional sales baseline contains an independent expected monthly YoY result
+packages/generation test: ok 18 - the regional sales baseline contains an independent expected monthly YoY result
+packages/generation test:   ---
+packages/generation test:   duration_ms: 1.2357
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: a ready chart-plan decision is correct when its plan and fields reproduce the baseline
+packages/generation test: ok 19 - a ready chart-plan decision is correct when its plan and fields reproduce the baseline
+packages/generation test:   ---
+packages/generation test:   duration_ms: 14.0887
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: an executable decision with a missing chart field is invalid with a structured error
+packages/generation test: ok 20 - an executable decision with a missing chart field is invalid with a structured error
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.8836
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: a valid clarification decision is classified without executing a plan
+packages/generation test: ok 21 - a valid clarification decision is classified without executing a plan
+packages/generation test:   ---
+packages/generation test:   duration_ms: 1.5149
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: malformed model output is invalid before any data execution
+packages/generation test: ok 22 - malformed model output is invalid before any data execution
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.546
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Readiness Gate 用确定性证据生成候选和推荐，但保留用户确认门
+packages/generation test: ok 23 - Readiness Gate 用确定性证据生成候选和推荐，但保留用户确认门
+packages/generation test:   ---
+packages/generation test:   duration_ms: 1.2038
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Readiness Gate 没有候选字段时继续要求澄清，不伪造字段
+packages/generation test: ok 24 - Readiness Gate 没有候选字段时继续要求澄清，不伪造字段
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.6151
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Readiness Gate 只有一个候选时也不会自动采用
+packages/generation test: ok 25 - Readiness Gate 只有一个候选时也不会自动采用
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.1499
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Readiness Gate 对未覆盖的系统错误返回 blocked
+packages/generation test: ok 26 - Readiness Gate 对未覆盖的系统错误返回 blocked
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.1796
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Readiness Gate 只按诊断代码识别缺失横轴，不从错误文案猜测
+packages/generation test: ok 27 - Readiness Gate 只按诊断代码识别缺失横轴，不从错误文案猜测
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.0814
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: 1..27
+packages/generation test: # tests 27
+packages/generation test: # suites 0
+packages/generation test: # pass 27
+packages/generation test: # fail 0
+packages/generation test: # cancelled 0
+packages/generation test: # skipped 0
+packages/generation test: # todo 0
+packages/generation test: # duration_ms 1653.0253
+packages/generation test: Done

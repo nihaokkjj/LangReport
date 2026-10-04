@@ -136,6 +136,10 @@ export class EvidenceGenerationWorkflow {
         status: "completed",
         memoryContext,
         cycleResult: await cycle.run({
+          transformExecutorVersion:
+            input.job.executionAssembly === null
+              ? "v1"
+              : (executionAssemblySchema.parse(input.job.executionAssembly).transformExecutorVersion ?? "v1"),
           cycle: {
             workspaceId: input.workspaceId,
             projectId: input.job.projectId,

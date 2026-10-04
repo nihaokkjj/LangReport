@@ -1,0 +1,42 @@
+TAP version 13
+(node:10936) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: derived jobs inherit isolated source provenance and only public project memory references
+ok 1 - derived jobs inherit isolated source provenance and only public project memory references
+  ---
+  duration_ms: 1.3302
+  type: 'test'
+  ...
+# Subtest: derived jobs reject missing source Brief or metric instead of freezing empty objects
+ok 2 - derived jobs reject missing source Brief or metric instead of freezing empty objects
+  ---
+  duration_ms: 0.3663
+  type: 'test'
+  ...
+# Subtest: the Chart public patch returns isolated material for a new Revision
+ok 3 - the Chart public patch returns isolated material for a new Revision
+  ---
+  duration_ms: 0.2796
+  type: 'test'
+  ...
+# Subtest: Evidence finding reads the frozen complete result summary
+ok 4 - Evidence finding reads the frozen complete result summary
+  ---
+  duration_ms: 14.3439
+  type: 'test'
+  ...
+# Subtest: visual revisions reuse the complete frozen result while logical patches require execution
+ok 5 - visual revisions reuse the complete frozen result while logical patches require execution
+  ---
+  duration_ms: 6.3656
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 674.2952

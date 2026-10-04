@@ -30,6 +30,9 @@ _Avoid_: Dataset、Data Source、Upload
 **Data Snapshot**：从 Data Asset 解析出的不可变数据版本，是一次 Generation Cycle 实际使用的数据输入。
 _Avoid_: Copy、Cache、Current Data
 
+**Data Intake Job**：一次文件接入的可观察执行记录，负责从源文件经受限表格工具建立 Data Snapshot，记录状态、来源与失败原因。它先于图表生成，不是 Generation Cycle；等待接入完成时不能把尚未发布的数据当作 Snapshot 使用。
+_Avoid_: Generation Job、Live Sheet、Mutable Snapshot
+
 **Data Snapshot Preview**：对 Data Snapshot 中有限数据行和字段画像的只读查看；默认展示最新 Snapshot，也可以在同一 Data Asset 内切换历史 Snapshot，但不改变 Generation Cycle 的输入。
 _Avoid_: Raw File Viewer、Data Editor、Dataset Browser
 

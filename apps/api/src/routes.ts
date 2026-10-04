@@ -2412,6 +2412,7 @@ function freezeExecutionAssembly(modelRoute: ModelRouteSnapshot) {
   const graphDefinition = "evidence-generation-graph:v1:prepare>plan>transform>compile>validate>repair";
   return executionAssemblySchema.parse({
     version: "v1",
+    transformExecutorVersion: "v2",
     graph: {
       id: "evidence-generation-graph",
       definitionHash: `sha256:${fingerprintFor(graphDefinition)}`,

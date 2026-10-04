@@ -1,0 +1,20 @@
+[
+  {
+    "url": "https://example.invalid/data.json",
+    "attempts": ["https://example.invalid/data.json"],
+    "errors": [],
+    "outcome": {
+      "resolved": true,
+      "svgBytes": 3106
+    }
+  },
+  {
+    "url": "file:///C:/Windows/win.ini",
+    "attempts": ["file:///C:/Windows/win.ini"],
+    "errors": [],
+    "outcome": {
+      "resolved": true,
+      "svgBytes": 3106
+    }
+  }
+]

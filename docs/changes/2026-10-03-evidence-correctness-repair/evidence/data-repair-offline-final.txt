@@ -1,0 +1,825 @@
+Scope: 5 of 19 workspace projects
+packages/contracts test$ tsx --test test/unit/http.test.ts test/unit/model.test.ts
+packages/contracts test: TAP version 13
+packages/contracts test: # Subtest: route contract registry covers every current route exactly once
+packages/contracts test: ok 1 - route contract registry covers every current route exactly once
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 1.3162
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: every route contract has metadata, response schemas, and complete path parameters
+packages/contracts test: ok 2 - every route contract has metadata, response schemas, and complete path parameters
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 2.1821
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: route lookup is stable and marks bootstrap as internal
+packages/contracts test: ok 3 - route lookup is stable and marks bootstrap as internal
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 0.2183
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: generation message contract carries the single-send inputs and allows precondition responses
+packages/contracts test: ok 4 - generation message contract carries the single-send inputs and allows precondition responses
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 1.5829
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: data uploads require a Conversation source
+packages/contracts test: ok 5 - data uploads require a Conversation source
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 1.1172
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: Snapshot preview contracts keep list summaries light and detail provenance nullable
+packages/contracts test: ok 6 - Snapshot preview contracts keep list summaries light and detail provenance nullable
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 0.1557
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: Project creation contract requires auditable onboarding context
+packages/contracts test: ok 7 - Project creation contract requires auditable onboarding context
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 26.8528
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: Chart edit contract keeps data logic and display annotations explicit
+packages/contracts test: ok 8 - Chart edit contract keeps data logic and display annotations explicit
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 3.5217
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: OpenAPI document is generated from the route contracts
+packages/contracts test: ok 9 - OpenAPI document is generated from the route contracts
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 25.6388
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: chart-plan ready decision contains a plan and chart selection
+packages/contracts test: ok 10 - chart-plan ready decision contains a plan and chart selection
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 6.1596
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: chart-plan needs_clarification decision contains one Proposal and no plan
+packages/contracts test: ok 11 - chart-plan needs_clarification decision contains one Proposal and no plan
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 1.8699
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: Generation Readiness Proposal carries one diagnostic and deterministic candidate provenance
+packages/contracts test: ok 12 - Generation Readiness Proposal carries one diagnostic and deterministic candidate provenance
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 1.3252
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: generation decisions accept only current-cycle actions and bounded targets
+packages/contracts test: ok 13 - generation decisions accept only current-cycle actions and bounded targets
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 1.5689
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: chart-plan decisions cannot contain both a plan and a Proposal
+packages/contracts test: ok 14 - chart-plan decisions cannot contain both a plan and a Proposal
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 0.4272
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: prepared model context is a strict canonical text projection
+packages/contracts test: ok 15 - prepared model context is a strict canonical text projection
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 5.3103
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: chart-plan output descriptor is generated from the local decision contract
+packages/contracts test: ok 16 - chart-plan output descriptor is generated from the local decision contract
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 5.4553
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: execution assembly is versioned, non-secret, and does not fabricate legacy records
+packages/contracts test: ok 17 - execution assembly is versioned, non-secret, and does not fabricate legacy records
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 1.4787
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: result summary preserves complete transformed facts without preview rows
+packages/contracts test: ok 18 - result summary preserves complete transformed facts without preview rows
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 1.1881
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: persisted request excludes runtime parser and cancellation objects
+packages/contracts test: ok 19 - persisted request excludes runtime parser and cancellation objects
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 2.7589
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: model result has mutually exclusive success and error envelopes
+packages/contracts test: ok 20 - model result has mutually exclusive success and error envelopes
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 1.976
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: model gateway interface keeps parsing and cancellation runtime-only
+packages/contracts test: ok 21 - model gateway interface keeps parsing and cancellation runtime-only
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 1.3855
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: history policy fixes the first context strategy
+packages/contracts test: ok 22 - history policy fixes the first context strategy
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 0.2131
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: model profile and run snapshot retain effective routing and options
+packages/contracts test: ok 23 - model profile and run snapshot retain effective routing and options
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 1.4922
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: validation records have explicit status, errors, and validator version
+packages/contracts test: ok 24 - validation records have explicit status, errors, and validator version
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 0.6165
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: generation validation persists plan and render records as separate facts
+packages/contracts test: ok 25 - generation validation persists plan and render records as separate facts
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 0.3191
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: # Subtest: model error codes distinguish authentication, throttling, timeout, capability, tool, output, and budget failures
+packages/contracts test: ok 26 - model error codes distinguish authentication, throttling, timeout, capability, tool, output, and budget failures
+packages/contracts test:   ---
+packages/contracts test:   duration_ms: 0.1354
+packages/contracts test:   type: 'test'
+packages/contracts test:   ...
+packages/contracts test: 1..26
+packages/contracts test: # tests 26
+packages/contracts test: # suites 0
+packages/contracts test: # pass 26
+packages/contracts test: # fail 0
+packages/contracts test: # cancelled 0
+packages/contracts test: # skipped 0
+packages/contracts test: # todo 0
+packages/contracts test: # duration_ms 400.6995
+packages/contracts test: Done
+packages/data-engine test$ tsx --test test/unit/index.test.ts
+packages/data-engine test: TAP version 13
+packages/data-engine test: # Subtest: percent change respects orderBy while retaining the source row order
+packages/data-engine test: ok 1 - percent change respects orderBy while retaining the source row order
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 4.1091
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: ambiguous duplicate calendar periods require aggregation
+packages/data-engine test: ok 2 - ambiguous duplicate calendar periods require aggregation
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.6935
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: explicit legacy execution preserves the frozen v1 ordering semantics
+packages/data-engine test: ok 3 - explicit legacy execution preserves the frozen v1 ordering semantics
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.5545
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: calendar comparison handles partitions, missing periods and negative or zero bases
+packages/data-engine test: ok 4 - calendar comparison handles partitions, missing periods and negative or zero bases
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.4686
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: XLSX ISO dates and date-only inputs retain monthly offset semantics
+packages/data-engine test: ok 5 - XLSX ISO dates and date-only inputs retain monthly offset semantics
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.4487
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: parser metadata maps each duplicate header and records conservative inference
+packages/data-engine test: ok 6 - parser metadata maps each duplicate header and records conservative inference
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 2.7587
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: numeric aggregation never silently drops invalid mixed-column cells
+packages/data-engine test: ok 7 - numeric aggregation never silently drops invalid mixed-column cells
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 1.0995
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: duplicate and normalized headers preserve every positional cell
+packages/data-engine test: ok 8 - duplicate and normalized headers preserve every positional cell
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.4598
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: CSV rows wider than the header fail explicitly instead of losing cells
+packages/data-engine test: ok 9 - CSV rows wider than the header fail explicitly instead of losing cells
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.6396
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: pasted identifiers and unsafe integers stay text while plain amounts stay numeric
+packages/data-engine test: ok 10 - pasted identifiers and unsafe integers stay text while plain amounts stay numeric
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.5264
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: mixed CSV columns preserve numeric-looking text without per-cell coercion
+packages/data-engine test: ok 11 - mixed CSV columns preserve numeric-looking text without per-cell coercion
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.2098
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: monthly YoY uses the prior calendar year across the year boundary
+packages/data-engine test: ok 12 - monthly YoY uses the prior calendar year across the year boundary
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 2.9829
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: a missing month is not synthesized as a zero row
+packages/data-engine test: ok 13 - a missing month is not synthesized as a zero row
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.2839
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: a CSV Data Snapshot remains immutable while its fixed TransformPlan reproduces rows and field lineage
+packages/data-engine test: ok 14 - a CSV Data Snapshot remains immutable while its fixed TransformPlan reproduces rows and field lineage
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 1.9325
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: unsupported source types and missing TransformPlan fields fail with an actionable boundary error
+packages/data-engine test: ok 15 - unsupported source types and missing TransformPlan fields fail with an actionable boundary error
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 0.6565
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: # Subtest: result summary uses all transformed rows while preview remains bounded
+packages/data-engine test: ok 16 - result summary uses all transformed rows while preview remains bounded
+packages/data-engine test:   ---
+packages/data-engine test:   duration_ms: 1.8148
+packages/data-engine test:   type: 'test'
+packages/data-engine test:   ...
+packages/data-engine test: 1..16
+packages/data-engine test: # tests 16
+packages/data-engine test: # suites 0
+packages/data-engine test: # pass 16
+packages/data-engine test: # fail 0
+packages/data-engine test: # cancelled 0
+packages/data-engine test: # skipped 0
+packages/data-engine test: # todo 0
+packages/data-engine test: # duration_ms 495.494
+packages/data-engine test: Done
+packages/generation test$ tsx --test test/unit/index.test.ts test/unit/readiness-gate.test.ts test/unit/model-baseline.test.ts test/unit/context-projection.test.ts
+packages/generation test: TAP version 13
+packages/generation test: # Subtest: canonical_text_context 保留规范角色和顺序，并生成稳定哈希
+packages/generation test: ok 1 - canonical_text_context 保留规范角色和顺序，并生成稳定哈希
+packages/generation test:   ---
+packages/generation test:   duration_ms: 14.387
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: canonical_text_context 仅保留最近消息，并把截断事实写入投影和哈希
+packages/generation test: ok 2 - canonical_text_context 仅保留最近消息，并把截断事实写入投影和哈希
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.9822
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: 模型选择 avg 时编译器不得静默改用 sum，未知纵轴必须失败
+packages/generation test: ok 3 - 模型选择 avg 时编译器不得静默改用 sum，未知纵轴必须失败
+packages/generation test:   ---
+packages/generation test:   duration_ms: 66.0172
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 通过确定性 adapter 产出 drafted 和完整审计
+packages/generation test: ok 4 - Generation Cycle 通过确定性 adapter 产出 drafted 和完整审计
+packages/generation test:   ---
+packages/generation test:   duration_ms: 41.2751
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 将冻结的 Conversation 投影交给 Model Gateway，并在审计中保留版本和哈希
+packages/generation test: ok 5 - Generation Cycle 将冻结的 Conversation 投影交给 Model Gateway，并在审计中保留版本和哈希
+packages/generation test:   ---
+packages/generation test:   duration_ms: 6.9309
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 将 Gateway 的有界模型调用摘要保留在审计中
+packages/generation test: ok 6 - Generation Cycle 将 Gateway 的有界模型调用摘要保留在审计中
+packages/generation test:   ---
+packages/generation test:   duration_ms: 8.5391
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 在 Compile 缺少横轴时返回可执行的 Clarification Proposal
+packages/generation test: ok 7 - Generation Cycle 在 Compile 缺少横轴时返回可执行的 Clarification Proposal
+packages/generation test:   ---
+packages/generation test:   duration_ms: 12.0239
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 只在当前周期应用用户选择的候选横轴
+packages/generation test: ok 8 - Generation Cycle 只在当前周期应用用户选择的候选横轴
+packages/generation test:   ---
+packages/generation test:   duration_ms: 8.8316
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 在无法识别指标时返回 needs_clarification 而不是抛出异常
+packages/generation test: ok 9 - Generation Cycle 在无法识别指标时返回 needs_clarification 而不是抛出异常
+packages/generation test:   ---
+packages/generation test:   duration_ms: 4.9246
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 将跨 seam 的非法模型输出归一为 failed
+packages/generation test: ok 10 - Generation Cycle 将跨 seam 的非法模型输出归一为 failed
+packages/generation test:   ---
+packages/generation test:   duration_ms: 9.0397
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle 将破损的 Model Gateway envelope 归一为 failed
+packages/generation test: ok 11 - Generation Cycle 将破损的 Model Gateway envelope 归一为 failed
+packages/generation test:   ---
+packages/generation test:   duration_ms: 4.865
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle deterministically turns one frozen sales Snapshot into a validated draft with fixed TransformPlan lineage
+packages/generation test: ok 12 - Generation Cycle deterministically turns one frozen sales Snapshot into a validated draft with fixed TransformPlan lineage
+packages/generation test:   ---
+packages/generation test:   duration_ms: 12.9161
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation Cycle stops after two public repair attempts when a fixed validator remains unsatisfied
+packages/generation test: ok 13 - Generation Cycle stops after two public repair attempts when a fixed validator remains unsatisfied
+packages/generation test:   ---
+packages/generation test:   duration_ms: 23.2567
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Generation revision validation returns field-specific errors instead of a draftable result
+packages/generation test: ok 14 - Generation revision validation returns field-specific errors instead of a draftable result
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.2492
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: the regional sales baseline contains an independent expected monthly YoY result
+packages/generation test: ok 15 - the regional sales baseline contains an independent expected monthly YoY result
+packages/generation test:   ---
+packages/generation test:   duration_ms: 1.1908
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: a ready chart-plan decision is correct when its plan and fields reproduce the baseline
+packages/generation test: ok 16 - a ready chart-plan decision is correct when its plan and fields reproduce the baseline
+packages/generation test:   ---
+packages/generation test:   duration_ms: 13.9769
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: an executable decision with a missing chart field is invalid with a structured error
+packages/generation test: ok 17 - an executable decision with a missing chart field is invalid with a structured error
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.8144
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: a valid clarification decision is classified without executing a plan
+packages/generation test: ok 18 - a valid clarification decision is classified without executing a plan
+packages/generation test:   ---
+packages/generation test:   duration_ms: 1.3803
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: malformed model output is invalid before any data execution
+packages/generation test: ok 19 - malformed model output is invalid before any data execution
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.5316
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Readiness Gate 用确定性证据生成候选和推荐，但保留用户确认门
+packages/generation test: ok 20 - Readiness Gate 用确定性证据生成候选和推荐，但保留用户确认门
+packages/generation test:   ---
+packages/generation test:   duration_ms: 1.1114
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Readiness Gate 没有候选字段时继续要求澄清，不伪造字段
+packages/generation test: ok 21 - Readiness Gate 没有候选字段时继续要求澄清，不伪造字段
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.5623
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Readiness Gate 只有一个候选时也不会自动采用
+packages/generation test: ok 22 - Readiness Gate 只有一个候选时也不会自动采用
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.15
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Readiness Gate 对未覆盖的系统错误返回 blocked
+packages/generation test: ok 23 - Readiness Gate 对未覆盖的系统错误返回 blocked
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.1739
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: # Subtest: Readiness Gate 只按诊断代码识别缺失横轴，不从错误文案猜测
+packages/generation test: ok 24 - Readiness Gate 只按诊断代码识别缺失横轴，不从错误文案猜测
+packages/generation test:   ---
+packages/generation test:   duration_ms: 0.0857
+packages/generation test:   type: 'test'
+packages/generation test:   ...
+packages/generation test: 1..24
+packages/generation test: # tests 24
+packages/generation test: # suites 0
+packages/generation test: # pass 24
+packages/generation test: # fail 0
+packages/generation test: # cancelled 0
+packages/generation test: # skipped 0
+packages/generation test: # todo 0
+packages/generation test: # duration_ms 1498.3319
+packages/generation test: Done
+apps/generation-worker test$ tsx --test test/unit/snapshot-access.test.ts test/unit/memory-invocation-gateway.test.ts
+apps/generation-worker test: TAP version 13
+apps/generation-worker test: # Subtest: full provider request hard budget rejects before admission or gateway send
+apps/generation-worker test: ok 1 - full provider request hard budget rejects before admission or gateway send
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 11.16
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: # Subtest: post-admission full request budget rejection discards usage and never reaches the gateway
+apps/generation-worker test: ok 2 - post-admission full request budget rejection discards usage and never reaches the gateway
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 5.0907
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: # Subtest: revocation before admission removes preference; revocation after admission leaves only that call in flight
+apps/generation-worker test: ok 3 - revocation before admission removes preference; revocation after admission leaves only that call in flight
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 4.1574
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: # Subtest: revocation completed before admission cannot send the stored preference
+apps/generation-worker test: ok 4 - revocation completed before admission cannot send the stored preference
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 1.7739
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: # Subtest: unavailable revocation state blocks admission and provider send
+apps/generation-worker test: ok 5 - unavailable revocation state blocks admission and provider send
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 1.6602
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: # Subtest: loads a validated structured snapshot without leaking storage details
+apps/generation-worker test: ok 6 - loads a validated structured snapshot without leaking storage details
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 1.6646
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: # Subtest: allows a Project-owned asset to be reused by another Conversation
+apps/generation-worker test: ok 7 - allows a Project-owned asset to be reused by another Conversation
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 0.3146
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: # Subtest: rejects a mismatched snapshot and asset relation before reading
+apps/generation-worker test: ok 8 - rejects a mismatched snapshot and asset relation before reading
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 0.4356
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: # Subtest: rejects an asset from another Project before reading
+apps/generation-worker test: ok 9 - rejects an asset from another Project before reading
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 0.1913
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: # Subtest: rejects assets without a current Conversation source
+apps/generation-worker test: ok 10 - rejects assets without a current Conversation source
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 0.1239
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: # Subtest: rejects legacy or tampered object keys without a fallback read
+apps/generation-worker test: ok 11 - rejects legacy or tampered object keys without a fallback read
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 0.1856
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: # Subtest: maps missing objects to an auditable snapshot error
+apps/generation-worker test: ok 12 - maps missing objects to an auditable snapshot error
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 0.1819
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: # Subtest: maps other storage failures to a direct snapshot read failure
+apps/generation-worker test: ok 13 - maps other storage failures to a direct snapshot read failure
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 0.1189
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: # Subtest: rejects malformed snapshot JSON and schema payloads
+apps/generation-worker test: ok 14 - rejects malformed snapshot JSON and schema payloads
+apps/generation-worker test:   ---
+apps/generation-worker test:   duration_ms: 0.5306
+apps/generation-worker test:   type: 'test'
+apps/generation-worker test:   ...
+apps/generation-worker test: 1..14
+apps/generation-worker test: # tests 14
+apps/generation-worker test: # suites 0
+apps/generation-worker test: # pass 14
+apps/generation-worker test: # fail 0
+apps/generation-worker test: # cancelled 0
+apps/generation-worker test: # skipped 0
+apps/generation-worker test: # todo 0
+apps/generation-worker test: # duration_ms 1569.4453
+apps/generation-worker test: Done
+apps/api test$ tsx --test --test-concurrency=1 test/unit/auth.test.ts test/unit/http-contracts.test.ts test/unit/http-errors.test.ts test/unit/data-assets.test.ts test/unit/openapi.test.ts
+apps/api test: TAP version 13
+apps/api test: # Subtest: development requests require an authenticated context and reject x-user-id
+apps/api test: ok 1 - development requests require an authenticated context and reject x-user-id
+apps/api test:   ---
+apps/api test:   duration_ms: 1.2243
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: production requests require an auth context or an explicitly trusted proxy
+apps/api test: ok 2 - production requests require an auth context or an explicitly trusted proxy
+apps/api test:   ---
+apps/api test:   duration_ms: 0.2255
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: shared deployment passwords enforce their minimum length and are stored as scrypt hashes
+apps/api test: ok 3 - shared deployment passwords enforce their minimum length and are stored as scrypt hashes
+apps/api test:   ---
+apps/api test:   duration_ms: 86.2886
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: development login gateway issues an HttpOnly cookie without Secure and rejects identity headers
+apps/api test: ok 4 - development login gateway issues an HttpOnly cookie without Secure and rejects identity headers
+apps/api test:   ---
+apps/api test:   duration_ms: 883.7486
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: production app accepts the deployment auth provider request context
+apps/api test: ok 5 - production app accepts the deployment auth provider request context
+apps/api test:   ---
+apps/api test:   duration_ms: 518.8203
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: production JWT provider accepts a signed bearer or session cookie and rejects invalid signatures or claims
+apps/api test: ok 6 - production JWT provider accepts a signed bearer or session cookie and rejects invalid signatures or claims
+apps/api test:   ---
+apps/api test:   duration_ms: 1.2915
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: production JWT provider rejects a non-canonical signature encoding
+apps/api test: ok 7 - production JWT provider rejects a non-canonical signature encoding
+apps/api test:   ---
+apps/api test:   duration_ms: 0.373
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: production JWT provider requires an expiry no more than seven days after issuance
+apps/api test: ok 8 - production JWT provider requires an expiry no more than seven days after issuance
+apps/api test:   ---
+apps/api test:   duration_ms: 0.2228
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: production app wires the signed JWT provider when configured
+apps/api test: ok 9 - production app wires the signed JWT provider when configured
+apps/api test:   ---
+apps/api test:   duration_ms: 437.4766
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: API CORS explicitly supports the HttpOnly session cookie flow
+apps/api test: ok 10 - API CORS explicitly supports the HttpOnly session cookie flow
+apps/api test:   ---
+apps/api test:   duration_ms: 463.0495
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: production app rejects a spoofed identity when the provider has no user
+apps/api test: ok 11 - production app rejects a spoofed identity when the provider has no user
+apps/api test:   ---
+apps/api test:   duration_ms: 530.3914
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: login gateway signs a seven-day HS256 session and writes a secure HttpOnly cookie
+apps/api test: ok 12 - login gateway signs a seven-day HS256 session and writes a secure HttpOnly cookie
+apps/api test:   ---
+apps/api test:   duration_ms: 524.2185
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: login gateway returns generic errors without an application rate limit and validates TTL
+apps/api test: ok 13 - login gateway returns generic errors without an application rate limit and validates TTL
+apps/api test:   ---
+apps/api test:   duration_ms: 706.1774
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: disabled accounts cannot sign in, while already-issued JWTs remain valid until their original expiry
+apps/api test: ok 14 - disabled accounts cannot sign in, while already-issued JWTs remain valid until their original expiry
+apps/api test:   ---
+apps/api test:   duration_ms: 579.2878
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: self-service password change verifies the current password and preserves existing session expiry
+apps/api test: ok 15 - self-service password change verifies the current password and preserves existing session expiry
+apps/api test:   ---
+apps/api test:   duration_ms: 812.8239
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: login routes report unavailable configuration and session requires a valid token
+apps/api test: ok 16 - login routes report unavailable configuration and session requires a valid token
+apps/api test:   ---
+apps/api test:   duration_ms: 413.0494
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: public data asset DTO omits storage object keys and reports source status
+apps/api test: ok 17 - public data asset DTO omits storage object keys and reports source status
+apps/api test:   ---
+apps/api test:   duration_ms: 0.8471
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: conversation uploads use an isolated, snapshot-addressable object path
+apps/api test: ok 18 - conversation uploads use an isolated, snapshot-addressable object path
+apps/api test:   ---
+apps/api test:   duration_ms: 0.2275
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: intake validates the source relation before creating processing state
+apps/api test: ok 19 - intake validates the source relation before creating processing state
+apps/api test:   ---
+apps/api test:   duration_ms: 0.8587
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: intake writes both objects and commits one ready snapshot
+apps/api test: ok 20 - intake writes both objects and commits one ready snapshot
+apps/api test:   ---
+apps/api test:   duration_ms: 3.4276
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: intake updates one asset by appending a new snapshot and preserving v1
+apps/api test: ok 21 - intake updates one asset by appending a new snapshot and preserving v1
+apps/api test:   ---
+apps/api test:   duration_ms: 0.9437
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: failed updates clean up only new objects and preserve the ready asset
+apps/api test: ok 22 - failed updates clean up only new objects and preserve the ready asset
+apps/api test:   ---
+apps/api test:   duration_ms: 0.8657
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: source object failure persists a typed failure without creating a snapshot
+apps/api test: ok 23 - source object failure persists a typed failure without creating a snapshot
+apps/api test:   ---
+apps/api test:   duration_ms: 0.4295
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: normalized object failure compensates the source object and persists a typed failure
+apps/api test: ok 24 - normalized object failure compensates the source object and persists a typed failure
+apps/api test:   ---
+apps/api test:   duration_ms: 0.4568
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: snapshot persistence failure compensates both objects and never reaches ready
+apps/api test: ok 25 - snapshot persistence failure compensates both objects and never reaches ready
+apps/api test:   ---
+apps/api test:   duration_ms: 0.8537
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: cleanup failures are audited without replacing the original storage error
+apps/api test: ok 26 - cleanup failures are audited without replacing the original storage error
+apps/api test:   ---
+apps/api test:   duration_ms: 0.7565
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: parse failures become safe 422 errors and leave no objects
+apps/api test: ok 27 - parse failures become safe 422 errors and leave no objects
+apps/api test:   ---
+apps/api test:   duration_ms: 0.3926
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: the module enforces the 50 MB boundary independently of HTTP multipart limits
+apps/api test: ok 28 - the module enforces the 50 MB boundary independently of HTTP multipart limits
+apps/api test:   ---
+apps/api test:   duration_ms: 0.1743
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: development bootstrap is disabled in production
+apps/api test: ok 29 - development bootstrap is disabled in production
+apps/api test:   ---
+apps/api test:   duration_ms: 0.6632
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: Fastify registers every route with its HTTP contract
+apps/api test: ok 30 - Fastify registers every route with its HTTP contract
+apps/api test:   ---
+apps/api test:   duration_ms: 777.1778
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: multipart upload keeps its OpenAPI body but skips Fastify JSON body validation
+apps/api test: ok 31 - multipart upload keeps its OpenAPI body but skips Fastify JSON body validation
+apps/api test:   ---
+apps/api test:   duration_ms: 0.1709
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: snapshot re-ingest contracts expose the target Asset path and multipart shape
+apps/api test: ok 32 - snapshot re-ingest contracts expose the target Asset path and multipart shape
+apps/api test:   ---
+apps/api test:   duration_ms: 0.5921
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: database account contracts expose session identity and the current-password change route
+apps/api test: ok 33 - database account contracts expose session identity and the current-password change route
+apps/api test:   ---
+apps/api test:   duration_ms: 0.1124
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: sendHttpError returns the stable error shape and request id
+apps/api test: ok 34 - sendHttpError returns the stable error shape and request id
+apps/api test:   ---
+apps/api test:   duration_ms: 135.3307
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # Subtest: sendDataError maps intake failures without exposing provider details
+apps/api test: ok 35 - sendDataError maps intake failures without exposing provider details
+apps/api test:   ---
+apps/api test:   duration_ms: 3.1846
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: serves OpenAPI JSON and a standard Swagger UI page
+apps/api test: ok 36 - serves OpenAPI JSON and a standard Swagger UI page
+apps/api test:   ---
+apps/api test:   duration_ms: 754.3002
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: hides internal documentation and bootstrap routes in production
+apps/api test: ok 37 - hides internal documentation and bootstrap routes in production
+apps/api test:   ---
+apps/api test:   duration_ms: 494.295
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+apps/api test: # Subtest: documents the Generation Job async state and failure trace contract
+apps/api test: ok 38 - documents the Generation Job async state and failure trace contract
+apps/api test:   ---
+apps/api test:   duration_ms: 472.7816
+apps/api test:   type: 'test'
+apps/api test:   ...
+apps/api test: 1..38
+apps/api test: # tests 38
+apps/api test: # suites 0
+apps/api test: # pass 38
+apps/api test: # fail 0
+apps/api test: # cancelled 0
+apps/api test: # skipped 0
+apps/api test: # todo 0
+apps/api test: # duration_ms 16890.0589
+apps/api test: Done

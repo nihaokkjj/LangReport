@@ -29,12 +29,13 @@ const transformStepSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("derive"),
     outputColumn: z.string().min(1),
-    expression: z.enum(["year", "month", "quarter", "percent_change", "sum", "difference", "ratio"]),
+    expression: z.enum(["year", "month", "quarter", "day", "percent_change", "sum", "difference", "ratio"]),
     inputColumns: z.array(z.string().min(1)).min(1),
     partitionBy: z.array(z.string().min(1)).max(8).optional(),
     orderBy: z.string().min(1).optional(),
     periodColumn: z.string().min(1).optional(),
     periodOffset: z.number().int().positive().max(120).optional(),
+    periodUnit: z.enum(["day", "month", "quarter", "year"]).optional(),
   }),
   z.object({
     kind: z.literal("aggregate"),
@@ -1219,6 +1220,7 @@ export const modelRouteSnapshotSchema = z
 export const executionAssemblySchema = z
   .object({
     version: z.literal("v1"),
+    transformExecutorVersion: z.enum(["v1", "v2"]).optional(),
     graph: z
       .object({
         id: z.literal("evidence-generation-graph"),

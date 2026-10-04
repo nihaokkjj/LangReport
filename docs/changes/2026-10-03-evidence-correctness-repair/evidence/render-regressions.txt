@@ -1,0 +1,132 @@
+$ tsx --test test/unit/index.test.ts
+TAP version 13
+# Subtest: compiled chart retains the complete 600-row input
+not ok 1 - compiled chart retains the complete 600-row input
+  ---
+  duration_ms: 24.6653
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\packages\\flint-adapter\\test\\unit\\index.test.ts:17:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    115 !== 600
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 600
+  actual: 115
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (D:\front\newProject\LangReport\packages\flint-adapter\test\unit\index.test.ts:21:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: Area exports have a filled data mark
+not ok 2 - Area exports have a filled data mark
+  ---
+  duration_ms: 84.1898
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\packages\\flint-adapter\\test\\unit\\index.test.ts:25:1'
+  failureType: 'testCodeFailure'
+  error: 'Area must contain filled paths, not only a line'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (D:\front\newProject\LangReport\packages\flint-adapter\test\unit\index.test.ts:28:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: negative and positive bars have proportional heights and stay inside the canvas
+not ok 3 - negative and positive bars have proportional heights and stay inside the canvas
+  ---
+  duration_ms: 25.8373
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\packages\\flint-adapter\\test\\unit\\index.test.ts:31:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+
+      assert.ok(Math.abs(rectangles[0].height / rectangles[1].height - 0.5) < 0.01)
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (D:\front\newProject\LangReport\packages\flint-adapter\test\unit\index.test.ts:38:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: plugin theme config reaches Flint and deterministic SVG output
+ok 4 - plugin theme config reaches Flint and deterministic SVG output
+  ---
+  duration_ms: 20.9832
+  type: 'test'
+  ...
+# Subtest: default deterministic chart uses the warm workbench palette
+ok 5 - default deterministic chart uses the warm workbench palette
+  ---
+  duration_ms: 10.8306
+  type: 'test'
+  ...
+# Subtest: display annotations and value labels remain present in deterministic SVG exports
+ok 6 - display annotations and value labels remain present in deterministic SVG exports
+  ---
+  duration_ms: 23.7191
+  type: 'test'
+  ...
+# Subtest: render validation records concrete Vega-Lite, SVG, and PNG artifacts independently
+ok 7 - render validation records concrete Vega-Lite, SVG, and PNG artifacts independently
+  ---
+  duration_ms: 14.8678
+  type: 'test'
+  ...
+# Subtest: static HTML wraps trusted SVG and escapes evidence metadata without scripts
+ok 8 - static HTML wraps trusted SVG and escapes evidence metadata without scripts
+  ---
+  duration_ms: 15.3155
+  type: 'test'
+  ...
+# Subtest: render validation explains every missing artifact before a Chart Revision can be drafted
+ok 9 - render validation explains every missing artifact before a Chart Revision can be drafted
+  ---
+  duration_ms: 0.5461
+  type: 'test'
+  ...
+# Subtest: default theme accepts adapter overrides without inventing a Flint preset
+ok 10 - default theme accepts adapter overrides without inventing a Flint preset
+  ---
+  duration_ms: 0.6048
+  type: 'test'
+  ...
+# Subtest: adapter payload validation rejects unknown fields and accepts the builtin fragments
+ok 11 - adapter payload validation rejects unknown fields and accepts the builtin fragments
+  ---
+  duration_ms: 5.4521
+  type: 'test'
+  ...
+# Subtest: platform renderer registry resolves only the built-in Vega-Lite adapter
+ok 12 - platform renderer registry resolves only the built-in Vega-Lite adapter
+  ---
+  duration_ms: 0.3522
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 9
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 651.3482
+D:\front\newProject\LangReport\packages\flint-adapter:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @langreport/flint-adapter@ test: `tsx --test test/unit/index.test.ts`
+Exit status 1

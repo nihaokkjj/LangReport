@@ -1,0 +1,43 @@
+[
+  {
+    "count": 600,
+    "chartType": "Bar Chart",
+    "svgBytes": 116532,
+    "pngBytes": 31117,
+    "elapsedMs": 128.08270000000005,
+    "rss": 144617472
+  },
+  {
+    "count": 600,
+    "chartType": "Line Chart",
+    "svgBytes": 16859,
+    "pngBytes": 74626,
+    "elapsedMs": 77.39859999999999,
+    "rss": 148430848
+  },
+  {
+    "count": 600,
+    "chartType": "Area Chart",
+    "svgBytes": 23798,
+    "pngBytes": 128172,
+    "elapsedMs": 68.75600000000009,
+    "rss": 150052864
+  },
+  {
+    "browserCompleteRows": 600,
+    "tailAnomaly": 99999
+  },
+  {
+    "browser": "chromium",
+    "hover": "passed",
+    "viewports": ["1280x720", "390x844"],
+    "gzipBytes": {
+      "vega": 180641,
+      "vegaLite": 79733
+    }
+  },
+  {
+    "peakRssBytes": 160022528,
+    "node": "v22.22.2"
+  }
+]

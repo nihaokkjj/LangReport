@@ -8,6 +8,7 @@ import {
   transformPlanSchema,
   type CanonicalTextContextProjection,
   type ChartPlanDecision,
+  type ChartSelection,
   type ConversationIntent,
   type FlintSpec,
   type GenerationClarificationProposal,
@@ -67,6 +68,7 @@ export {
 } from "./context-projection.js";
 
 export type GenerationInput = {
+  transformExecutorVersion?: "v1" | "v2";
   prompt: string;
   profiles: ColumnProfile[];
   rows: DataRow[];
@@ -123,9 +125,22 @@ const MEASURE_NAME_HINTS = [
   "cost",
 ];
 
-function parseConversationIntent(prompt: string, profiles: ColumnProfile[]): ConversationIntent {
+function parseConversationIntent(
+  prompt: string,
+  profiles: ColumnProfile[],
+  executorVersion: "v1" | "v2" = "v2",
+): ConversationIntent {
   const normalizedPrompt = prompt.trim();
-  const timeProfile = findProfile(profiles, DATE_NAME_HINTS, (profile) => profile.inferredType === "date");
+  const timeProfile = findProfile(
+    profiles,
+    DATE_NAME_HINTS,
+    (profile) =>
+      profile.inferredType === "date" ||
+      (executorVersion === "v2" &&
+        includesHint(profile.name, DATE_NAME_HINTS) &&
+        profile.sampleValues.length > 0 &&
+        profile.sampleValues.every((value) => /^(?:\d{4}|\d{4}-Q[1-4]|\d{4}-\d{2}-\d{2}T.*Z)$/.test(String(value)))),
+  );
   const numericProfiles = profiles.filter((profile) => profile.inferredType === "number");
   const measureProfile =
     numericProfiles.find((profile) => includesHint(profile.name, MEASURE_NAME_HINTS)) ?? numericProfiles[0];
@@ -168,7 +183,11 @@ function parseConversationIntent(prompt: string, profiles: ColumnProfile[]): Con
   });
 }
 
-function generateTransformPlan(intentInput: ConversationIntent, profiles: ColumnProfile[]): TransformPlan {
+function generateTransformPlan(
+  intentInput: ConversationIntent,
+  profiles: ColumnProfile[],
+  executorVersion: "v1" | "v2" = "v2",
+): TransformPlan {
   const intent = conversationIntentSchema.parse(intentInput);
   const availableColumns = new Set(profiles.map((profile) => profile.name));
   const measure = intent.measureColumns[0];
@@ -194,6 +213,15 @@ function generateTransformPlan(intentInput: ConversationIntent, profiles: Column
       measures: [{ column: measure, operation: "sum", outputColumn: aggregateColumn }],
     },
   ];
+  if (executorVersion === "v2" && intent.timeColumn && intent.timeGrain) {
+    const grain = intent.timeGrain;
+    steps.unshift({
+      kind: "derive",
+      outputColumn: intent.timeColumn,
+      inputColumns: [intent.timeColumn],
+      expression: grain,
+    });
+  }
   const expectedColumns = [...groupBy, aggregateColumn];
   if (intent.comparison !== "none") {
     const comparisonColumn = `${measure}_${intent.comparison}`;
@@ -205,7 +233,28 @@ function generateTransformPlan(intentInput: ConversationIntent, profiles: Column
       partitionBy: intent.dimensionColumns.filter((column) => column !== intent.timeColumn),
       orderBy: intent.timeColumn,
       periodColumn: intent.timeColumn,
-      periodOffset: intent.comparison === "yoy" ? 12 : 1,
+      periodOffset:
+        executorVersion === "v1"
+          ? intent.comparison === "yoy"
+            ? 12
+            : 1
+          : intent.comparison === "yoy"
+            ? intent.timeGrain === "quarter"
+              ? 4
+              : intent.timeGrain === "year" || intent.timeGrain === "day"
+                ? 1
+                : 12
+            : 1,
+      ...(executorVersion === "v2"
+        ? {
+            periodUnit:
+              intent.timeGrain === "day"
+                ? intent.comparison === "yoy"
+                  ? ("year" as const)
+                  : ("month" as const)
+                : (intent.timeGrain ?? ("month" as const)),
+          }
+        : {}),
     });
     expectedColumns.push(comparisonColumn);
   }
@@ -223,6 +272,7 @@ function generateTransformPlan(intentInput: ConversationIntent, profiles: Column
 function generateFlintSpec(input: {
   intent: ConversationIntent;
   transform: TransformResult;
+  chartSelection?: ChartSelection;
   theme?: FlintSpec["theme"];
   themeVersion?: string;
   themeConfig?: Record<string, unknown>;
@@ -231,22 +281,31 @@ function generateFlintSpec(input: {
   const { intent, transform } = input;
   const measure = intent.measureColumns[0];
   if (!measure) throw new Error("缺少图表指标");
-  const valueColumn = transform.columns.includes(`${measure}_sum`)
-    ? `${measure}_sum`
-    : transform.columns.find(
-        (column) =>
-          column !== intent.timeColumn &&
-          column !== intent.dimensionColumns[0] &&
-          transform.rows.some((row) => typeof row[column] === "number"),
-      );
+  const valueColumn =
+    input.chartSelection?.yField ??
+    (transform.columns.includes(`${measure}_sum`)
+      ? `${measure}_sum`
+      : transform.columns.find(
+          (column) =>
+            column !== intent.timeColumn &&
+            column !== intent.dimensionColumns[0] &&
+            transform.rows.some((row) => typeof row[column] === "number"),
+        ));
   if (!valueColumn) throw new Error("变换结果没有可视化指标");
-  const dimension = intent.dimensionColumns[0];
-  const xColumn = intent.timeColumn ?? dimension ?? transform.columns.find((column) => column !== valueColumn);
+  const dimension = input.chartSelection ? (input.chartSelection.seriesField ?? undefined) : intent.dimensionColumns[0];
+  const xColumn =
+    input.chartSelection?.xField ??
+    intent.timeColumn ??
+    dimension ??
+    transform.columns.find((column) => column !== valueColumn);
   if (!xColumn || !transform.columns.includes(xColumn))
     throw new GenerationReadinessError("MISSING_X_FIELD", "缺少图表横轴字段");
+  for (const field of [xColumn, valueColumn, dimension].filter((value): value is string => Boolean(value))) {
+    if (!transform.columns.includes(field)) throw new Error(`模型选择的图表字段不存在：${field}`);
+  }
   const comparisonColumn = intent.comparison === "none" ? undefined : `${measure}_${intent.comparison}`;
   const encodings: FlintSpec["chartSpec"]["encodings"] = {
-    x: { field: xColumn, type: intent.timeColumn ? "temporal" : "nominal" },
+    x: { field: xColumn, type: xColumn === intent.timeColumn ? "temporal" : "nominal" },
     y: { field: valueColumn, type: "quantitative" },
   };
   if (dimension && dimension !== xColumn && transform.columns.includes(dimension)) {
@@ -257,7 +316,11 @@ function generateFlintSpec(input: {
   }
   const chartType =
     input.chartTypeOverride ??
-    (intent.chartType === "bar" ? "Bar Chart" : intent.chartType === "area" ? "Area Chart" : "Line Chart");
+    ((input.chartSelection?.chartType ?? intent.chartType) === "bar"
+      ? "Bar Chart"
+      : (input.chartSelection?.chartType ?? intent.chartType) === "area"
+        ? "Area Chart"
+        : "Line Chart");
   return flintSpecSchema.parse({
     version: "v1",
     data: { values: transform.rows },
@@ -321,73 +384,6 @@ function validateFlintSpec(specInput: unknown): ValidationReport {
     dataFields: dataFieldsValid,
     visual: visualValid,
   });
-}
-
-/** Materialize a validated Chart Plan decision through the internal deterministic modules. */
-function materializeArtifacts(
-  input: GenerationInput & { plan?: TransformPlan },
-  decision: Extract<ChartPlanDecision, { decision: "ready" }>,
-): GenerationArtifacts {
-  const intent = decision.intent;
-  const pluginManifests = input.pluginManifests ?? [];
-  const pluginTemplate = selectPluginTemplate(input.prompt, pluginManifests, "vega-lite");
-  const pluginTemplateId = pluginTemplate?.id;
-  const pluginChartType = pluginTemplate?.payload.chartType;
-  const chartTypeOverride =
-    pluginChartType === "Line Chart" || pluginChartType === "Bar Chart" || pluginChartType === "Area Chart"
-      ? pluginChartType
-      : undefined;
-  let plan = input.plan ? transformPlanSchema.parse(input.plan) : decision.plan;
-  let repairCount = 0;
-  let transform = executeTransformPlan(plan, input.rows);
-  const themeConfig = input.themeConfig ?? {};
-  let flintSpec = generateFlintSpec({
-    intent,
-    transform,
-    theme: input.theme,
-    themeVersion: input.themeVersion,
-    themeConfig,
-    chartTypeOverride,
-  });
-  let validation = validateFlintSpec(flintSpec);
-  while (!validation.valid && repairCount < 2) {
-    repairCount += 1;
-    plan = repairPlan(plan, validation, input.profiles);
-    transform = executeTransformPlan(plan, input.rows);
-    flintSpec = generateFlintSpec({
-      intent,
-      transform,
-      theme: input.theme,
-      themeVersion: input.themeVersion,
-      themeConfig,
-      chartTypeOverride,
-    });
-    validation = validateFlintSpec(flintSpec);
-  }
-  const pluginSemanticTypes = semanticTypesFromPlugins(input.profiles, pluginManifests);
-  flintSpec = {
-    ...flintSpec,
-    semanticTypes: { ...flintSpec.semanticTypes, ...pluginSemanticTypes },
-  };
-  validation = applyPluginValidation(validation, pluginManifests, {
-    templateId: pluginTemplateId,
-    renderer: "vega-lite",
-    columns: input.profiles.map((profile) => profile.name),
-    roles: { ...rolesForIntent(intent), [flintSpec.chartSpec.encodings.y.field]: "measure" },
-    semanticTypes: flintSpec.semanticTypes,
-    nullRates: Object.fromEntries(
-      input.profiles.map((profile) => [profile.name, input.rows.length ? profile.nullCount / input.rows.length : 0]),
-    ),
-    cardinalities: Object.fromEntries(input.profiles.map((profile) => [profile.name, profile.distinctCount])),
-  });
-  const pluginUsage = buildPluginUsage({
-    manifests: pluginManifests,
-    template: pluginTemplate,
-    themeRef: input.pluginThemeRef ?? null,
-    semanticTypes: pluginSemanticTypes,
-    renderer: "vega-lite",
-  });
-  return { intent, plan, transform, flintSpec, validation, repairCount, pluginUsage };
 }
 
 function selectPluginTemplate(
@@ -702,120 +698,13 @@ type PreparedGenerationModelContext = {
  * compilation, plugin validation, and repair remain private to this module.
  */
 export class GenerationCycle {
-  constructor(private readonly gateway: ModelGateway = new DeterministicModelGateway()) {}
+  constructor(private readonly gateway?: ModelGateway) {}
 
   async run(input: GenerationCycleInput): Promise<GenerationCycleResult> {
-    return runGenerationCycleGraph(input, this.gateway);
-    /*
-    Legacy imperative implementation removed from the executable type surface.
-    let context: PreparedModelContext;
-    let preparedContext: PreparedGenerationModelContext;
-    let audit: GenerationCycleAudit;
-    try {
-      preparedContext = buildPreparedModelContext(input);
-      context = preparedContext.context;
-      audit = createAudit(input, preparedContext);
-    } catch (error) {
-      audit = createAudit(input);
-      return failedResult(audit, input, "GENERATION_CONTEXT_INVALID", errorMessage(error, "模型上下文无效"), false, "planning");
-    }
-
-    if (input.memoryContext?.conflicts?.some((conflict) => conflict.requiresDecision)) {
-      const proposal = memoryConflictProposal(input.memoryContext.conflicts
-        .filter((conflict) => conflict.requiresDecision)
-        .at(0)!.memoryKey);
-      audit = setStage(audit, "planning", "succeeded");
-      return { status: "needs_clarification", diagnostic: proposal.diagnostic, proposal, audit };
-    }
-
-    if (Date.now() >= input.cycle.budget.deadlineAt) {
-      return failedResult(audit, input, "MODEL_BUDGET_EXCEEDED", "Generation Cycle 在模型调用前已超过截止时间预算", false, "planning");
-    }
-
-    const deadline = createDeadlineAbortController(input.cycle.budget.deadlineAt);
-    const request: RuntimeModelRequest<ChartPlanDecision> = {
-      version: "v1",
-      workspaceId: input.cycle.workspaceId,
-      projectId: input.cycle.projectId,
-      generationJobId: input.cycle.generationJobId,
-      invocationId: input.cycle.invocationId,
-      task: "chart-plan",
-      routeSnapshotId: input.cycle.routeSnapshotId,
-      context,
-      output: {
-        ...createChartPlanOutputDescriptor(),
-        parse: (value: unknown) => chartPlanDecisionSchema.parse(value)
-      },
-      budget: input.cycle.budget,
-      signal: deadline.signal
-    };
-
-    let modelResult: ModelResult<ChartPlanDecision>;
-    try {
-      modelResult = await this.gateway.generateStructured(request);
-    } catch (error) {
-      const timedOut = deadline.signal.aborted || Date.now() >= input.cycle.budget.deadlineAt;
-      return failedResult(
-        audit,
-        input,
-        timedOut ? "MODEL_TIMEOUT" : "GENERATION_UNEXPECTED",
-        errorMessage(error, timedOut ? "Model Gateway 在截止时间内未完成" : "Model Gateway 调用失败"),
-        timedOut,
-        "planning"
-      );
-    } finally {
-      deadline.dispose();
-    }
-    audit = setStage(audit, "planning", "succeeded");
-
-    const resultEnvelope = modelResultSchema.safeParse(modelResult);
-    if (!resultEnvelope.success || !resultEnvelope.data) {
-      return failedResult(audit, input, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的结果 envelope 不符合版本化合同", false, "planning");
-    }
-    audit = { ...audit, modelInvocation: resultEnvelope.data.invocation ?? null };
-
-    const normalizedModelResult = modelResult as ModelResult<ChartPlanDecision>;
-    if (normalizedModelResult.status === "error") {
-      return failedResult(audit, input, normalizedModelResult.code, normalizedModelResult.message, normalizedModelResult.retryable, "planning");
-    }
-
-    const decision = chartPlanDecisionSchema.safeParse((normalizedModelResult as Extract<ModelResult<ChartPlanDecision>, { status: "ok" }>).data);
-    if (!decision.success || !decision.data) {
-      return failedResult(audit, input, "MODEL_OUTPUT_INVALID", "Model Gateway 返回的 chart-plan 不符合版本化合同", false, "planning");
-    }
-    if (decision.data.decision === "needs_clarification") {
-      return { status: "needs_clarification", diagnostic: decision.data.proposal.diagnostic, proposal: decision.data.proposal, audit };
-    }
-
-    let artifacts: GenerationArtifacts;
-    try {
-      audit = setStage(audit, "transforming", "succeeded");
-      artifacts = materializeArtifacts(input, decision.data);
-      audit = setStage(audit, "compiling", "succeeded");
-      audit = setStage(audit, "validating", "succeeded");
-    } catch (error) {
-      const message = errorMessage(error, "生成阶段失败");
-      const stage = message.includes("Flint") || message.includes("图表") ? "compiling" : "transforming";
-      return failedResult(audit, input, stage === "compiling" ? "GENERATION_COMPILATION_FAILED" : "GENERATION_TRANSFORM_FAILED", message, false, stage);
-    }
-
-    audit = {
-      ...audit,
-      planValidation: validationRecordFromReport(artifacts.validation),
-      repairCount: artifacts.repairCount
-    };
-    if (!artifacts.validation.valid) {
-      return failedResult(
-        audit,
-        input,
-        artifacts.repairCount >= 2 ? "MODEL_BUDGET_EXCEEDED" : "GENERATION_VALIDATION_FAILED",
-        artifacts.repairCount >= 2 ? "生成修复预算已耗尽，Flint Spec 仍未通过校验" : "生成结果未通过必要校验",
-        false,
-        "validating"
-      );
-    }
-    return { status: "drafted", artifacts, audit };
-    */
+    return runGenerationCycleGraph(
+      input,
+      this.gateway ?? new DeterministicModelGateway(input.transformExecutorVersion ?? "v2"),
+    );
   }
 }
 //模型规划
@@ -946,7 +835,12 @@ async function runGenerationCycleGraph(
           proposal,
         };
       }
-      decision = applyGenerationDecision(parsed.data, input.generationDecision, input.profiles);
+      decision = applyGenerationDecision(
+        parsed.data,
+        input.generationDecision,
+        input.profiles,
+        input.transformExecutorVersion,
+      );
       return {
         audit: nextAudit,
         decision,
@@ -956,7 +850,7 @@ async function runGenerationCycleGraph(
     async transform(state) {
       const audit = state.audit as GenerationCycleAudit;
       try {
-        transform = executeTransformPlan(state.transformPlan!, input.rows);
+        transform = executeTransformPlan(state.transformPlan!, input.rows, input.transformExecutorVersion);
         return { audit: setStage(audit, "transforming", "succeeded") };
       } catch (error) {
         return fail(audit, "GENERATION_TRANSFORM_FAILED", errorMessage(error, "生成阶段失败"), false, "transforming");
@@ -968,6 +862,7 @@ async function runGenerationCycleGraph(
         flintSpec = generateFlintSpec({
           intent: decision!.intent,
           transform: transform!,
+          chartSelection: decision!.chartSelection,
           theme: input.theme,
           themeVersion: input.themeVersion,
           themeConfig: input.themeConfig ?? {},
@@ -1095,6 +990,7 @@ export function validateGenerationRevision(specInput: unknown): ValidationReport
 }
 
 class DeterministicModelGateway implements ModelGateway {
+  constructor(private readonly executorVersion: "v1" | "v2" = "v2") {}
   async generateStructured<T>(request: RuntimeModelRequest<T>): Promise<ModelResult<T>> {
     try {
       const context = preparedModelContextSchema.parse(request.context);
@@ -1118,8 +1014,8 @@ class DeterministicModelGateway implements ModelGateway {
           invocationId: request.invocationId,
         };
       }
-      const intent = parseConversationIntent(context.brief.businessQuestion, profiles);
-      const plan = generateTransformPlan(intent, profiles);
+      const intent = parseConversationIntent(context.brief.businessQuestion, profiles, this.executorVersion);
+      const plan = generateTransformPlan(intent, profiles, this.executorVersion);
       const measure = intent.measureColumns[0];
       const xField =
         intent.timeColumn ??
@@ -1250,6 +1146,7 @@ function applyGenerationDecision(
   decision: Extract<ChartPlanDecision, { decision: "ready" }>,
   generationDecision: GenerationDecision | undefined,
   profiles: ColumnProfile[],
+  executorVersion: "v1" | "v2" = "v2",
 ): Extract<ChartPlanDecision, { decision: "ready" }> {
   if (
     !generationDecision ||
@@ -1269,7 +1166,7 @@ function applyGenerationDecision(
       ? decision.intent.dimensionColumns
       : [selectedProfile.name, ...decision.intent.dimensionColumns.filter((column) => column !== selectedProfile.name)],
   });
-  const plan = generateTransformPlan(intent, profiles);
+  const plan = generateTransformPlan(intent, profiles, executorVersion);
   return {
     ...decision,
     intent,
