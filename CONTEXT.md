@@ -39,7 +39,10 @@ _Avoid_: Metric Note、Formula Guess
 **Conversation**：用户与系统围绕一个 Project 展开的自然语言交互上下文。
 _Avoid_: Chat、Thread、Session
 
-**Generation Cycle**：围绕一个明确 Analysis Brief，从用户意图到一个候选 Evidence Block 的完整生成尝试。一次 Cycle 有明确输入、输出、校验结果和结束原因。
+**Task**：Conversation 内围绕一个分析目标开展的逻辑任务，可以跨越澄清和多次 Generation Cycle；仅在成功、最终失败或明确取消后结束，等待澄清不是结束。
+_Avoid_: Generation Cycle、Analysis Brief、Conversation
+
+**Generation Cycle**：Task 内围绕一个明确 Analysis Brief、使用固定输入产生一个候选 Evidence Block 的单次生成尝试。补充澄清创建新 Cycle，但仍属于同一 Task；同一 Cycle 的执行重试不改变输入。
 _Avoid_: Infinite Loop、Chat Response
 
 **Generation Readiness Gate**：对当前 Generation Cycle 的输入、字段、指标口径、变换结果和图表要求进行前提判断的决策门；它只判断是否可以继续、需要用户澄清或不能继续，不把一次判断写成长期项目规范。
@@ -74,16 +77,22 @@ _Avoid_: Dashboard、Final Report、Insight Guess
 
 ## 记忆与视觉规范
 
-**Conversation Memory**：当前 Conversation 内用于继续对话的临时上下文，不自动成为长期事实。
+**Task Memory**：一个 Task 内的用户请求、澄清和任务约束；Task 成功、最终失败或取消后不再自动注入，但对应 Conversation/Job 原始业务记录按各自规则保留。各 Generation Cycle 只使用其创建时确定的任务上下文。
+_Avoid_: Session Memory、Project Memory
+
+**Conversation Memory**：当前 Conversation（会话层）内用于继续对话的临时上下文，包括近期消息和版本化滚动摘要，不自动成为长期事实；只有显式归档 Conversation 才结束该上下文，归档后只读且不自动注入，原始消息仍可搜索。
 _Avoid_: Long-term Memory、Project Memory
 
-**Project Memory**：经用户确认后，对单个 Project 持久有效的指标定义、数据口径、业务规则或偏好。
+**Project Memory**：经用户确认后，对单个 Project 持久有效、可复用的指标口径、数据定义、术语、业务规则或项目决定；若 Metric Definition、Visual Template 等规范实体已表达该内容，Memory 引用而不重复维护权威正文。单次分析发现仍属于 Evidence。
 _Avoid_: Project Notes、Chat History
 
-**Workspace Memory**：经用户确认后，对该用户私有 Workspace 内多个 Project 共享的规范、术语和模板偏好；第一阶段不跨用户共享。
+**Workspace Memory**：面向未来、经确认后供同一用户私有 Workspace 内多个 Project 共享的规范与术语；当前记忆系统首期不读取、写入或删除，也不提供可用 UI/API，已有数据行保留。
 _Avoid_: Team Memory、Global Memory
 
-**Memory Candidate**：模型从 Conversation 中提取、等待用户确认是否写入 Project Memory 或 Workspace Memory 的候选事实。
+**User Preference Memory**：经当前认证用户显式设置、明确要求记住或确认后，仅对该用户生效的语言、语气、详略、交互和默认输出格式偏好；它不是客户业务事实，具有独立私有存储和使用记录，不因参与一次 Project 生成而对其他 Project 成员可见。偏好长期保留、不按时间自动过期；图表视觉默认仍由 Project Visual Template 管理。
+_Avoid_: Personal Profile、Personal Memory、Workspace Memory
+
+**Memory Candidate**：模型基于用户在 Conversation 中的陈述提出、等待用户接受/编辑/拒绝后才可写入长期记忆的候选事实或偏好；候选必须引用用户消息来源，不得从原始数据行或模型推断建立。用户明确要求“记住”且 scope 清楚时直接创建已确认记忆，不经过 Candidate；Conversation 归档时未决 Candidate 过期。
 _Avoid_: Auto Memory、Learned Fact
 
 **Theme**：控制图表颜色、字体、布局、标签和视觉层级的可复用视觉规则。

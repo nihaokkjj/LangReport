@@ -26,6 +26,8 @@ Metric Definition 属于一个 Project，描述指标名称、业务含义、计
 
 Data Asset 属于一个 Project，代表用户导入的逻辑数据资源。每个新 Data Asset 必须记录一个不可变、非空的来源 Conversation 标识；该字段用于文件目录隔离和来源审计，不把 Data Asset 的所有权转移给 Conversation。来源 Conversation 删除后仍保留该标识，并在读模型显示来源已删除；Data Asset 和历史 Data Snapshot 继续可读。每次重新上传或重新解析都生成新的 Data Snapshot；历史 Snapshot 不被覆盖。
 
+Data Intake Job 附着在 Data Asset，保存一次异步文件接入的冻结输入、连接身份和执行期限。当前飞书接入单次领取，进程中断后终止，不自动重放会新建云文件的导入动作。成功提交 Snapshot 与任务成功状态在同一事务完成；新版本失败时保留原来的可用 Snapshot。它与生成阶段的可续约 Worker Lease 不同，详见 [ADR 0031](../adr/0031-lark-cli-table-intake.md)。
+
 ### Conversation
 
 Conversation 属于一个 Project，保存用户意图、消息、附件引用和 Generation Cycle/Generation Job 引用。Conversation Memory 只对当前 Conversation 有效。
@@ -89,6 +91,8 @@ Chart Revision 1 ── * Review Comment
 ```
 
 ## 3. 不变量
+
+> A 批已实现并通过适用自动化测试，独立复核与用户最终验收待完成。Project Memory 稳定逻辑身份、不可变版本、独立冲突标记和逐调用撤销见[记忆设计](../changes/2026-09-24-memory-system/design.md)。Task 承接同一目标的多个 Cycle、澄清开启新 Cycle 属于尚未授权的 B 批；下述父 Job 关系不能证明同 Cycle。
 
 1. 所有持久化业务对象必须能解析到唯一 Workspace。
 2. Project 不能跨 Workspace 移动；Project 内的资产不能被其他 Workspace 直接引用。

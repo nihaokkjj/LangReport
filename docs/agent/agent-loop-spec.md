@@ -219,6 +219,8 @@ Planning / Validating
 
 ### 记忆不变量
 
+A 批的 Project/个人偏好隔离、版本、删除撤销和逐调用预算门已实现；自动化证据见[测试报告](../changes/2026-09-24-memory-system/test-report.md)，独立复核与用户最终接受待完成。B 批 Task 可跨澄清产生新 Cycle、Cycle 来源冻结/逐次压缩和 Conversation 归档仍未实施且未获授权；设计约束见[记忆系统设计](../changes/2026-09-24-memory-system/design.md)。
+
 - Conversation Memory 不等于长期事实；
 - Memory Candidate 未确认前不参与长期检索；
 - Project Memory 不自动升级为 Workspace Memory；

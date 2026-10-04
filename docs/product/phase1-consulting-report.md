@@ -263,6 +263,8 @@ Brief ready
 
 ## 8. 记忆规则
 
+> 实施状态：A 批已按[记忆系统设计](../changes/2026-09-24-memory-system/design.md)交付 Project Memory 版本/撤销、私有 User Preference 与管理流程；适用自动化测试通过，独立复核及用户最终验收待完成。Task/Cycle 生命周期、压缩、归档及候选自动化属于 B/C，尚未实施且未获授权。Workspace Memory 首期禁用并保留旧行。
+
 ### 允许形成 Project Memory 的内容
 
 - 客户已确认的指标口径；
