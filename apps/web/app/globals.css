@@ -2117,10 +2117,6 @@ summary:focus-visible {
   .history-item {
     flex: 0 0 190px;
   }
-  .rail-divider,
-  .rail-source {
-    display: none;
-  }
   .workspace-main {
     min-height: auto;
     overflow: visible;

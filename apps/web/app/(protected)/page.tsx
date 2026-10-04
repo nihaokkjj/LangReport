@@ -5,7 +5,7 @@ import { waitForTableIntake } from "../../features/data-snapshot/table-intake";
 import CloseIcon from "@mui/icons-material/Close";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import { Button, Checkbox, Dialog, IconButton, MenuItem, TextField } from "@mui/material";
+import { Button, Checkbox, Dialog, Divider, IconButton, Menu, MenuItem, TextField } from "@mui/material";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -680,6 +680,7 @@ export default function Home() {
   const [modelApiKey, setModelApiKey] = useState("");
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [conversationMenuOpen, setConversationMenuOpen] = useState(false);
+  const [accountMenuAnchor, setAccountMenuAnchor] = useState<HTMLElement | null>(null);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showMetricModal, setShowMetricModal] = useState(false);
   const [showBriefModal, setShowBriefModal] = useState(false);
@@ -712,6 +713,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const snapshotPreview = useSnapshotPreview();
   const rightDrawerOpen = activeRightView !== null;
+  const closeAccountMenu = () => setAccountMenuAnchor(null);
 
   const projectServerState = useProjectServerState(authUserId, projectId, conversationId);
   const conversations = (projectServerState.conversations.data ?? []) as Conversation[];
@@ -1514,20 +1516,63 @@ export default function Home() {
         </div>
         <div className="topbar-actions">
           <span className={`connection-dot ${error ? "attention" : ""}`} aria-label={error ? "有错误" : "接口正常"} />
-          {canManageModelCredential && (
-            <Button variant="text" type="button" onClick={() => setShowModelCredentialModal(true)}>
-              模型设置
-            </Button>
-          )}
-          <Button component="a" variant="text" href="/plugins">
-            插件
-          </Button>
-          <Button component="a" variant="text" href="/account">
+          <Button
+            id="account-menu-button"
+            variant="text"
+            type="button"
+            aria-controls={accountMenuAnchor ? "account-menu" : undefined}
+            aria-haspopup="menu"
+            aria-expanded={Boolean(accountMenuAnchor)}
+            endIcon={
+              <ChevronDownIcon
+                fontSize="small"
+                sx={{
+                  transform: accountMenuAnchor ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: "transform 150ms ease",
+                }}
+              />
+            }
+            onClick={(event) => {
+              const anchor = event.currentTarget;
+              setAccountMenuAnchor((current) => (current ? null : anchor));
+            }}
+          >
             账号
           </Button>
-          <Button variant="text" type="button" onClick={() => void logout()}>
-            退出
-          </Button>
+          <Menu
+            id="account-menu"
+            anchorEl={accountMenuAnchor}
+            open={Boolean(accountMenuAnchor)}
+            onClose={closeAccountMenu}
+            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+            transformOrigin={{ vertical: "top", horizontal: "right" }}
+          >
+            <MenuItem component="a" href="/account" onClick={closeAccountMenu}>
+              账号设置
+            </MenuItem>
+            {canManageModelCredential && (
+              <MenuItem
+                onClick={() => {
+                  closeAccountMenu();
+                  setShowModelCredentialModal(true);
+                }}
+              >
+                模型设置
+              </MenuItem>
+            )}
+            <MenuItem component="a" href="/plugins" onClick={closeAccountMenu}>
+              插件管理
+            </MenuItem>
+            <Divider />
+            <MenuItem
+              onClick={() => {
+                closeAccountMenu();
+                void logout();
+              }}
+            >
+              退出登录
+            </MenuItem>
+          </Menu>
           <IconButton
             className="rail-toggle desktop-only"
             aria-label={leftRailOpen ? "隐藏对话历史" : "显示对话历史"}

@@ -86,7 +86,7 @@ export const theme = createTheme({
           borderRadius: 6,
           backgroundColor: "#fffefb",
           "& fieldset": { borderColor: "#c5c0b1" },
-          "&.Mui-focused": { outline: "2px solid #ff4f00", outlineOffset: 3 },
+          "&.Mui-focused": { outline: "2px solid #ff4f00", outlineOffset: 6 },
           "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "#c5c0b1", borderWidth: 1 },
         },
         input: { padding: "12px 14px" },
