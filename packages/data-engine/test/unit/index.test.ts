@@ -21,6 +21,30 @@ const fixtureDirectory = resolve(
   "../../../../tests/fixtures/consulting/monthly-regional-sales",
 );
 
+test("high-cardinality profiles keep exact counts and the first five typed samples", () => {
+  const rows = Array.from({ length: 20_000 }, (_, index) => ({
+    id: index % 1_000 === 0 ? null : `row-${index}`,
+    mixed: index % 4 === 0 ? 1 : index % 4 === 1 ? "1" : index % 4 === 2 ? true : null,
+  }));
+  const table = parseData({ sourceType: "json", bytes: Buffer.from(JSON.stringify(rows)) });
+  assert.deepEqual(table.profiles, [
+    {
+      name: "id",
+      inferredType: "string",
+      nullCount: 20,
+      distinctCount: 19_980,
+      sampleValues: ["row-1", "row-2", "row-3", "row-4", "row-5"],
+    },
+    {
+      name: "mixed",
+      inferredType: "string",
+      nullCount: 5_000,
+      distinctCount: 2,
+      sampleValues: [1, "1", true],
+    },
+  ]);
+});
+
 test("explicit calendar units match days across leap years without substituting another day", () => {
   const plan: TransformPlan = {
     version: "v1",

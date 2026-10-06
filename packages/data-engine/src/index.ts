@@ -297,15 +297,33 @@ function profileRows(rows: DataRow[]): ParsedTable {
   if (columns.length === 0) throw new DataParseError("数据没有可用字段");
 
   const profiles = columns.map((name): ColumnProfile => {
-    const values = rows.map((row) => row[name] ?? null);
-    const nonNullValues = values.filter((value): value is Exclude<DataCell, null> => value !== null);
-    const distinctValues = new Set(nonNullValues.map((value) => String(value)));
+    const distinctValues = new Set<string>();
+    const sampleValues: DataCell[] = [];
+    let nullCount = 0;
+    let nonNullCount = 0;
+    let allNumbers = true;
+    let allBooleans = true;
+    let allDates = true;
+    for (const row of rows) {
+      const value = row[name] ?? null;
+      if (value === null) {
+        nullCount += 1;
+        continue;
+      }
+      nonNullCount += 1;
+      distinctValues.add(String(value));
+      if (sampleValues.length < 5 && sampleValues.indexOf(value) === -1) sampleValues.push(value);
+      if (typeof value !== "number") allNumbers = false;
+      if (typeof value !== "boolean") allBooleans = false;
+      if (typeof value !== "string" || !isDateString(value)) allDates = false;
+    }
     return {
       name,
-      inferredType: inferType(nonNullValues),
-      nullCount: values.length - nonNullValues.length,
+      inferredType:
+        nonNullCount === 0 ? "null" : allNumbers ? "number" : allBooleans ? "boolean" : allDates ? "date" : "string",
+      nullCount,
       distinctCount: distinctValues.size,
-      sampleValues: values.filter((value, index, list) => value !== null && list.indexOf(value) === index).slice(0, 5),
+      sampleValues,
     };
   });
 
@@ -315,14 +333,6 @@ function profileRows(rows: DataRow[]): ParsedTable {
     profiles,
     preview: rows.slice(0, PREVIEW_ROW_COUNT),
   };
-}
-
-function inferType(values: Exclude<DataCell, null>[]): InferredColumnType {
-  if (values.length === 0) return "null";
-  if (values.every((value) => typeof value === "number")) return "number";
-  if (values.every((value) => typeof value === "boolean")) return "boolean";
-  if (values.every((value) => typeof value === "string" && isDateString(value))) return "date";
-  return "string";
 }
 
 function isDateString(value: string): boolean {
