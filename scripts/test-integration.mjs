@@ -63,23 +63,6 @@ try {
   if (status === 0)
     status = run([
       "--filter",
-      "@langreport/web",
-      "exec",
-      "playwright",
-      "test",
-      "-c",
-      "playwright.config.ts",
-      "test/e2e/consulting-report.spec.ts",
-      "-g",
-      "真实 API 失败状态契约投影到界面",
-      "--project",
-      "chromium-desktop",
-      "--project",
-      "chromium-mobile",
-    ]);
-  if (status === 0)
-    status = run([
-      "--filter",
       "@langreport/generation-worker",
       "exec",
       "tsx",

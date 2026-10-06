@@ -58,3 +58,5 @@ Adapter 18/18 通过：10,000 点折线 SVG 路径含 9,999 个连续线段及�
 Next 16.3.3 生产构建成功。静态产物中四个可通过 `Vega-Lite`/`vega-lite`/`scaleBand` 文本定位的 JS chunk 合计 476,600 字节，gzip 后合计 146,715 字节；它只是可识别子集，不代表完整 Vega 动态依赖或页面总传输量，不据此声称构建体积预算通过。冻结锁文件离线校验退出 0。
 
 真实 PostgreSQL→Render Worker→API 的 10,001 点失败检查已写入隔离测试入口；浏览器用例把 API 状态映射到固定测试 Job，只验证界面投影，没有从浏览器请求真实 API。本机 Docker Engine 返回 503，`54330` 与 `9002` 端口不可连接，隔离测试尚未执行。完整数据库→Worker→API→Web 失败链路与 T2/T3 最终门禁仍未通过。
+
+2026-10-06 后续补验：Docker Engine 恢复，隔离 PostgreSQL/MinIO 健康。API 用例保持真实 Job 与 Fastify 服务存活期间启动桌面、移动 Playwright，浏览器以真实 Job ID 请求 `/status` 与详情，两种视口 2/2 通过；隔离 API 集成 14/14、Generation Worker 2/2，`node scripts/test-integration.mjs` 最终退出 0。浏览器的其他项目准备数据仍由合成夹具提供，验收对象限定为 10,001 点预算失败传播；未证明完整上传/生成成功路径。此前“未执行”的段落是 Docker 503 时的历史记录，以本段结果为准。

@@ -224,8 +224,8 @@ test("real generation and render workers persist plugin usage and historical sna
         conversationProjection,
         executionAssembly,
         pluginContext: pluginResolution.context,
-        analysisBriefSnapshot: {},
-        metricDefinitionSnapshot: {},
+        analysisBriefSnapshot: { businessQuestion: "按月份展示各区域销售额趋势" },
+        metricDefinitionSnapshot: { name: "销售额", formula: "sum(销售额)" },
         createdBy: userId,
       })
       .returning();
@@ -304,8 +304,14 @@ test("real generation and render workers persist plugin usage and historical sna
     assert.match(html, /<!doctype html>/i);
     assert.match(html, /<svg[\s>]/i);
     assert.doesNotMatch(html, /<script\b|javascript:|\son\w+\s*=/i);
-    const vegaLite = JSON.parse((await getObject(outputs.vegaLite as string)).toString("utf8")) as { _theme?: unknown };
-    assert.equal(typeof vegaLite._theme, "object");
+    const vegaLite = JSON.parse((await getObject(outputs.vegaLite as string)).toString("utf8")) as {
+      mark?: { color?: string };
+      encoding?: { color?: { scale?: { range?: string[] } } };
+    };
+    // The canonical runtime applies the theme to executable mark/scale fields;
+    // it no longer exports Flint's private _theme helper metadata.
+    const seriesColors = vegaLite.encoding?.color?.scale?.range ?? [vegaLite.mark?.color];
+    assert.equal(seriesColors[0], "#2563EB");
 
     const [revision] = await db
       .select()

@@ -81,6 +81,16 @@ Render Worker 对旧式数组记忆的兜底路径原会直接保留任何对象
 - 新增隔离集成测试：真实 PostgreSQL 的 10,001 点 Generation Job 交给 Render Worker，查询 API 完整/轻量状态，确认 `CHART_POINT_BUDGET_EXCEEDED` 与聚合文案且禁止重试。后续浏览器用例仅把该 API 状态数据映射到固定测试 Job，检验 UI 对失败合同的投影；浏览器没有直接请求真实 API，**不构成数据库→Worker→API→Web 完整链路测试**。`scripts/test-integration.mjs` 显式枚举并清理临时投影文件。测试代码已完成类型检查，**尚未运行**：Docker Engine 的 `docker info` 返回 503，测试 Compose 无法获取 `postgres:16-alpine` 镜像，隔离服务端口 54330/9002 均未监听。真实失败链路保持未验收。
 - 最终快照的桌面/移动核心、失败态和 10,000 点 Playwright 8/8 通过；渲染计时分别 130/158 ms，最大事件采样间隔 282.6/261.6 ms。
 
+## 2026-10-06 真实失败链路补验
+
+Docker Engine 恢复后，`docker compose -f infra/docker-compose.test.yml up -d --wait` 的 PostgreSQL、MinIO 均健康。`node scripts/test-integration.mjs` 在随机 test schema/bucket 执行并退出 0：API 集成 14/14、Generation Worker 集成 2/2；测试结束执行隔离 schema/bucket 清理。
+
+10,001 点 Generation Job 写入隔离 PostgreSQL 后由真实 Render Worker 写成 `failed`，持久化 `CHART_POINT_BUDGET_EXCEEDED` 和聚合建议。运行中的 Fastify API 对相同 Job ID 的 `/status`、详情返回同一错误，原输入重试返回 409。API 测试保持服务与 Job 存活并启动 Playwright；桌面和 390px 移动浏览器各 1/1 通过：页面的状态轮询及详情请求转发到该真实 API，响应核对真实 Job ID 与错误码，界面显示聚合建议且无直接重试按钮。页面其他准备数据仍用合成夹具，因此该证明限定于**预算失败从数据库、Render Worker、API 到页面的传播**，不等于上传/生成成功全流程。
+
+最终测试夹具的 10,000 点 Canvas 场景另在桌面/移动各重跑一次，2/2 通过；绘制耗时 171/125 ms、最大事件采样间隔 421.2/343.5 ms，均满足场景中的 3,000/500 ms 断言。API/Web/Generation Worker 测试类型检查、Web 源码类型检查、定向 ESLint、Prettier、边界和文档检查通过。
+
+首次全套运行在独立的旧“状态契约投影”步骤因 Windows 命令行筛选拆词误选真实用例而失败；已移除重复步骤，真实浏览器检查只在 API 存活时执行。第二次运行暴露旧 Worker 夹具缺少冻结 Analysis Brief/Metric Definition，派生编辑被正确拒绝；补齐夹具后第三次完整运行退出 0。历史失败没有计入通过数。
+
 ## 原文档阶段记录（历史）
 
 ## 本次验证范围

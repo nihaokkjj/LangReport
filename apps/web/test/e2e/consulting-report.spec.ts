@@ -20,7 +20,7 @@ function createFixture(
     intakeResult?: "succeeded" | "needs_clarification";
     chartRows?: typeof rows;
     generationFailure?: { code: string; message: string };
-    generationStatus?: { job: Record<string, unknown>; revision: null };
+    generationJobId?: string;
     initialMessages?: Array<{
       id: string;
       conversationId: string;
@@ -30,6 +30,7 @@ function createFixture(
     }>;
   } = {},
 ) {
+  const submittedJobId = options.generationJobId ?? jobId;
   const initialMessages = options.initialMessages ?? [];
   let intakePolls = 0;
   let asset: Record<string, unknown> | null = null;
@@ -332,7 +333,7 @@ function createFixture(
             json: {
               message: { id: "message-user", conversationId, role: "user", content: body.content, createdAt: now },
               job: {
-                id: jobId,
+                id: submittedJobId,
                 conversationId,
                 status: "queued",
                 operation: "generate",
@@ -350,7 +351,7 @@ function createFixture(
                 previewData: null,
                 revision: null,
               },
-              nextAction: { type: "poll_generation_job", jobId, message: "Generation Cycle 已排队。" },
+              nextAction: { type: "poll_generation_job", jobId: submittedJobId, message: "Generation Cycle 已排队。" },
             },
           });
         return route.fulfill({
@@ -410,8 +411,6 @@ function createFixture(
           },
         });
       }
-      if (path === `/api/v1/generation-jobs/${jobId}/status` && request.method() === "GET" && options.generationStatus)
-        return route.fulfill({ json: options.generationStatus });
       if (path === "/api/v1/chart-artifacts/artifact-sales/revisions" && request.method() === "POST") {
         const parsedRequest = JSON.parse(request.postData() ?? "{}") as Record<string, unknown>;
         editRequest = parsedRequest;
@@ -790,20 +789,35 @@ test("绘图结果超出上限时主界面提示聚合且不提供相同输入�
   await expect(failure.getByRole("button", { name: "再次尝试" })).toHaveCount(0);
 });
 
-test("真实 API 失败状态契约投影到界面并提示聚合", async ({ page }) => {
+test("真实数据库失败链路在界面提示聚合", async ({ page }) => {
   test.skip(!process.env.LANGREPORT_FAILURE_FIXTURE_PATH, "仅在隔离数据库集成验收中运行");
+  test.setTimeout(120_000);
   const payload = JSON.parse(await readFile(process.env.LANGREPORT_FAILURE_FIXTURE_PATH!, "utf8")) as {
-    job: { errorCode: string; errorMessage: string; status: string; terminal: boolean };
+    job: { id: string; errorCode: string; errorMessage: string; status: string };
+    apiBaseUrl: string;
     source: { database: string; worker: string; apiStatus: number };
   };
   expect(payload.source).toEqual({ database: "postgres", worker: "render-worker", apiStatus: 200 });
-  expect(payload.job.status).toBe("failed");
-  expect(payload.job.terminal).toBe(true);
-  const fixture = createFixture({
-    generationFailure: { code: payload.job.errorCode, message: payload.job.errorMessage },
-    generationStatus: { job: { ...payload.job, id: "job-sales" }, revision: null },
+  expect(new URL(payload.apiBaseUrl).hostname).toBe("127.0.0.1");
+  const fixture = createFixture({ generationJobId: payload.job.id });
+  const jobPath = `/api/v1/generation-jobs/${payload.job.id}`;
+  let statusRequests = 0;
+  let detailRequests = 0;
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== "GET" || (url.pathname !== jobPath && url.pathname !== `${jobPath}/status`)) {
+      return fixture.route(route);
+    }
+    const response = await route.fetch({ url: new URL(`${url.pathname}${url.search}`, payload.apiBaseUrl).toString() });
+    expect(response.status()).toBe(200);
+    const body = (await response.json()) as { job: { id: string; status: string; errorCode: string } };
+    expect(body.job.id).toBe(payload.job.id);
+    expect(body.job.status).toBe("failed");
+    expect(body.job.errorCode).toBe(payload.job.errorCode);
+    if (url.pathname.endsWith("/status")) statusRequests += 1;
+    else detailRequests += 1;
+    await route.fulfill({ response });
   });
-  await page.route("**/api/**", fixture.route);
   await page.goto("/");
   await page.evaluate(async () => {
     await fetch("/api/v1/projects/project-sales/data-assets/paste", { method: "POST" });
@@ -827,6 +841,8 @@ test("真实 API 失败状态契约投影到界面并提示聚合", async ({ pag
   await expect(failure).toContainText(payload.job.errorCode);
   await expect(failure).toContainText(payload.job.errorMessage);
   await expect(failure.getByRole("button", { name: "再次尝试" })).toHaveCount(0);
+  expect(statusRequests).toBeGreaterThan(0);
+  expect(detailRequests).toBeGreaterThan(0);
 });
 
 test("浏览器 Canvas 绘制完整 10,000 点且保持键盘与事件响应", async ({ page }) => {

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { eq } from "drizzle-orm";
 import {
@@ -20,6 +23,34 @@ import { chartPointBudgetMessage, MAX_CHART_POINTS } from "@langreport/contracts
 import { buildApp } from "../../src/app.js";
 
 const { processRenderJob } = await import("../../../render-worker/src/index.js");
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+
+async function verifyFailureInBrowser(): Promise<void> {
+  const webRoot = resolve(repositoryRoot, "apps/web");
+  const cli = resolve(webRoot, "node_modules/@playwright/test/cli.js");
+  const code = await new Promise<number>((resolveCode, reject) => {
+    const child = spawn(
+      process.execPath,
+      [
+        cli,
+        "test",
+        "-c",
+        "playwright.config.ts",
+        "test/e2e/consulting-report.spec.ts",
+        "-g",
+        "真实数据库失败链路在界面提示聚合",
+        "--project",
+        "chromium-desktop",
+        "--project",
+        "chromium-mobile",
+      ],
+      { cwd: webRoot, env: process.env, stdio: "inherit" },
+    );
+    child.once("error", reject);
+    child.once("exit", (exitCode) => resolveCode(exitCode ?? 1));
+  });
+  assert.equal(code, 0, "真实数据库失败链路的浏览器验收失败");
+}
 
 test("真实数据库中的 10,001 点经 Render Worker 与 API 保留预算失败", async () => {
   const suffix = randomUUID();
@@ -156,6 +187,7 @@ test("真实数据库中的 10,001 点经 Render Worker 与 API 保留预算失�
     const retry = await app.inject({ method: "POST", url: `/api/v1/generation-jobs/${job.id}/retry` });
     assert.equal(retry.statusCode, 409);
     if (process.env.LANGREPORT_FAILURE_FIXTURE_PATH) {
+      const apiBaseUrl = await app.listen({ host: "127.0.0.1", port: 0 });
       await writeFile(
         process.env.LANGREPORT_FAILURE_FIXTURE_PATH,
         JSON.stringify({
@@ -168,10 +200,12 @@ test("真实数据库中的 10,001 点经 Render Worker 与 API 保留预算失�
             repairCount: job.repairCount,
             clarificationProposal: null,
           },
+          apiBaseUrl,
           source: { database: "postgres", worker: "render-worker", apiStatus: status.statusCode },
         }),
         "utf8",
       );
+      await verifyFailureInBrowser();
     }
   } finally {
     await app.close();
