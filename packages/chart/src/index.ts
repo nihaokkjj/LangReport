@@ -386,6 +386,7 @@ export async function createDerivedRevision(input: {
     .where(and(eq(chartRevisions.id, input.sourceRevisionId), eq(chartRevisions.artifactId, input.artifactId)))
     .limit(1);
   if (!source) throw new ChartServiceError("REVISION_NOT_FOUND", "来源图表版本不存在", 404);
+  const frozenProvenance = freezeDerivedProvenance(source);
   if (input.idempotencyKey) {
     const [existing] = await db
       .select()
@@ -432,11 +433,11 @@ export async function createDerivedRevision(input: {
       themeSnapshot: input.themeSnapshot ?? source.themeSnapshot,
       vegaLiteSpec: input.vegaLiteSpec ?? source.vegaLiteSpec,
       validation: input.validation ?? source.validation,
-      analysisBriefSnapshot: input.analysisBriefSnapshot ?? source.analysisBriefSnapshot,
-      metricDefinitionSnapshot: input.metricDefinitionSnapshot ?? source.metricDefinitionSnapshot,
-      memorySnapshot: input.memorySnapshot ?? source.memorySnapshot,
+      analysisBriefSnapshot: frozenProvenance.analysisBriefSnapshot,
+      metricDefinitionSnapshot: frozenProvenance.metricDefinitionSnapshot,
+      memorySnapshot: frozenProvenance.memoryContext,
       pluginSnapshot: input.pluginSnapshot ?? source.pluginSnapshot,
-      executionAssembly: input.executionAssembly ?? source.executionAssembly,
+      executionAssembly: input.executionAssembly ?? frozenProvenance.executionAssembly,
       resultSummary: input.resultSummary === undefined ? source.resultSummary : input.resultSummary,
       outputObjects: input.outputObjects ?? source.outputObjects,
     })
@@ -471,6 +472,7 @@ export async function copyRevisionToArtifact(input: {
 }) {
   await assertChartAction(input.projectId, input.createdBy, "create_revision");
   const source = await getRevision(input.sourceRevisionId, input.createdBy, { projectId: input.projectId });
+  const frozenProvenance = freezeDerivedProvenance(source.revision);
   if (input.idempotencyKey) {
     const [existingArtifact] = await db
       .select()
@@ -517,8 +519,11 @@ export async function copyRevisionToArtifact(input: {
       themeSnapshot: source.revision.themeSnapshot,
       vegaLiteSpec: source.revision.vegaLiteSpec,
       validation: source.revision.validation,
-      memorySnapshot: source.revision.memorySnapshot,
+      analysisBriefSnapshot: frozenProvenance.analysisBriefSnapshot,
+      metricDefinitionSnapshot: frozenProvenance.metricDefinitionSnapshot,
+      memorySnapshot: frozenProvenance.memoryContext,
       pluginSnapshot: source.revision.pluginSnapshot,
+      executionAssembly: frozenProvenance.executionAssembly,
       resultSummary: source.revision.resultSummary,
       outputObjects: source.revision.outputObjects,
     })

@@ -91,6 +91,14 @@ Docker Engine 恢复后，`docker compose -f infra/docker-compose.test.yml up -d
 
 首次全套运行在独立的旧“状态契约投影”步骤因 Windows 命令行筛选拆词误选真实用例而失败；已移除重复步骤，真实浏览器检查只在 API 存活时执行。第二次运行暴露旧 Worker 夹具缺少冻结 Analysis Brief/Metric Definition，派生编辑被正确拒绝；补齐夹具后第三次完整运行退出 0。历史失败没有计入通过数。
 
+## 2026-10-06 T5 来源冻结补验
+
+复制与回滚的数据库写入现在使用来源 Revision 的 Analysis Brief、Metric Definition、执行来源及公开 Project 记忆引用；旧数组中的私有偏好和正文会在派生前被投影掉。回滚即使收到调用方传入的另一条公开记忆引用，也只写来源引用。来源缺 Brief/Metric 时返回 `409 REVISION_PROVENANCE_INCOMPLETE`。现有纯标题编辑单元断言证明 TransformPlan、lineage、resultSummary 与完整数据值继承；逻辑编辑仍由 Generation Worker 重新执行变换。此轮没有宣称 TP06 全链路已验收：视觉编辑与逻辑编辑的完整数据库、Worker、API、Web 连贯检查仍待补齐。
+
+真实 PostgreSQL/MinIO 集成测试新增复制、回滚、私有记忆排除、外来记忆引用排除和缺来源拒绝断言。完整 `node scripts/test-integration.mjs` 退出 0：API 14/14、Generation Worker 2/2，且现有真实预算失败浏览器桌面/移动 2/2。最初在沙箱内启动 Node test runner 时遇到 `spawn EPERM`，未进入断言；随后在允许子进程的环境中重跑通过。
+
+Chart 源码、Generation Worker 测试和 Web 源码类型检查均退出 0；本轮四个代码文件 Prettier 检查、`pnpm docs:check`、`git diff --check` 通过。API Console 桌面/移动 Playwright 6/6 通过。定向 ESLint 仍有 API Console 原有 4 项和 contracts/http 原有 2 项未使用赋值错误，均不在本轮修改行；Chart 与 Worker 本轮代码没有 lint 报错。这些存量 lint 错误未计为通过。
+
 ## 原文档阶段记录（历史）
 
 ## 本次验证范围

@@ -1911,7 +1911,7 @@ export const routeContracts: RouteContract[] = [
         body: zodJson(chartRevisionCommandSchema),
       }),
       successDescription:
-        "编辑Job冻结来源Revision的分析问题、指标口径、执行快照及公开项目记忆引用；不读取当前项目口径。来源不完整返回409 REVISION_PROVENANCE_INCOMPLETE。",
+        "编辑、复制和回滚仅继承来源Revision的分析问题、指标口径、执行快照及公开项目记忆引用；不读取当前项目口径。来源不完整返回409 REVISION_PROVENANCE_INCOMPLETE。",
     },
   ),
   contract(

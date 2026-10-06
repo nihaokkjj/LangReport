@@ -32,6 +32,7 @@ import {
   validationRecordSchema,
 } from "@langreport/contracts";
 import { projectConversationToCanonicalTextContext } from "@langreport/generation";
+import { copyRevisionToArtifact, createDerivedRevision } from "@langreport/chart";
 import { createUserPreferenceMemory, getMemoryContextForGeneration } from "@langreport/memory";
 import {
   installPlugin,
@@ -662,6 +663,50 @@ test("real generation and render workers persist plugin usage and historical sna
       installation.contentHash,
     );
     assert.match((await getObject(outputs.svg as string)).toString("utf8"), /#2563EB/);
+
+    const publicMemory = { id: "public-legacy", scope: "project", key: "revenue", version: 1, contentHash: "hash" };
+    await db
+      .update(chartRevisions)
+      .set({
+        memorySnapshot: [
+          { ...publicMemory, statement: "公开正文也不复制到派生版本" },
+          { id: privatePreference.id, scope: "user_preference", value: privatePreference.statement },
+        ],
+      })
+      .where(eq(chartRevisions.id, revision.id));
+    const rollback = await createDerivedRevision({
+      projectId: project.id,
+      artifactId: revision.artifactId,
+      sourceRevisionId: revision.id,
+      createdBy: userId,
+      changeReason: "rollback",
+      memorySnapshot: [{ id: "injected", scope: "project", key: "wrong", version: 1, contentHash: "wrong" }],
+      idempotencyKey: `worker-rollback-${suffix}`,
+    });
+    const copy = await copyRevisionToArtifact({
+      projectId: project.id,
+      sourceRevisionId: revision.id,
+      createdBy: userId,
+      name: "来源冻结复制",
+      idempotencyKey: `worker-copy-${suffix}`,
+    });
+    for (const derived of [rollback, copy.revision]) {
+      assert.deepEqual(derived.analysisBriefSnapshot, revision.analysisBriefSnapshot);
+      assert.deepEqual(derived.metricDefinitionSnapshot, revision.metricDefinitionSnapshot);
+      assert.deepEqual(derived.executionAssembly, revision.executionAssembly);
+      assert.deepEqual(derived.memorySnapshot, [publicMemory]);
+      assert.equal(JSON.stringify(derived).includes(privatePreference.statement), false);
+    }
+    await db.update(chartRevisions).set({ analysisBriefSnapshot: {} }).where(eq(chartRevisions.id, revision.id));
+    await assert.rejects(
+      copyRevisionToArtifact({
+        projectId: project.id,
+        sourceRevisionId: revision.id,
+        createdBy: userId,
+        name: "缺来源复制",
+      }),
+      (error: unknown) => error instanceof Error && "code" in error && error.code === "REVISION_PROVENANCE_INCOMPLETE",
+    );
   } finally {
     for (const key of objectKeys) await deleteObject(key).catch(() => undefined);
     if (workspaceId) await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
