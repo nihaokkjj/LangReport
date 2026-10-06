@@ -143,6 +143,10 @@ test("documents the Generation Job async state and failure trace contract", asyn
       "cancelled",
     ]);
     assert.ok(getJobProperties?.properties?.errorCode);
+    assert.match(
+      (getJobProperties?.properties?.errorCode as { description?: string } | undefined)?.description ?? "",
+      /CHART_POINT_BUDGET_EXCEEDED.*聚合/,
+    );
     assert.ok(getJobProperties?.properties?.errorMessage);
     assert.ok(getJobProperties?.properties?.snapshotId);
     assert.ok(getJobProperties?.properties?.metricDefinitionId);
@@ -153,6 +157,10 @@ test("documents the Generation Job async state and failure trace contract", asyn
     assert.ok(getJobProperties?.properties?.renderValidation);
     assert.ok(getJobProperties?.properties?.resultSummary);
     assert.ok(statusJobProperties?.properties?.statusVersion);
+    assert.match(
+      (statusJobProperties?.properties?.errorCode as { description?: string } | undefined)?.description ?? "",
+      /CHART_POINT_BUDGET_EXCEEDED.*聚合/,
+    );
     assert.equal(statusOperation.responses?.["204"]?.content, undefined);
   } finally {
     await app.close();
