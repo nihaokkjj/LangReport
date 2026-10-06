@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import {
   auditEvents,
   chartArtifacts,
@@ -7,7 +7,6 @@ import {
   chartRevisions,
   chartReviews,
   chartShares,
-  dataSnapshots,
   evidenceBlocks,
   members,
   projectMembers,
@@ -16,7 +15,6 @@ import {
   db,
 } from "@langreport/db";
 import {
-  chartRevisionStatusSchema,
   flintSpecSchema,
   transformPlanSchema,
   pluginThemeRefSchema,
@@ -32,7 +30,6 @@ import {
 import {
   applyChartEditPatch,
   assertCanPerformChartAction,
-  canPerformChartAction,
   compareRevisions,
   transitionRevision,
   ChartDomainError,
@@ -59,27 +56,20 @@ export class ChartServiceError extends Error {
   }
 }
 
-/** Freeze only source facts and public references for a derived Job. */
-export function freezeDerivedProvenance(source: {
-  analysisBriefSnapshot: unknown;
-  metricDefinitionSnapshot: unknown;
-  memorySnapshot: unknown;
-  executionAssembly: unknown;
-}) {
-  const record = (value: unknown): Record<string, unknown> | null =>
-    value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-  const brief = record(source.analysisBriefSnapshot);
-  const metric = record(source.metricDefinitionSnapshot);
-  const nonempty = (value: unknown) => typeof value === "string" && value.trim().length > 0;
-  if (!brief || !nonempty(brief.businessQuestion) || !metric || !nonempty(metric.name) || !nonempty(metric.formula)) {
-    throw new ChartServiceError(
-      "REVISION_PROVENANCE_INCOMPLETE",
-      "来源版本缺少完整的分析问题或指标口径，请重新确认输入后生成",
-      409,
-    );
-  }
-  const memoryContext = (Array.isArray(source.memorySnapshot) ? source.memorySnapshot : []).flatMap((value) => {
-    const reference = record(value);
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function nonempty(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+/** Legacy arrays may contain private memory bodies; only public project references survive. */
+export function publicProjectMemoryReferences(value: unknown) {
+  return (Array.isArray(value) ? value : []).flatMap((item) => {
+    const reference = record(item);
     if (
       !reference ||
       reference.scope !== "project" ||
@@ -93,17 +83,35 @@ export function freezeDerivedProvenance(source: {
     return [
       {
         id: reference.id,
-        scope: "project",
+        scope: "project" as const,
         key: reference.key,
-        version: reference.version,
+        version: reference.version as number,
         contentHash: reference.contentHash,
       },
     ];
   });
+}
+
+/** Freeze only source facts and public references for a derived Job. */
+export function freezeDerivedProvenance(source: {
+  analysisBriefSnapshot: unknown;
+  metricDefinitionSnapshot: unknown;
+  memorySnapshot: unknown;
+  executionAssembly: unknown;
+}) {
+  const brief = record(source.analysisBriefSnapshot);
+  const metric = record(source.metricDefinitionSnapshot);
+  if (!brief || !nonempty(brief.businessQuestion) || !metric || !nonempty(metric.name) || !nonempty(metric.formula)) {
+    throw new ChartServiceError(
+      "REVISION_PROVENANCE_INCOMPLETE",
+      "来源版本缺少完整的分析问题或指标口径，请重新确认输入后生成",
+      409,
+    );
+  }
   return structuredClone({
     analysisBriefSnapshot: brief,
     metricDefinitionSnapshot: metric,
-    memoryContext,
+    memoryContext: publicProjectMemoryReferences(source.memorySnapshot),
     executionAssembly: source.executionAssembly ?? null,
   });
 }
@@ -944,7 +952,9 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-async function workspaceIdForProject(executor: any, projectId: string): Promise<string> {
+type ChartDbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function workspaceIdForProject(executor: ChartDbExecutor, projectId: string): Promise<string> {
   const [project] = await executor
     .select({ workspaceId: projects.workspaceId })
     .from(projects)
@@ -954,7 +964,7 @@ async function workspaceIdForProject(executor: any, projectId: string): Promise<
   return project.workspaceId;
 }
 
-async function nextReviewCycle(executor: any, revisionId: string): Promise<number> {
+async function nextReviewCycle(executor: ChartDbExecutor, revisionId: string): Promise<number> {
   const [last] = await executor
     .select({ reviewCycle: chartReviews.reviewCycle })
     .from(chartReviews)
@@ -965,7 +975,7 @@ async function nextReviewCycle(executor: any, revisionId: string): Promise<numbe
 }
 
 async function writeAudit(
-  executor: any,
+  executor: ChartDbExecutor,
   input: {
     workspaceId: string;
     projectId?: string;

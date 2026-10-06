@@ -31,8 +31,14 @@ import {
   type ValidationRecord,
   type ValidationReport,
 } from "@langreport/contracts";
-import { buildEvidenceFinding, createDerivedRevision, createInitialRevision } from "@langreport/chart";
 import {
+  buildEvidenceFinding,
+  createDerivedRevision,
+  createInitialRevision,
+  publicProjectMemoryReferences,
+} from "@langreport/chart";
+import {
+  ChartPointBudgetError,
   createStaticSvgHtml,
   resolveRendererAdapter,
   FLINT_VERSION,
@@ -205,7 +211,7 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
           : (sourceRevision?.pluginSnapshot ?? {});
     const renderer = resolveRendererAdapter(record.job.renderer);
     const rendered = await renderer.render(spec);
-    const baseRenderValidation = renderer.validate(rendered);
+    const baseRenderValidation = await renderer.validate(rendered);
     const generationAudit = withValidationAudit(record.job.generationAudit, {
       planValidation,
       renderValidation: baseRenderValidation,
@@ -356,6 +362,14 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
     );
     console.log(`${workerName} completed`, { jobId, revisionId: revision.id });
   } catch (error) {
+    if (error instanceof ChartPointBudgetError) {
+      const renderValidation = failedRenderValidation(error.code, error.message);
+      await failRenderJob(jobId, lease, error.code, error.message, {
+        renderValidation,
+        generationAudit: withValidationAudit(record.job.generationAudit, { renderValidation }),
+      });
+      return;
+    }
     if (error instanceof PluginServiceError) {
       const renderValidation = failedRenderValidation(error.code, error.message);
       await failRenderJob(jobId, lease, error.code, error.message, {
@@ -646,9 +660,7 @@ function memorySnapshotForRevision(value: unknown): Array<Record<string, unknown
       contentHash: createHash("sha256").update(JSON.stringify(record.value)).digest("hex"),
     }));
   }
-  return Array.isArray(value)
-    ? value.filter((record): record is Record<string, unknown> => typeof record === "object" && record !== null)
-    : [];
+  return publicProjectMemoryReferences(value);
 }
 
 function hasPluginContext(value: unknown): boolean {

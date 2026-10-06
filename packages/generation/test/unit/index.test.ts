@@ -5,6 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { loadBuiltinManifests, parseManifest } from "@langreport/plugin-sdk";
 import { parseData, type DataRow, type FieldLineage } from "@langreport/data-engine";
+import { MAX_CHART_POINTS } from "@langreport/contracts";
 import type { ModelGateway, RuntimeModelRequest, ModelResult, TransformPlan } from "@langreport/contracts";
 import {
   GenerationCycle,
@@ -613,4 +614,72 @@ test("Generation revision validation returns field-specific errors instead of a 
   assert.equal(validation.valid, false);
   assert.ok(validation.issues.some((issue) => issue.code === "DATA_FIELD_MISSING"));
   assert.ok(validation.issues.some((issue) => issue.code === "VISUAL_RULE_FAILED"));
+});
+
+test("Generation validation accepts 10,000 distinct x values and rejects 10,001 with aggregation guidance", () => {
+  const values = Array.from({ length: MAX_CHART_POINTS + 1 }, (_, index) => ({ category: `C${index}`, amount: index }));
+  const spec = {
+    version: "v1",
+    data: { values: values.slice(0, MAX_CHART_POINTS) },
+    semanticTypes: { category: "Category", amount: "Quantity" },
+    chartSpec: {
+      chartType: "Bar Chart",
+      title: "完整绘图结果",
+      encodings: { x: { field: "category", type: "nominal" }, y: { field: "amount", type: "quantitative" } },
+      baseSize: { width: 920, height: 520 },
+    },
+    theme: "economist",
+    themeVersion: "v1",
+    themeConfig: {},
+  };
+  assert.equal(validateGenerationRevision(spec).valid, true);
+  const rejected = validateGenerationRevision({ ...spec, data: { values } });
+  assert.equal(rejected.valid, false);
+  assert.equal(rejected.checks.visual, false);
+  assert.ok(
+    rejected.issues.some((issue) => issue.code === "CHART_POINT_BUDGET_EXCEEDED" && /聚合/.test(issue.message)),
+  );
+  assert.ok(rejected.issues.every((issue) => issue.code !== "VISUAL_RULE_FAILED"));
+});
+
+test("Generation Cycle rejects 10,001 result rows without adding a silent limit step", async () => {
+  const rows = Array.from({ length: MAX_CHART_POINTS + 1 }, (_, index) => ({ 类别: `C${index}`, 销售额: 1 }));
+  const aggregated = await new GenerationCycle().run({
+    ...cycleInput,
+    cycle: { ...cycleInput.cycle, budget: { deadlineAt: Date.now() + 30_000, maxOutputTokens: 2_000 } },
+    analysisBriefSnapshot: {
+      ...cycleInput.analysisBriefSnapshot,
+      businessQuestion: "按类别展示销售额",
+      timeRange: "全部",
+    },
+    prompt: "按类别展示销售额",
+    profiles: [
+      { name: "类别", inferredType: "string", nullCount: 0, distinctCount: 100, sampleValues: ["C0", "C1"] },
+      { name: "销售额", inferredType: "number", nullCount: 0, distinctCount: 1, sampleValues: [1] },
+    ],
+    rows: rows.map((row, index) => ({ ...row, 类别: `C${index % 100}` })),
+  });
+  assert.equal(aggregated.status, "drafted");
+  if (aggregated.status === "drafted") assert.equal(aggregated.artifacts.flintSpec.data.values.length, 100);
+  const result = await new GenerationCycle().run({
+    ...cycleInput,
+    cycle: { ...cycleInput.cycle, budget: { deadlineAt: Date.now() + 30_000, maxOutputTokens: 2_000 } },
+    analysisBriefSnapshot: {
+      ...cycleInput.analysisBriefSnapshot,
+      businessQuestion: "按类别展示销售额",
+      timeRange: "全部",
+    },
+    prompt: "按类别展示销售额",
+    profiles: [
+      { name: "类别", inferredType: "string", nullCount: 0, distinctCount: rows.length, sampleValues: ["C0", "C1"] },
+      { name: "销售额", inferredType: "number", nullCount: 0, distinctCount: 1, sampleValues: [1] },
+    ],
+    rows,
+  });
+  assert.equal(result.status, "failed");
+  if (result.status !== "failed") return;
+  assert.equal(result.error.code, "CHART_POINT_BUDGET_EXCEEDED");
+  assert.match(result.error.message, /聚合/);
+  assert.equal(result.audit.repairCount, 0);
+  assert.ok(result.audit.planValidation.errors.some((issue) => issue.code === "CHART_POINT_BUDGET_EXCEEDED"));
 });

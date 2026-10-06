@@ -1,13 +1,33 @@
 import { assembleVegaLite } from "flint-chart";
 import sharp from "sharp";
-import type { FlintSpec, ValidationRecord } from "@langreport/contracts";
+import { View, loader, parse } from "vega";
+import { compile } from "vega-lite";
+import type { TopLevelSpec } from "vega-lite";
+import { assertSafeVegaLiteSpec } from "@langreport/contracts/vega";
+import {
+  chartPointBudgetMessage,
+  MAX_CHART_POINTS,
+  type FlintSpec,
+  type ValidationRecord,
+} from "@langreport/contracts";
 
 export const FLINT_VERSION = "0.5.1";
-export const RENDERER_VERSION = "vega-lite-svg-v2";
+export const RENDERER_VERSION = "vega-lite-svg-v4";
+export { MAX_CHART_POINTS } from "@langreport/contracts";
+
+export class ChartPointBudgetError extends Error {
+  readonly code = "CHART_POINT_BUDGET_EXCEEDED";
+
+  constructor(readonly pointCount: number) {
+    super(chartPointBudgetMessage(pointCount));
+    this.name = "ChartPointBudgetError";
+  }
+}
 export const DESIGN_FONT_FAMILIES = {
-  display: '"Degular Display", Inter, "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+  display:
+    '"Degular Display", Inter, "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
   sans: 'Inter, "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
-  mono: '"JetBrains Mono", "SF Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace'
+  mono: '"JetBrains Mono", "SF Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace',
 } as const;
 export const DESIGN_CHART_COLORS = ["#FF4F00", "#939084", "#18794E"] as const;
 
@@ -34,14 +54,14 @@ export type RendererAdapter = {
   id: string;
   version: string;
   render(spec: FlintSpec): Promise<RenderedChart>;
-  validate(rendered: RenderedChart): ValidationRecord;
+  validate(rendered: RenderedChart): Promise<ValidationRecord>;
 };
 
 const vegaLiteRenderer: RendererAdapter = {
   id: "vega-lite",
   version: RENDERER_VERSION,
   render: renderChart,
-  validate: validateRenderedChart
+  validate: validateRenderedChart,
 };
 
 const platformRendererAdapters = [vegaLiteRenderer] as const;
@@ -56,14 +76,14 @@ export function resolveRendererAdapter(id: string): RendererAdapter {
  * Validate the concrete render artifacts independently from Flint Spec plan
  * validation. This is deliberately limited to the files this adapter owns.
  */
-export function validateRenderedChart(rendered: RenderedChart): ValidationRecord {
+export async function validateRenderedChart(rendered: RenderedChart): Promise<ValidationRecord> {
   const errors: ValidationRecord["errors"] = [];
   if (Object.keys(rendered.vegaLiteSpec).length === 0) {
     errors.push({
       code: "RENDER_VEGA_LITE_EMPTY",
       path: "vegaLiteSpec",
       message: "渲染器没有产出 Vega-Lite 规范",
-      severity: "error"
+      severity: "error",
     });
   }
   if (!rendered.svg.trim()) {
@@ -71,36 +91,56 @@ export function validateRenderedChart(rendered: RenderedChart): ValidationRecord
       code: "RENDER_SVG_EMPTY",
       path: "svg",
       message: "渲染器没有产出 SVG",
-      severity: "error"
+      severity: "error",
     });
-  } else if (!rendered.svg.includes("<svg") || !rendered.svg.includes("</svg>")) {
+  } else if (
+    !/<svg[\s>]/i.test(rendered.svg) ||
+    !/<\/svg>/i.test(rendered.svg) ||
+    containsExecutableMarkup(rendered.svg)
+  ) {
     errors.push({
       code: "RENDER_SVG_INVALID",
       path: "svg",
       message: "SVG 输出缺少完整根元素",
-      severity: "error"
+      severity: "error",
     });
+  } else {
+    try {
+      const metadata = await sharp(Buffer.from(rendered.svg)).metadata();
+      if (metadata.format !== "svg" || !metadata.width || !metadata.height) throw new Error("invalid SVG");
+    } catch {
+      errors.push({ code: "RENDER_SVG_INVALID", path: "svg", message: "SVG 输出无法解析", severity: "error" });
+    }
   }
   if (rendered.png.byteLength === 0) {
     errors.push({
       code: "RENDER_PNG_EMPTY",
       path: "png",
       message: "渲染器没有产出 PNG",
-      severity: "error"
+      severity: "error",
     });
   } else if (!hasPngSignature(rendered.png)) {
     errors.push({
       code: "RENDER_PNG_INVALID",
       path: "png",
       message: "PNG 输出不包含有效文件签名",
-      severity: "error"
+      severity: "error",
     });
+  } else {
+    try {
+      const image = sharp(rendered.png, { failOn: "error" });
+      const metadata = await image.metadata();
+      if (metadata.format !== "png" || !metadata.width || !metadata.height) throw new Error("invalid PNG");
+      await image.raw().toBuffer();
+    } catch {
+      errors.push({ code: "RENDER_PNG_INVALID", path: "png", message: "PNG 输出无法解码", severity: "error" });
+    }
   }
   return {
     status: errors.length === 0 ? "passed" : "failed",
     errors,
     validatorVersion: "flint-render-v1",
-    checkedAt: new Date().toISOString()
+    checkedAt: new Date().toISOString(),
   };
 }
 
@@ -167,23 +207,47 @@ export function validateStaticSvgHtml(value: string): ValidationRecord {
     errors.push({ code: "RENDER_HTML_EMPTY", path: "html", message: "静态 HTML 输出为空", severity: "error" });
   } else {
     if (!/^<!doctype html>/i.test(value.trim()) || !/<html[\s>]/i.test(value) || !/<\/html>/i.test(value)) {
-      errors.push({ code: "RENDER_HTML_INVALID", path: "html", message: "HTML 输出缺少完整文档结构", severity: "error" });
+      errors.push({
+        code: "RENDER_HTML_INVALID",
+        path: "html",
+        message: "HTML 输出缺少完整文档结构",
+        severity: "error",
+      });
     }
     if (!/<svg[\s>]/i.test(value) || !/<\/svg>/i.test(value)) {
-      errors.push({ code: "RENDER_HTML_SVG_MISSING", path: "html", message: "HTML 输出缺少 SVG 内容", severity: "error" });
+      errors.push({
+        code: "RENDER_HTML_SVG_MISSING",
+        path: "html",
+        message: "HTML 输出缺少 SVG 内容",
+        severity: "error",
+      });
     }
     if (containsExecutableMarkup(value) || /<script\b|javascript:|\son[a-z]+\s*=/i.test(value)) {
-      errors.push({ code: "RENDER_HTML_UNSAFE", path: "html", message: "HTML 输出包含不允许的脚本或事件处理器", severity: "error" });
+      errors.push({
+        code: "RENDER_HTML_UNSAFE",
+        path: "html",
+        message: "HTML 输出包含不允许的脚本或事件处理器",
+        severity: "error",
+      });
     }
-    if (/<(?:link|img|iframe|object|embed)\b[^>]*(?:src|href)\s*=/i.test(value) || /\b(?:src|href|xlink:href)\s*=\s*["'](?:https?:|\/\/)/i.test(value) || /@import\b|url\(\s*["']?(?:https?:|\/\/)/i.test(value)) {
-      errors.push({ code: "RENDER_HTML_EXTERNAL_RESOURCE", path: "html", message: "HTML 输出不能依赖外部资源", severity: "error" });
+    if (
+      /<(?:link|img|iframe|object|embed)\b[^>]*(?:src|href)\s*=/i.test(value) ||
+      /\b(?:src|href|xlink:href)\s*=\s*["'](?:https?:|\/\/)/i.test(value) ||
+      /@import\b|url\(\s*["']?(?:https?:|\/\/)/i.test(value)
+    ) {
+      errors.push({
+        code: "RENDER_HTML_EXTERNAL_RESOURCE",
+        path: "html",
+        message: "HTML 输出不能依赖外部资源",
+        severity: "error",
+      });
     }
   }
   return {
     status: errors.length === 0 ? "passed" : "failed",
     errors,
     validatorVersion: "langreport-static-svg-html-v1",
-    checkedAt: new Date().toISOString()
+    checkedAt: new Date().toISOString(),
   };
 }
 
@@ -194,14 +258,17 @@ function hasPngSignature(value: Buffer): boolean {
 
 /** Convert the platform-owned Flint Spec into Flint's native input shape. */
 export function toFlintAssemblyInput(spec: FlintSpec): Record<string, unknown> {
+  const pointCount = spec.data.values.length;
+  if (pointCount > MAX_CHART_POINTS) throw new ChartPointBudgetError(pointCount);
   const themeConfig = { ...spec.themeConfig };
   const configuredParent = typeof themeConfig.extends === "string" ? themeConfig.extends : spec.theme;
   delete themeConfig.extends;
-  const themeSpec = configuredParent === "default" && Object.keys(themeConfig).length === 0
-    ? undefined
-    : configuredParent === "default"
-      ? themeConfig
-      : { extends: configuredParent, ...themeConfig };
+  const themeSpec =
+    configuredParent === "default" && Object.keys(themeConfig).length === 0
+      ? undefined
+      : configuredParent === "default"
+        ? themeConfig
+        : { extends: configuredParent, ...themeConfig };
   return {
     data: spec.data,
     semantic_types: spec.semanticTypes,
@@ -210,15 +277,114 @@ export function toFlintAssemblyInput(spec: FlintSpec): Record<string, unknown> {
       title: spec.chartSpec.title,
       subtitle: spec.chartSpec.subtitle,
       encodings: spec.chartSpec.encodings,
-      baseSize: spec.chartSpec.baseSize
+      baseSize: spec.chartSpec.baseSize,
     },
     ...(themeSpec ? { theme_spec: themeSpec } : {}),
-    options: { addTooltips: true }
+    options: {
+      addTooltips: true,
+      // Flint's default overflow budget silently drops rows before producing Vega-Lite.
+      maxStretch: Math.max(2, pointCount * 20),
+      maxColorValues: Math.max(1, pointCount),
+    },
   };
 }
 
 export function compileVegaLite(spec: FlintSpec): Record<string, unknown> {
-  return assembleVegaLite(toFlintAssemblyInput(spec) as never) as Record<string, unknown>;
+  const assembled = assembleVegaLite(toFlintAssemblyInput(spec) as never) as Record<string, unknown>;
+  const values = (assembled.data as { values?: unknown } | undefined)?.values;
+  if (!Array.isArray(values) || values.length !== spec.data.values.length) {
+    throw new Error(
+      `Flint 编译后绘图结果数量不一致：输入 ${spec.data.values.length}，输出 ${Array.isArray(values) ? values.length : "未知"}。已拒绝发布图表，避免静默截断。`,
+    );
+  }
+  // Flint themes may emit expression-bearing helper layers. Keep Flint's chart
+  // choice and data, then assemble the narrow, auditable runtime grammar here.
+  const firstLayer = Array.isArray(assembled.layer) ? (assembled.layer[0] as Record<string, unknown>) : assembled;
+  const sourceMark = firstLayer.mark as string | { type?: string; color?: string };
+  const markType = typeof sourceMark === "string" ? sourceMark : sourceMark?.type;
+  if (!["bar", "line", "area"].includes(String(markType))) throw new Error("Flint 未产出受支持的图表类型");
+  const sourceEncoding = (firstLayer.encoding ?? {}) as Record<string, Record<string, unknown>>;
+  const xField = spec.chartSpec.encodings.x.field;
+  const yField = spec.chartSpec.encodings.y.field;
+  const configuredColor = (spec.themeConfig as { ink?: { series?: { single?: unknown } } }).ink?.series?.single;
+  const sourceColor =
+    typeof configuredColor === "string" && /^#[0-9a-f]{6}$/i.test(configuredColor)
+      ? configuredColor
+      : DESIGN_CHART_COLORS[0];
+  const chartColors = [sourceColor, ...DESIGN_CHART_COLORS.filter((color) => color !== sourceColor)];
+  const encoding: Record<string, unknown> = {
+    x: {
+      field: xField,
+      type: sourceEncoding.x?.type ?? "nominal",
+      sort: null,
+      axis: { labelFont: DESIGN_FONT_FAMILIES.mono, titleFont: DESIGN_FONT_FAMILIES.mono, labelFontSize: 11 },
+    },
+    y: {
+      field: yField,
+      type: "quantitative",
+      scale: { zero: true },
+      stack: null,
+      axis: { labelFont: DESIGN_FONT_FAMILIES.mono, titleFont: DESIGN_FONT_FAMILIES.mono, labelFontSize: 11 },
+    },
+  };
+  if (spec.chartSpec.encodings.color) {
+    if (markType === "bar") encoding.xOffset = { field: spec.chartSpec.encodings.color.field };
+    encoding.color = {
+      field: spec.chartSpec.encodings.color.field,
+      type: "nominal",
+      scale: { range: chartColors },
+      legend: spec.chartSpec.showLegend === false ? null : { labelFont: DESIGN_FONT_FAMILIES.mono, labelFontSize: 11 },
+    };
+  }
+  const compiled: Record<string, unknown> = {
+    data: { values },
+    mark: {
+      type: markType,
+      tooltip: true,
+      ...(markType === "line" || markType === "area" ? { invalid: "break-paths-filter-domains" } : {}),
+      ...(spec.chartSpec.encodings.color ? {} : { color: sourceColor }),
+    },
+    encoding,
+    width: spec.chartSpec.baseSize.width,
+    height: spec.chartSpec.baseSize.height,
+    autosize: { type: "fit", contains: "padding" },
+    title: spec.chartSpec.title,
+    background: "#fffefb",
+    config: {
+      axis: { labelFont: DESIGN_FONT_FAMILIES.mono, titleFont: DESIGN_FONT_FAMILIES.mono, labelFontSize: 11 },
+      title: { font: DESIGN_FONT_FAMILIES.sans, fontSize: 18 },
+    },
+  };
+  const annotations = spec.chartSpec.annotations?.map((annotation) => annotation.text).filter(Boolean) ?? [];
+  if (annotations.length || spec.chartSpec.subtitle) {
+    compiled.title = {
+      text: spec.chartSpec.title,
+      subtitle: [spec.chartSpec.subtitle, ...annotations].filter(Boolean),
+    };
+  }
+  const x = encoding.x as Record<string, unknown>;
+  if (x && values.length > 12) {
+    const xField = spec.chartSpec.encodings.x.field;
+    const labels = [...new Set(values.map((row) => (row as Record<string, unknown>)[xField]))];
+    const stride = Math.ceil(labels.length / 10);
+    x.axis = {
+      ...(x.axis as Record<string, unknown> | undefined),
+      values: labels.filter((_, index) => index % stride === 0),
+    };
+  }
+  if (spec.chartSpec.showValues && values.length <= 40) {
+    const chartMark = compiled.mark;
+    delete compiled.mark;
+    compiled.layer = [
+      { mark: chartMark },
+      {
+        mark: { type: "text", dy: -8, color: "#201515", font: DESIGN_FONT_FAMILIES.mono, fontSize: 11 },
+        encoding: { text: { field: spec.chartSpec.encodings.y.field, type: "quantitative", format: ",.2f" } },
+      },
+    ];
+  }
+  assertSafeVegaLiteSpec(compiled);
+  return compiled;
 }
 
 /**
@@ -229,108 +395,35 @@ export function compileVegaLite(spec: FlintSpec): Record<string, unknown> {
  */
 export async function renderChart(spec: FlintSpec): Promise<RenderedChart> {
   const vegaLiteSpec = compileVegaLite(spec);
-  const svg = renderDeterministicSvg(spec);
+  let rejectedResource = false;
+  const deny = async () => {
+    rejectedResource = true;
+    throw new Error("CHART_EXTERNAL_RESOURCE_FORBIDDEN");
+  };
+  const guardedLoader = loader();
+  guardedLoader.load = deny;
+  guardedLoader.sanitize = deny;
+  const view = new View(parse(compile(vegaLiteSpec as unknown as TopLevelSpec).spec), {
+    renderer: "none",
+    loader: guardedLoader,
+  });
+  let svg: string;
+  try {
+    svg = await view.toSVG();
+    if (rejectedResource) throw new Error("CHART_EXTERNAL_RESOURCE_FORBIDDEN");
+    if (Buffer.byteLength(svg) > 32 * 1024 * 1024) throw new Error("CHART_OUTPUT_BUDGET_EXCEEDED");
+  } finally {
+    view.finalize();
+  }
   const png = await sharp(Buffer.from(svg)).png().toBuffer();
   return { vegaLiteSpec, svg, png };
 }
 
-function renderDeterministicSvg(spec: FlintSpec): string {
-  const width = spec.chartSpec.baseSize.width;
-  const height = spec.chartSpec.baseSize.height;
-  const left = 78;
-  const top = 78;
-  const right = 26;
-  const bottom = 66;
-  const plotWidth = width - left - right;
-  const plotHeight = height - top - bottom;
-  const xField = spec.chartSpec.encodings.x.field;
-  const yField = spec.chartSpec.encodings.y.field;
-  const colorField = spec.chartSpec.encodings.color?.field;
-  const rows = spec.data.values;
-  const xValues = [...new Set(rows.map((row) => String(row[xField] ?? "")))];
-  const series = colorField ? [...new Set(rows.map((row) => String(row[colorField] ?? "")))] : [""];
-  const numericValues = rows.map((row) => Number(row[yField])).filter(Number.isFinite);
-  const maxValue = Math.max(...numericValues, 0);
-  const minValue = Math.min(...numericValues, 0);
-  const range = maxValue - minValue || 1;
-  const configuredSingle = readNestedString(spec.themeConfig, ["ink", "series", "single"]);
-  const colors = configuredSingle ? [configuredSingle, ...DESIGN_CHART_COLORS.slice(1)] : DESIGN_CHART_COLORS;
-  const xPosition = (value: string) => xValues.length <= 1 ? plotWidth / 2 : xValues.indexOf(value) * plotWidth / (xValues.length - 1);
-  const yPosition = (value: number) => plotHeight - ((value - minValue) / range) * plotHeight;
-  const parts: string[] = [];
-  const sansFont = escapeXml(DESIGN_FONT_FAMILIES.sans);
-  const monoFont = escapeXml(DESIGN_FONT_FAMILIES.mono);
-  const displayFont = escapeXml(DESIGN_FONT_FAMILIES.display);
-  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-kerning="normal" role="img" aria-label="${escapeXml(spec.chartSpec.title)}">`);
-  parts.push(`<rect width="${width}" height="${height}" fill="#fffefb"/>`);
-  parts.push(`<text x="${left}" y="32" font-family="${displayFont}" font-size="22" font-weight="600" fill="#201515">${escapeXml(spec.chartSpec.title)}</text>`);
-  if (spec.chartSpec.subtitle) parts.push(`<text x="${left}" y="54" font-family="${sansFont}" font-size="12" fill="#201515">${escapeXml(spec.chartSpec.subtitle)}</text>`);
-  for (const [index, annotation] of (spec.chartSpec.annotations ?? []).entries()) {
-    parts.push(`<text x="${left}" y="${76 + index * 16}" font-family="${sansFont}" font-size="12" fill="#939084">${escapeXml(annotation.text)}</text>`);
-  }
-  parts.push(`<line x1="${left}" y1="${top + plotHeight}" x2="${left + plotWidth}" y2="${top + plotHeight}" stroke="#201515" stroke-width="1"/>`);
-  parts.push(`<line x1="${left}" y1="${top}" x2="${left}" y2="${top + plotHeight}" stroke="#201515" stroke-width="1"/>`);
-  parts.push(`<text x="${left - 12}" y="${top + 4}" text-anchor="end" font-family="${monoFont}" font-size="11" fill="#201515">${formatNumber(maxValue)}</text>`);
-  parts.push(`<text x="${left - 12}" y="${top + plotHeight}" text-anchor="end" font-family="${monoFont}" font-size="11" fill="#201515">${formatNumber(minValue)}</text>`);
-  for (const [index, value] of xValues.entries()) {
-    const x = left + (xValues.length <= 1 ? plotWidth / 2 : index * plotWidth / (xValues.length - 1));
-    parts.push(`<text x="${x}" y="${top + plotHeight + 24}" text-anchor="middle" font-family="${monoFont}" font-size="11" fill="#201515">${escapeXml(value)}</text>`);
-  }
-  for (const [seriesIndex, seriesValue] of series.entries()) {
-    const points = rows.filter((row) => !colorField || String(row[colorField] ?? "") === seriesValue);
-    if (spec.chartSpec.chartType === "Bar Chart") {
-      const barWidth = Math.max(8, plotWidth / Math.max(xValues.length * series.length, 1) * 0.72);
-      for (const [pointIndex, row] of points.entries()) {
-        const xIndex = xValues.indexOf(String(row[xField] ?? ""));
-        const value = Number(row[yField]);
-        if (!Number.isFinite(value)) continue;
-        const x = left + xPosition(String(row[xField] ?? "")) - ((series.length - 1) * barWidth) / 2 + seriesIndex * barWidth;
-        const y = top + yPosition(Math.max(value, minValue));
-        const baseline = top + yPosition(Math.min(value, minValue));
-        parts.push(`<rect x="${x - barWidth / 2}" y="${Math.min(y, baseline)}" width="${barWidth - 2}" height="${Math.max(1, Math.abs(baseline - y))}" fill="${colors[seriesIndex % colors.length]}" opacity="0.86"><title>${escapeXml(`${String(row[xField] ?? "")}: ${formatNumber(value)}`)}</title></rect>`);
-        if (spec.chartSpec.showValues && pointIndex < 40) {
-          parts.push(`<text x="${x}" y="${Math.min(y, baseline) - 6}" text-anchor="middle" font-family="${monoFont}" font-size="10" fill="#201515">${formatNumber(value)}</text>`);
-        }
-        void xIndex;
-      }
-    } else {
-      const path = points
-        .filter((row) => Number.isFinite(Number(row[yField])))
-        .sort((leftRow, rightRow) => xValues.indexOf(String(leftRow[xField] ?? "")) - xValues.indexOf(String(rightRow[xField] ?? "")))
-        .map((row, index) => `${index === 0 ? "M" : "L"}${left + xPosition(String(row[xField] ?? ""))},${top + yPosition(Number(row[yField]))}`)
-        .join(" ");
-      if (path) parts.push(`<path d="${path}" fill="none" stroke="${colors[seriesIndex % colors.length]}" stroke-width="3"/>`);
-      for (const [pointIndex, row] of points.entries()) {
-        const value = Number(row[yField]);
-        if (!Number.isFinite(value)) continue;
-        const cx = left + xPosition(String(row[xField] ?? ""));
-        const cy = top + yPosition(value);
-        parts.push(`<circle cx="${cx}" cy="${cy}" r="4" fill="${colors[seriesIndex % colors.length]}"><title>${escapeXml(`${String(row[xField] ?? "")}: ${formatNumber(value)}`)}</title></circle>`);
-        if (spec.chartSpec.showValues && pointIndex < 40) {
-          parts.push(`<text x="${cx}" y="${cy - 8}" text-anchor="middle" font-family="${monoFont}" font-size="10" fill="#201515">${formatNumber(value)}</text>`);
-        }
-      }
-    }
-    if (colorField && seriesValue && spec.chartSpec.showLegend !== false) {
-      const legendX = left + seriesIndex * 120;
-      parts.push(`<circle cx="${legendX}" cy="${height - 18}" r="4" fill="${colors[seriesIndex % colors.length]}"/>`);
-      parts.push(`<text x="${legendX + 10}" y="${height - 14}" font-family="${monoFont}" font-size="11" fill="#201515">${escapeXml(seriesValue)}</text>`);
-    }
-  }
-  parts.push("</svg>");
-  return parts.join("");
-}
-
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(value);
-}
-
-function escapeXml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[character] ?? character);
-}
-
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
+  return value.replace(
+    /[&<>"']/g,
+    (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character,
+  );
 }
 
 function containsExecutableMarkup(value: string): boolean {
@@ -343,13 +436,4 @@ function metricSummary(value: unknown): string {
   const name = typeof record.name === "string" ? record.name : "未命名指标";
   const formula = typeof record.formula === "string" ? record.formula : "未提供公式";
   return `${name} · ${formula}`;
-}
-
-function readNestedString(value: Record<string, unknown>, path: string[]): string | undefined {
-  let current: unknown = value;
-  for (const key of path) {
-    if (typeof current !== "object" || current === null || !(key in current)) return undefined;
-    current = (current as Record<string, unknown>)[key];
-  }
-  return typeof current === "string" && /^#[0-9a-f]{6}$/i.test(current) ? current : undefined;
 }

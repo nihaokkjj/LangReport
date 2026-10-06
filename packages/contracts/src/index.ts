@@ -87,6 +87,8 @@ export const chartEncodingSchema = z.object({
   type: z.enum(["quantitative", "temporal", "nominal", "ordinal"]).optional(),
 });
 
+export { MAX_CHART_POINTS, chartPointBudgetMessage } from "./chart-points";
+
 export const flintSpecSchema = z.object({
   version: z.literal("v1"),
   data: z.object({ values: z.array(z.record(z.string(), scalarSchema)) }),

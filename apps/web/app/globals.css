@@ -822,6 +822,21 @@ summary:focus-visible {
   min-width: 0;
   margin-inline: auto;
 }
+.vega-host {
+  width: 100%;
+  overflow-x: auto;
+}
+.vega-host svg,
+.vega-host canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+}
+.chart-visual:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
 .chart-svg {
   display: block;
   width: 100%;

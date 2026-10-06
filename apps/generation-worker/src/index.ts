@@ -200,11 +200,12 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
     });
     await setStatus(jobId, lease, "compiling", { flintSpec: artifacts.flintSpec });
     if (!artifacts.validation.valid) {
+      const budgetIssue = artifacts.validation.issues.find((issue) => issue.code === "CHART_POINT_BUDGET_EXCEEDED");
       await failJob(
         jobId,
         lease,
-        "VALIDATION_FAILED",
-        "Flint Spec 未通过必要校验",
+        budgetIssue?.code ?? "VALIDATION_FAILED",
+        budgetIssue?.message ?? "Flint Spec 未通过必要校验",
         artifacts.validation,
         cycleResult.audit,
       );
@@ -261,7 +262,14 @@ async function processEditJob(jobId: string, record: GenerationJobRecord, lease:
         renderValidation,
       });
       if (!validation.valid) {
-        await failJob(jobId, lease, "VALIDATION_FAILED", "编辑后的 Flint Spec 未通过必要校验", validation);
+        const budgetIssue = validation.issues.find((issue) => issue.code === "CHART_POINT_BUDGET_EXCEEDED");
+        await failJob(
+          jobId,
+          lease,
+          budgetIssue?.code ?? "VALIDATION_FAILED",
+          budgetIssue?.message ?? "编辑后的 Flint Spec 未通过必要校验",
+          validation,
+        );
         return;
       }
       await setStatus(jobId, lease, "rendering", {}, true);
@@ -322,7 +330,14 @@ async function processEditJob(jobId: string, record: GenerationJobRecord, lease:
     });
     await setStatus(jobId, lease, "compiling", { flintSpec: editedSpec, validation, planValidation, renderValidation });
     if (!validation.valid) {
-      await failJob(jobId, lease, "VALIDATION_FAILED", "编辑后的 Flint Spec 未通过必要校验", validation);
+      const budgetIssue = validation.issues.find((issue) => issue.code === "CHART_POINT_BUDGET_EXCEEDED");
+      await failJob(
+        jobId,
+        lease,
+        budgetIssue?.code ?? "VALIDATION_FAILED",
+        budgetIssue?.message ?? "编辑后的 Flint Spec 未通过必要校验",
+        validation,
+      );
       return;
     }
     await setStatus(jobId, lease, "rendering", {}, true);

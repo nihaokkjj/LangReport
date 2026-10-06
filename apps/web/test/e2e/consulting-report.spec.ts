@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { captureUiEvidence } from "./visual-evidence";
 
 const projectId = "project-sales";
@@ -17,6 +18,9 @@ const rows = [
 function createFixture(
   options: {
     intakeResult?: "succeeded" | "needs_clarification";
+    chartRows?: typeof rows;
+    generationFailure?: { code: string; message: string };
+    generationStatus?: { job: Record<string, unknown>; revision: null };
     initialMessages?: Array<{
       id: string;
       conversationId: string;
@@ -63,9 +67,22 @@ function createFixture(
     snapshotId: "snapshot-sales-v1",
     createdAt: now,
     changeReason: null,
+    vegaLiteSpec: {
+      data: { values: options.chartRows ?? rows },
+      mark: { type: "line", color: "#FF4F00", tooltip: true },
+      encoding: {
+        x: { field: "月份", type: "ordinal" },
+        y: { field: "销售额", type: "quantitative", scale: { zero: true } },
+        color: { field: "区域", type: "nominal", scale: { range: ["#FF4F00", "#939084", "#18794E"] } },
+      },
+      width: 900,
+      height: 360,
+      title: "各区域月度销售额",
+      background: "#fffefb",
+    },
     flintSpec: {
       version: "v1",
-      data: { values: rows },
+      data: { values: options.chartRows ?? rows },
       semanticTypes: { 月份: "temporal", 区域: "nominal", 销售额: "measure" },
       chartSpec: {
         chartType: "Line Chart",
@@ -207,7 +224,9 @@ function createFixture(
       if (path === `/api/v1/projects/${projectId}/memories` && request.method() === "GET")
         return route.fulfill({ json: { memory: { project: [], workspace: [], conflicts: [] } } });
       if (path === `/api/v1/projects/${projectId}/evidence-blocks` && request.method() === "GET")
-        return route.fulfill({ json: { evidence: asset && brief && metric ? [evidence()] : [] } });
+        return route.fulfill({
+          json: { evidence: asset && brief && metric && !options.generationFailure ? [evidence()] : [] },
+        });
       if (path === `/api/v1/projects/${projectId}/theme` && request.method() === "GET")
         return route.fulfill({ json: { theme: { preset: "economist" } } });
       if (path === "/api/v1/workspaces/workspace-sales/model-credential" && request.method() === "GET")
@@ -369,13 +388,13 @@ function createFixture(
             job: {
               id: jobId,
               conversationId,
-              status: "succeeded",
+              status: options.generationFailure ? "failed" : "succeeded",
               operation: "generate",
               prompt: "按月份展示各区域销售额",
               snapshotId: "snapshot-sales-v1",
               repairCount: 0,
-              errorCode: null,
-              errorMessage: null,
+              errorCode: options.generationFailure?.code ?? null,
+              errorMessage: options.generationFailure?.message ?? null,
               clarificationProposal: null,
               intent: null,
               transformPlan: nextRevision.transformPlan,
@@ -383,12 +402,16 @@ function createFixture(
               flintSpec: nextRevision.flintSpec,
               validation: nextRevision.validation,
               previewData: { columns: ["月份", "区域", "销售额"], rows, steps: [] },
-              revision: { id: revisionId, artifactId: "artifact-sales", revision: 1, status: revisionStatus },
+              revision: options.generationFailure
+                ? null
+                : { id: revisionId, artifactId: "artifact-sales", revision: 1, status: revisionStatus },
             },
-            revision: nextRevision,
+            revision: options.generationFailure ? null : nextRevision,
           },
         });
       }
+      if (path === `/api/v1/generation-jobs/${jobId}/status` && request.method() === "GET" && options.generationStatus)
+        return route.fulfill({ json: options.generationStatus });
       if (path === "/api/v1/chart-artifacts/artifact-sales/revisions" && request.method() === "POST") {
         const parsedRequest = JSON.parse(request.postData() ?? "{}") as Record<string, unknown>;
         editRequest = parsedRequest;
@@ -589,7 +612,7 @@ test("数据预览默认打开最新版本并可切换历史 Snapshot", async ({
 });
 
 test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => {
-  const fixture = createFixture();
+  const fixture = createFixture({ chartRows: [...rows, { 月份: "2026-04", 区域: "华东", 销售额: 999999 }] });
   await page.route("**/api/**", fixture.route);
   await page.goto("/");
   const topbar = page.locator(".topbar");
@@ -691,6 +714,13 @@ test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => 
   await page.getByRole("button", { name: /^生成证据/ }).click();
   const evidenceCanvas = page.getByLabel("证据画布");
   await expect(evidenceCanvas.getByRole("heading", { name: "各区域月度销售额" })).toBeVisible({ timeout: 10000 });
+  await expect(evidenceCanvas.locator(".vega-host[data-rendered-points='4'] svg .role-mark")).toBeVisible();
+  await evidenceCanvas.locator(".chart-visual").focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await expect(evidenceCanvas.locator(".chart-readout")).toContainText("999999");
   await captureUiEvidence(page, "workbench");
   await expect(evidenceCanvas.getByText("草稿", { exact: true })).toBeVisible();
   const chartAlignment = await evidenceCanvas.locator(".chart-stage").evaluate((stage) => {
@@ -724,6 +754,138 @@ test("销售 CSV 到固定 Revision 导出的核心链路", async ({ page }) => 
   await page.getByRole("link", { name: "导出 SVG" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("langreport-revision-r1.svg");
+});
+
+test("绘图结果超出上限时主界面提示聚合且不提供相同输入重试", async ({ page }) => {
+  const fixture = createFixture({
+    generationFailure: {
+      code: "CHART_POINT_BUDGET_EXCEEDED",
+      message:
+        "图表绘制结果为 10001 个点，超过 10000 个点的上限。请先按时间或类别聚合，再重新生成图表；系统不会自动截断数据。",
+    },
+  });
+  await page.route("**/api/**", fixture.route);
+  await page.goto("/");
+  await page.evaluate(async () => {
+    await fetch("/api/v1/projects/project-sales/data-assets/paste", { method: "POST" });
+    await fetch("/api/v1/projects/project-sales/metric-definitions", { method: "POST" });
+    await fetch("/api/v1/projects/project-sales/analysis-brief", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        businessQuestion: "按月份展示销售额",
+        audience: "客户",
+        timeRange: "全部",
+        timeGrain: "月",
+        outputFormat: "evidence_block",
+      }),
+    });
+  });
+  await page.reload();
+  await page.getByLabel("继续对话").fill("按月份展示销售额");
+  await page.getByRole("button", { name: /^生成证据/ }).click();
+  const failure = page.locator(".failure-stage");
+  await expect(failure).toContainText("CHART_POINT_BUDGET_EXCEEDED");
+  await expect(failure).toContainText("请先按时间或类别聚合");
+  await expect(failure.getByRole("button", { name: "再次尝试" })).toHaveCount(0);
+});
+
+test("真实 API 失败状态契约投影到界面并提示聚合", async ({ page }) => {
+  test.skip(!process.env.LANGREPORT_FAILURE_FIXTURE_PATH, "仅在隔离数据库集成验收中运行");
+  const payload = JSON.parse(await readFile(process.env.LANGREPORT_FAILURE_FIXTURE_PATH!, "utf8")) as {
+    job: { errorCode: string; errorMessage: string; status: string; terminal: boolean };
+    source: { database: string; worker: string; apiStatus: number };
+  };
+  expect(payload.source).toEqual({ database: "postgres", worker: "render-worker", apiStatus: 200 });
+  expect(payload.job.status).toBe("failed");
+  expect(payload.job.terminal).toBe(true);
+  const fixture = createFixture({
+    generationFailure: { code: payload.job.errorCode, message: payload.job.errorMessage },
+    generationStatus: { job: { ...payload.job, id: "job-sales" }, revision: null },
+  });
+  await page.route("**/api/**", fixture.route);
+  await page.goto("/");
+  await page.evaluate(async () => {
+    await fetch("/api/v1/projects/project-sales/data-assets/paste", { method: "POST" });
+    await fetch("/api/v1/projects/project-sales/metric-definitions", { method: "POST" });
+    await fetch("/api/v1/projects/project-sales/analysis-brief", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        businessQuestion: "逐行绘制",
+        audience: "客户",
+        timeRange: "全部",
+        timeGrain: "月",
+        outputFormat: "evidence_block",
+      }),
+    });
+  });
+  await page.reload();
+  await page.getByLabel("继续对话").fill("逐行绘制");
+  await page.getByRole("button", { name: /^生成证据/ }).click();
+  const failure = page.locator(".failure-stage");
+  await expect(failure).toContainText(payload.job.errorCode);
+  await expect(failure).toContainText(payload.job.errorMessage);
+  await expect(failure.getByRole("button", { name: "再次尝试" })).toHaveCount(0);
+});
+
+test("浏览器 Canvas 绘制完整 10,000 点且保持键盘与事件响应", async ({ page }) => {
+  test.setTimeout(90_000);
+  const chartRows = Array.from({ length: 10_000 }, (_, index) => ({
+    月份: `M${index}`,
+    区域: "华东",
+    销售额: index,
+  }));
+  const fixture = createFixture({ chartRows });
+  await page.route("**/api/**", fixture.route);
+  await page.goto("/");
+  await page.evaluate(async () => {
+    await fetch("/api/v1/projects/project-sales/data-assets/paste", { method: "POST" });
+    await fetch("/api/v1/projects/project-sales/metric-definitions", { method: "POST" });
+    await fetch("/api/v1/projects/project-sales/analysis-brief", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        businessQuestion: "按月份展示销售额",
+        audience: "客户",
+        timeRange: "全部",
+        timeGrain: "月",
+        outputFormat: "evidence_block",
+      }),
+    });
+  });
+  await page.reload();
+  await page.evaluate(() => {
+    const samples: number[] = [];
+    let last = performance.now();
+    const timer = window.setInterval(() => {
+      const now = performance.now();
+      samples.push(now - last);
+      last = now;
+    }, 16);
+    (window as typeof window & { chartPulse?: { samples: number[]; timer: number } }).chartPulse = { samples, timer };
+  });
+  await page.getByLabel("继续对话").fill("按月份展示销售额");
+  await page.getByRole("button", { name: /^生成证据/ }).click();
+  const evidenceCanvas = page.getByLabel("证据画布");
+  const host = evidenceCanvas.locator(".vega-host[data-rendered-points='10000']");
+  await expect(host.locator("canvas")).toBeVisible({ timeout: 30_000 });
+  const metrics = await page.evaluate(() => {
+    const pulse = (window as typeof window & { chartPulse: { samples: number[]; timer: number } }).chartPulse;
+    window.clearInterval(pulse.timer);
+    const host = document.querySelector<HTMLElement>(".vega-host[data-rendered-points='10000']");
+    return {
+      renderMs: Number(host?.dataset.renderMs),
+      maxGapMs: Math.max(...pulse.samples),
+      samples: pulse.samples.length,
+    };
+  });
+  console.log(`10,000-point browser response: ${JSON.stringify(metrics)}`);
+  expect(metrics.renderMs).toBeLessThan(3_000);
+  expect(metrics.maxGapMs).toBeLessThan(500);
+  await evidenceCanvas.locator(".chart-visual").focus();
+  await page.keyboard.press("End");
+  await expect(evidenceCanvas.locator(".chart-readout")).toContainText("M9999 · 华东 · 9999");
 });
 
 test("图表编辑器把逻辑和显示变化提交为可追溯 Patch", async ({ page }) => {

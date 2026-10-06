@@ -6,6 +6,7 @@ import {
   buildEvidenceFinding,
   freezeDerivedProvenance,
   freezeVisualRevisionInput,
+  publicProjectMemoryReferences,
 } from "../../src/index.js";
 
 test("derived jobs inherit isolated source provenance and only public project memory references", () => {
@@ -47,6 +48,17 @@ test("derived jobs reject missing source Brief or metric instead of freezing emp
       (error: unknown) => error instanceof Error && "code" in error && error.code === "REVISION_PROVENANCE_INCOMPLETE",
     );
   }
+});
+
+test("legacy memory arrays expose only bounded project references", () => {
+  const references = publicProjectMemoryReferences([
+    { id: "public", scope: "project", key: "revenue", version: 1, contentHash: "hash", statement: "private body" },
+    { id: "private", scope: "user_preference", key: "tone", version: 1, contentHash: "secret", value: "private" },
+    { id: "incomplete", scope: "project", key: "revenue", version: 1, value: "unhashed" },
+  ]);
+  assert.deepEqual(references, [{ id: "public", scope: "project", key: "revenue", version: 1, contentHash: "hash" }]);
+  assert.equal(JSON.stringify(references).includes("private body"), false);
+  assert.deepEqual(publicProjectMemoryReferences({ scope: "project", value: "raw" }), []);
 });
 
 const sourceSpec: FlintSpec = {

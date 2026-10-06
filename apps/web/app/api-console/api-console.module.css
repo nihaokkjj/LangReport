@@ -964,6 +964,14 @@
   line-height: 1.55;
 }
 
+.generationBudgetNote strong {
+  font-size: 16px;
+}
+
+.generationBudgetNote p {
+  font-size: 15px;
+}
+
 .requestPanel {
   border-bottom: 1px solid var(--border);
 }

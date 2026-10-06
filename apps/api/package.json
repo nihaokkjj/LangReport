@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@langreport/generation-worker": "workspace:*",
+    "@langreport/render-worker": "workspace:*",
     "@types/node": "26.4.0",
     "tsx": "4.23.13",
     "typescript": "7.0.2"

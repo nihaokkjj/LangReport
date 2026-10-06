@@ -1,8 +1,10 @@
 import {
+  chartPointBudgetMessage,
   chartPlanDecisionSchema,
   conversationIntentSchema,
   createChartPlanOutputDescriptor,
   flintSpecSchema,
+  MAX_CHART_POINTS,
   modelResultSchema,
   preparedModelContextSchema,
   transformPlanSchema,
@@ -365,17 +367,23 @@ function validateFlintSpec(specInput: unknown): ValidationReport {
     issues.push({ code: "DATA_FIELD_MISSING", message: "Flint Spec 引用的数据字段不存在", severity: "error" });
 
   const numericY = spec.data.values.filter((row) => typeof row[encodings.y?.field ?? ""] === "number").length;
-  const xCardinality = new Set(spec.data.values.map((row) => String(row[encodings.x?.field ?? ""]))).size;
   const colorCardinality = encodings.color
     ? new Set(spec.data.values.map((row) => String(row[encodings.color?.field ?? ""]))).size
     : 0;
+  const overPointBudget = spec.data.values.length > MAX_CHART_POINTS;
+  if (overPointBudget)
+    issues.push({
+      code: "CHART_POINT_BUDGET_EXCEEDED",
+      message: chartPointBudgetMessage(spec.data.values.length),
+      severity: "error",
+    });
   const visualValid =
     Boolean(spec.chartSpec.title.trim()) &&
     spec.data.values.length > 0 &&
     numericY > 0 &&
-    xCardinality <= 500 &&
+    !overPointBudget &&
     colorCardinality <= 50;
-  if (!visualValid)
+  if (!visualValid && !overPointBudget)
     issues.push({ code: "VISUAL_RULE_FAILED", message: "图表数据为空、指标不可视化或类别过多", severity: "error" });
 
   return report(issues, {
@@ -539,16 +547,6 @@ function toCapabilityReference(capability: ResolvedCapability): PluginUsage["use
   };
 }
 
-function repairPlan(plan: TransformPlan, validation: ValidationReport, profiles: ColumnProfile[]): TransformPlan {
-  if (validation.valid) return plan;
-  const numeric = profiles.find((profile) => profile.inferredType === "number")?.name;
-  if (!numeric) return plan;
-  const hasLimit = plan.steps.some((step) => step.kind === "limit");
-  return hasLimit || validation.issues.every((issue) => issue.code !== "VISUAL_RULE_FAILED")
-    ? plan
-    : transformPlanSchema.parse({ ...plan, steps: [...plan.steps, { kind: "limit", count: 500 }] });
-}
-
 function validateReports(issues: ValidationIssue[], checks: ValidationReport["checks"]): ValidationReport {
   return {
     valid:
@@ -671,6 +669,7 @@ type GenerationCycleFailureCode =
   | "GENERATION_TRANSFORM_FAILED"
   | "GENERATION_COMPILATION_FAILED"
   | "GENERATION_VALIDATION_FAILED"
+  | "CHART_POINT_BUDGET_EXCEEDED"
   | "GENERATION_UNEXPECTED";
 
 export type GenerationCycleResult =
@@ -920,6 +919,9 @@ async function runGenerationCycleGraph(
       };
       if (validation.valid)
         return { audit: nextAudit, validation, compiledFlintSpec: flintSpec, terminal: "ready_for_render" };
+      const pointBudgetIssue = validation.issues.find((issue) => issue.code === "CHART_POINT_BUDGET_EXCEEDED");
+      if (pointBudgetIssue)
+        return fail(nextAudit, "CHART_POINT_BUDGET_EXCEEDED", pointBudgetIssue.message, false, "validating");
       if (state.repairCount >= 2)
         return fail(
           nextAudit,
@@ -935,7 +937,7 @@ async function runGenerationCycleGraph(
       try {
         return {
           audit,
-          transformPlan: repairPlan(state.transformPlan!, state.validation!, input.profiles),
+          transformPlan: state.transformPlan!,
           repairCount: state.repairCount + 1,
         };
       } catch (error) {

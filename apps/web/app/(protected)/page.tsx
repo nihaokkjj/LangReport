@@ -55,6 +55,7 @@ import type {
 import { PluginTrace } from "../../features/evidence/plugin-trace";
 import { usePluginTrace } from "../../features/evidence/use-plugin-trace";
 import { EvidenceCanvas } from "../../features/evidence/evidence-canvas";
+import { VegaChart } from "../../features/evidence/vega-chart";
 import { ReviewComposition } from "../../features/review/review-composition";
 import { useReviewComments } from "../../features/review/use-review-comments";
 import { AlertBanner } from "../../components/feedback/alert-banner";
@@ -158,6 +159,7 @@ type Revision = {
   createdAt: string;
   changeReason: string | null;
   flintSpec: FlintSpec;
+  vegaLiteSpec: Record<string, unknown> | null;
   validation: ValidationReport;
   transformPlan: TransformPlan;
   fieldLineage: Array<{ outputColumn: string; sourceColumns: string[]; operation: string }>;
@@ -326,160 +328,12 @@ function formatDate(value?: string | null): string {
     minute: "2-digit",
   }).format(new Date(value));
 }
-function formatValue(value: Cell): string {
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "number") return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(value);
-  return String(value);
-}
 function chartTypeName(type: FlintSpec["chartSpec"]["chartType"]): string {
   return type === "Bar Chart" ? "柱状图" : type === "Area Chart" ? "面积图" : "折线图";
 }
 function rowsForEvidence(evidence: EvidenceRecord | null): Array<Record<string, Cell>> {
-  if (evidence?.job?.previewData?.rows) return evidence.job.previewData.rows;
-  return evidence?.revision.flintSpec.data.values ?? [];
+  return evidence?.revision.flintSpec.data.values ?? evidence?.job?.previewData?.rows ?? [];
 }
-function InteractiveChart({ rows, spec }: { rows: Array<Record<string, Cell>>; spec: FlintSpec }) {
-  const [activePoint, setActivePoint] = useState<{ key: string; readout: string } | null>(null);
-  const xField = spec.chartSpec.encodings.x?.field;
-  const yField = spec.chartSpec.encodings.y?.field;
-  const colorField = spec.chartSpec.encodings.color?.field;
-  const chartRows = useMemo(
-    () => rows.filter((row) => xField && yField && typeof row[yField] === "number"),
-    [rows, xField, yField],
-  );
-  const xValues = useMemo(
-    () => [...new Set(chartRows.map((row) => String(xField ? (row[xField] ?? "") : "")))],
-    [chartRows, xField],
-  );
-  const seriesValues = useMemo(
-    () => (colorField ? [...new Set(chartRows.map((row) => String(row[colorField] ?? "")))] : [""]),
-    [chartRows, colorField],
-  );
-  const values = chartRows.map((row) => Number(yField ? row[yField] : 0));
-  if (!xField || !yField || chartRows.length === 0) return <div className="chart-empty">无可绘制数据</div>;
-  const focusPoint = (key: string, row: Record<string, Cell>) =>
-    setActivePoint({
-      key,
-      readout: `${String(row[xField] ?? "")} · ${colorField ? `${String(row[colorField] ?? "")} · ` : ""}${formatValue(row[yField])}`,
-    });
-  const width = 900;
-  const height = 360;
-  const left = 70;
-  const top = 28;
-  const right = 22;
-  const bottom = 56;
-  const plotWidth = width - left - right;
-  const plotHeight = height - top - bottom;
-  const min = Math.min(...values, 0);
-  const max = Math.max(...values, 0);
-  const range = max - min || 1;
-  const colors = ["#FF4F00", "#939084", "#18794E"];
-  const xPosition = (value: string) =>
-    xValues.length <= 1 ? plotWidth / 2 : (xValues.indexOf(value) * plotWidth) / (xValues.length - 1);
-  const yPosition = (value: number) => plotHeight - ((value - min) / range) * plotHeight;
-  const baseline = top + yPosition(Math.min(0, max));
-  return (
-    <div className="chart-visual" aria-label={`${spec.chartSpec.title}图表预览`}>
-      <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} role="img">
-        <line x1={left} y1={top + plotHeight} x2={left + plotWidth} y2={top + plotHeight} className="chart-axis" />
-        <line x1={left} y1={top} x2={left} y2={top + plotHeight} className="chart-axis" />
-        {[0, 0.33, 0.66, 1].map((step) => (
-          <g key={step}>
-            <line
-              x1={left}
-              y1={top + plotHeight * step}
-              x2={left + plotWidth}
-              y2={top + plotHeight * step}
-              className="chart-grid"
-            />
-            <text x={left - 10} y={top + plotHeight * step + 4} textAnchor="end">
-              {formatValue(max - (max - min) * step)}
-            </text>
-          </g>
-        ))}
-        {xValues.map((value) => (
-          <text key={value} x={left + xPosition(value)} y={top + plotHeight + 25} textAnchor="middle">
-            {value}
-          </text>
-        ))}
-        {seriesValues.map((seriesValue, seriesIndex) => {
-          const points = chartRows
-            .filter((row) => !colorField || String(row[colorField] ?? "") === seriesValue)
-            .sort((a, b) => xValues.indexOf(String(a[xField] ?? "")) - xValues.indexOf(String(b[xField] ?? "")));
-          const path = points
-            .map(
-              (row, index) =>
-                `${index === 0 ? "M" : "L"}${left + xPosition(String(row[xField] ?? ""))},${top + yPosition(Number(row[yField]))}`,
-            )
-            .join(" ");
-          const areaPath = `${path} L ${left + xPosition(String(points[points.length - 1]?.[xField] ?? ""))},${baseline} L ${left + xPosition(String(points[0]?.[xField] ?? ""))},${baseline} Z`;
-          return (
-            <g key={seriesValue || "default"}>
-              {spec.chartSpec.chartType === "Area Chart" && (
-                <path d={areaPath} fill={colors[seriesIndex % colors.length]} opacity="0.12" />
-              )}
-              {spec.chartSpec.chartType === "Bar Chart" ? (
-                points.map((row, index) => {
-                  const value = Number(row[yField]);
-                  const slot = plotWidth / Math.max(xValues.length * seriesValues.length, 1);
-                  const barWidth = Math.max(8, slot * 0.68);
-                  const x =
-                    left +
-                    xPosition(String(row[xField] ?? "")) -
-                    ((seriesValues.length - 1) * barWidth) / 2 +
-                    seriesIndex * barWidth;
-                  const y = top + yPosition(Math.max(value, 0));
-                  const key = `${seriesValue}-${index}`;
-                  return (
-                    <rect
-                      key={key}
-                      tabIndex={0}
-                      role="button"
-                      aria-label={`${String(row[xField] ?? "")}: ${formatValue(row[yField])}`}
-                      x={x - barWidth / 2}
-                      y={Math.min(y, baseline)}
-                      width={Math.max(3, barWidth - 2)}
-                      height={Math.max(2, Math.abs(baseline - y))}
-                      fill={colors[seriesIndex % colors.length]}
-                      opacity={activePoint?.key === key ? 1 : 0.78}
-                      onMouseEnter={() => focusPoint(key, row)}
-                      onFocus={() => focusPoint(key, row)}
-                    />
-                  );
-                })
-              ) : (
-                <>
-                  <path d={path} fill="none" stroke={colors[seriesIndex % colors.length]} strokeWidth="3" />
-                  {points.map((row, index) => {
-                    const key = `${seriesValue}-${index}`;
-                    return (
-                      <circle
-                        key={key}
-                        tabIndex={0}
-                        role="button"
-                        aria-label={`${String(row[xField] ?? "")}: ${formatValue(row[yField])}`}
-                        cx={left + xPosition(String(row[xField] ?? ""))}
-                        cy={top + yPosition(Number(row[yField]))}
-                        r={activePoint?.key === key ? 7 : 4.5}
-                        fill={colors[seriesIndex % colors.length]}
-                        onMouseEnter={() => focusPoint(key, row)}
-                        onFocus={() => focusPoint(key, row)}
-                      />
-                    );
-                  })}
-                </>
-              )}
-            </g>
-          );
-        })}
-      </svg>
-      <div className="chart-readout" aria-live="polite">
-        {activePoint?.readout ?? "选择数据点查看数值"}
-      </div>
-    </div>
-  );
-}
-
 function Pipeline({ job }: { job: GenerationJob }) {
   const currentIndex = pipelineStages.indexOf(job.status);
   return (
@@ -1837,7 +1691,12 @@ export default function Home() {
                 qualityWarnings={[...qualityWarnings, ...activeEvidence.block.qualityWarnings].map(
                   (warning) => warning.message,
                 )}
-                chart={<InteractiveChart rows={activeRows} spec={activeEvidence.revision.flintSpec} />}
+                chart={
+                  <VegaChart
+                    vegaLiteSpec={activeEvidence.revision.vegaLiteSpec}
+                    spec={activeEvidence.revision.flintSpec}
+                  />
+                }
                 canEdit={activeEvidence.revision.status !== "approved" && activeEvidence.revision.status !== "archived"}
                 onEdit={openEditor}
                 showTrace={showTrace}
@@ -2110,7 +1969,9 @@ export default function Home() {
                 </div>
                 <span className="revision-chip">R{(activeRevision?.revision ?? 0) + 1} 草稿</span>
               </div>
-              <InteractiveChart
+              <VegaChart
+                vegaLiteSpec={activeEvidence.revision.vegaLiteSpec}
+                draft
                 rows={activeRows}
                 spec={{
                   ...activeSpec,

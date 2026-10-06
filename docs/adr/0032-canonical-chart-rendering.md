@@ -1,7 +1,7 @@
 # ADR-0032：统一固定版本图表的渲染语义
 
 - change-id：`CHG-2026-10-03-evidence-correctness-repair`
-- 状态：`Proposed`（未批准、未实施）
+- 状态：`Proposed`（产品候选已实施，验收未完成）
 - 创建时间：2026-10-03
 - 更新时间：2026-10-03
 
@@ -23,6 +23,8 @@
 
 ## 验证与回退
 
-2026-10-03 T2已证明Vega6.4.0/Vega-Lite6.4.3能完整保留输入、在Windows生成SVG/PNG并提供浏览器悬停；公开Flint编译参数需显式防止隐式截断。十万行五轮冷进程测量显示Line中位11.22秒，最高峰值约1.10GB；拒绝loader可能仍返回空SVG，须增加执行前规范守卫和拒绝标志核验。资源策略尚待选择：保留十万条绘图结果并隔离执行，或一万条绘图结果预算加显式聚合确认。详见[兼容性实验](../changes/2026-10-03-evidence-correctness-repair/rendering-experiment.md)。当前不批准运行时替换，T3未开始。
+2026-10-03 T2已证明Vega6.4.0/Vega-Lite6.4.3能完整保留输入、在Windows生成SVG/PNG并提供浏览器悬停；公开Flint编译参数需显式防止隐式截断。十万行五轮冷进程测量显示Line中位11.22秒，最高峰值约1.10GB；拒绝loader可能仍返回空SVG，须增加执行前规范守卫和拒绝标志核验。2026-10-04 用户确定单图最多 10,000 个绘制点，超出时提示先聚合；100,000 行源输入目标不变。详见[兼容性实验](../changes/2026-10-03-evidence-correctness-repair/rendering-experiment.md)。运行时替换尚未验收，ADR 仍为 Proposed。
 
 T2 失败则停留 Proposed，修订方案；不能将局部修补冒充最终统一。历史 Approved 输出不重新渲染或覆盖；新渲染器采用新版本，新生成写新对象。实施和验收参见 [design D1](../changes/2026-10-03-evidence-correctness-repair/design.md)、[测试计划](../changes/2026-10-03-evidence-correctness-repair/test-plan.md)。
+
+2026-10-06 实施候选：固定 Vega 6.4.0 / Vega-Lite 6.4.3，服务端以 Vega 执行受限规范输出 SVG/PNG，浏览器消费固定 Revision 的同一规范并在超过 1,000 点时用 Canvas。规范守卫禁止外部资源、表达式和不支持的图形语法，loader 拒绝结果仍由失败标志复核。桌面/移动 10,000 点单轮响应已通过；真实数据库→Worker→API→UI 失败链路与最终独立复验尚未完成，因此保持 Proposed。

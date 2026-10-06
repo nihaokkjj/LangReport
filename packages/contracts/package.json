@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./http": "./src/http.ts"
+    "./http": "./src/http.ts",
+    "./vega": "./src/vega.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

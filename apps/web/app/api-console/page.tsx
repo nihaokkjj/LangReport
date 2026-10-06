@@ -2021,6 +2021,19 @@ export default function ApiConsolePage() {
                 </aside>
               )}
 
+              {selectedEntry.tag === "Generation Jobs" && (
+                <aside
+                  className={`${styles.memoryPrivacyNote} ${styles.generationBudgetNote}`}
+                  aria-label="图表绘制结果预算说明"
+                >
+                  <strong>图表最多绘制 10,000 个点</strong>
+                  <p>
+                    Data Snapshot 可保留更多原始行。若 Job 返回 CHART_POINT_BUDGET_EXCEEDED，请先按时间或类别聚合，
+                    再以聚合后的结果生成图表；相同输入直接重试仍会超限。
+                  </p>
+                </aside>
+              )}
+
               <section className={styles.requestPanel} aria-label="请求编辑器">
                 <div className={styles.panelHeader}>
                   <div>

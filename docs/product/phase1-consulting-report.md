@@ -50,20 +50,20 @@ LangReport 第一阶段不是通用 BI，也不是自动替代顾问的报告生
 
 ### 必须做
 
-| 能力 | 第一阶段要求 |
-| --- | --- |
-| Project | 创建、列表、切换、归档一个咨询项目；保存项目名称、客户代号、描述和当前 Visual Template |
-| Conversation | Project 内创建、继续和切换 Conversation；消息和生成结果可持久化 |
-| 数据 | 上传 CSV/XLSX/JSON 或粘贴表格；生成不可变 Data Snapshot；显示字段类型、缺失值、基数和时间粒度 |
-| Analysis Brief | 记录业务问题、受众、期间、输出要求和已确认约束；不明确时要求澄清 |
-| Metric Definition | 保存指标名称、含义、公式、单位、过滤和时间规则；区分用户确认和模型推断 |
-| 生成 | 一个 Generation Cycle 生成一个主 Chart Artifact 和一个 Evidence Block |
-| 变换 | 支持字段选择/重命名、类型转换、过滤、分组聚合、排序、同比/环比、比率和差值 |
-| 图表 | 第一阶段支持 Line、Bar、Area；图表字段、标题、排序、筛选和注释可编辑 |
-| 可追溯 | 每个结果关联 Data Snapshot、Metric Definition、TransformPlan、字段血缘、Flint Spec、Visual Template 版本和校验结果 |
-| 项目规范 | 提供内置模板；项目可复制模板并修改允许的视觉令牌，保存为版本 |
-| 审核 | Draft、In Review、Approved、Changes Requested；Approved 内容不可变 |
-| 输出 | 浏览器交互预览，以及绑定固定 Revision 的 PNG、SVG、静态 HTML 和 Vega-Lite JSON 下载；HTML 为服务端生成的自包含静态 SVG 包装页，不执行用户脚本 |
+| 能力              | 第一阶段要求                                                                                                                                  |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project           | 创建、列表、切换、归档一个咨询项目；保存项目名称、客户代号、描述和当前 Visual Template                                                        |
+| Conversation      | Project 内创建、继续和切换 Conversation；消息和生成结果可持久化                                                                               |
+| 数据              | 上传 CSV/XLSX/JSON 或粘贴表格；生成不可变 Data Snapshot；显示字段类型、缺失值、基数和时间粒度                                                 |
+| Analysis Brief    | 记录业务问题、受众、期间、输出要求和已确认约束；不明确时要求澄清                                                                              |
+| Metric Definition | 保存指标名称、含义、公式、单位、过滤和时间规则；区分用户确认和模型推断                                                                        |
+| 生成              | 一个 Generation Cycle 生成一个主 Chart Artifact 和一个 Evidence Block                                                                         |
+| 变换              | 支持字段选择/重命名、类型转换、过滤、分组聚合、排序、同比/环比、比率和差值                                                                    |
+| 图表              | 第一阶段支持 Line、Bar、Area；图表字段、标题、排序、筛选和注释可编辑                                                                          |
+| 可追溯            | 每个结果关联 Data Snapshot、Metric Definition、TransformPlan、字段血缘、Flint Spec、Visual Template 版本和校验结果                            |
+| 项目规范          | 提供内置模板；项目可复制模板并修改允许的视觉令牌，保存为版本                                                                                  |
+| 审核              | Draft、In Review、Approved、Changes Requested；Approved 内容不可变                                                                            |
+| 输出              | 浏览器交互预览，以及绑定固定 Revision 的 PNG、SVG、静态 HTML 和 Vega-Lite JSON 下载；HTML 为服务端生成的自包含静态 SVG 包装页，不执行用户脚本 |
 
 ### 明确不做
 
@@ -195,6 +195,7 @@ Brief ready
 - 单 Snapshot 硬上限：1,000,000 行；
 - 一个 Cycle 只允许一个输入文件或一份粘贴表格；
 - 首次生成目标：100,000 行以内、20 MB 以内；
+- 图表单次绘制结果最多 10,000 个点；超过时明确提示用户先按时间或类别聚合，不能静默截断或隐式 Top-N。此限制不降低 100,000 行源数据的首次生成目标；
 - 时间字段必须能够识别时间粒度，无法识别时要求用户确认；
 - 不把缺失月份静默补成零；
 - 不把重复记录静默去重；

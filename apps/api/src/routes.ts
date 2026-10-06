@@ -124,7 +124,7 @@ import { AuthenticationError, userIdFromRequest } from "./auth.js";
 import { registerAuthRoutes } from "./auth-routes.js";
 import type { AuthAccountStore } from "./user-account-store.js";
 
-const RENDERER_VERSION = "vega-lite-svg-v2";
+const RENDERER_VERSION = "vega-lite-svg-v4";
 const MAX_GENERATION_ATTEMPTS = 3;
 const retryableGenerationErrors = new Set([
   "GENERATION_FAILED",

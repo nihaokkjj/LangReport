@@ -510,7 +510,11 @@ const generationJobDto = dto(
     outputs: nullable(anyJson),
     repairCount: integer(),
     attemptCount: integer(),
-    errorCode: nullable(string()),
+    errorCode: {
+      ...nullable(string()),
+      description:
+        "失败代码；CHART_POINT_BUDGET_EXCEEDED 表示绘图结果超过 10,000 个点，应先聚合再生成，不可直接重试同一输入。",
+    },
     errorMessage: nullable(string()),
     statusVersion: integer(),
     statusChangedAt: dateTime(),
@@ -675,7 +679,10 @@ const generationJobStatusDto = dto(
     operation: { type: "string", enum: ["generate", "edit", "rollback", "copy"] },
     attemptCount: integer(),
     repairCount: integer(),
-    errorCode: nullable(string()),
+    errorCode: {
+      ...nullable(string()),
+      description: "CHART_POINT_BUDGET_EXCEEDED 表示绘图结果超过 10,000 个点；请先聚合，不要直接重试相同输入。",
+    },
     errorMessage: nullable(string()),
     clarificationProposal: nullable(anyJson),
     statusVersion: integer(),
@@ -2086,7 +2093,14 @@ function normalizeOpenApiSchema(value: unknown): unknown {
     if (nullIndex >= 0) {
       const other = anyOf[nullIndex === 0 ? 1 : 0];
       const normalizedOther = normalizeOpenApiSchema(other);
-      if (isRecord(normalizedOther)) return { ...normalizedOther, nullable: true };
+      if (isRecord(normalizedOther)) {
+        const annotations = Object.fromEntries(
+          Object.entries(value)
+            .filter(([key]) => key !== "anyOf")
+            .map(([key, item]) => [key, normalizeOpenApiSchema(item)]),
+        );
+        return { ...normalizedOther, ...annotations, nullable: true };
+      }
     }
   }
 

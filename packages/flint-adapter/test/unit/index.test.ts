@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  ChartPointBudgetError,
   compileVegaLite,
   createStaticSvgHtml,
   DESIGN_CHART_COLORS,
   DESIGN_FONT_FAMILIES,
+  MAX_CHART_POINTS,
   renderChart,
   resolveRendererAdapter,
   toFlintAssemblyInput,
@@ -12,6 +14,7 @@ import {
   validateStaticSvgHtml,
 } from "../../src/index.js";
 import { validateFlintTemplatePayload, validateFlintThemePayload } from "../../src/validation.js";
+import { assertSafeVegaLiteSpec } from "@langreport/contracts/vega";
 
 const spec = {
   version: "v1" as const,
@@ -49,14 +52,119 @@ test("compiled chart retains the complete 600-row input", () => {
   const values = (compiled.data as { values: Array<{ amount: number }> }).values;
   assert.equal(values.length, 600);
   assert.equal(Math.max(...values.map((row) => row.amount)), 600);
+  assert.equal(compiled.width, 500);
+  assert.equal(compiled.height, 300);
+});
+
+test("10,000 drawing results are allowed and Flint receives an explicit no-truncation budget", async () => {
+  const rows = Array.from({ length: MAX_CHART_POINTS }, (_, index) => ({ 月份: `M${index}`, 销售额: index }));
+  const boundedSpec = { ...spec, data: { values: rows } };
+  const input = toFlintAssemblyInput(boundedSpec);
+  assert.deepEqual(input.options, {
+    addTooltips: true,
+    maxStretch: MAX_CHART_POINTS * 20,
+    maxColorValues: MAX_CHART_POINTS,
+  });
+  assert.equal((input.data as { values: unknown[] }).values.length, MAX_CHART_POINTS);
+  const compiled = compileVegaLite(boundedSpec);
+  const values = (compiled.data as { values: Array<{ 销售额: number }> }).values;
+  assert.equal(values.length, MAX_CHART_POINTS);
+  assert.equal(values.at(-1)?.销售额, MAX_CHART_POINTS - 1);
+  assert.equal(compiled.width, 500);
+  assert.equal(compiled.height, 300);
+  const rendered = await renderChart(boundedSpec);
+  assert.match(rendered.svg, /M9999/);
+  const linePath = rendered.svg.match(/class="mark-line role-mark marks"[^>]*><path[^>]*d="([^"]+)/)?.[1];
+  assert.equal((linePath?.match(/L/g) ?? []).length, MAX_CHART_POINTS - 1);
+  assert.ok((rendered.svg.match(/<text[^>]*>M\d+<\/text>/g) ?? []).length <= 12);
+});
+
+test("10,000-point Bar and Area exports retain the complete result", async () => {
+  const rows = Array.from({ length: MAX_CHART_POINTS }, (_, index) => ({ category: `C${index}`, amount: index + 1 }));
+  const input = {
+    ...spec,
+    data: { values: rows },
+    semanticTypes: { category: "Category", amount: "Quantity" },
+    chartSpec: { ...spec.chartSpec, encodings: { x: { field: "category" }, y: { field: "amount" } } },
+  };
+  const bar = await renderChart({ ...input, chartSpec: { ...input.chartSpec, chartType: "Bar Chart" } });
+  assert.equal((bar.vegaLiteSpec.data as { values: unknown[] }).values.length, MAX_CHART_POINTS);
+  assert.equal((bar.svg.match(/aria-roledescription="bar"/g) ?? []).length, MAX_CHART_POINTS);
+  const area = await renderChart({ ...input, chartSpec: { ...input.chartSpec, chartType: "Area Chart" } });
+  assert.equal((area.vegaLiteSpec.data as { values: unknown[] }).values.length, MAX_CHART_POINTS);
+  assert.match(area.svg, /C9999/);
+  assert.match(area.svg, /aria-roledescription="area mark"/);
+});
+
+test("more than 10,000 drawing results fail with an explicit aggregation action", async () => {
+  const tooMany = {
+    ...spec,
+    data: {
+      values: Array.from({ length: MAX_CHART_POINTS + 1 }, (_, index) => ({ 月份: `M${index}`, 销售额: index })),
+    },
+  };
+  assert.throws(
+    () => compileVegaLite(tooMany),
+    (error: unknown) =>
+      error instanceof ChartPointBudgetError &&
+      error.code === "CHART_POINT_BUDGET_EXCEEDED" &&
+      error.pointCount === MAX_CHART_POINTS + 1 &&
+      /聚合/.test(error.message),
+  );
+  await assert.rejects(() => renderChart(tooMany), ChartPointBudgetError);
+});
+
+test("Vega execution refuses external data and expression-bearing grammar", () => {
+  const compiled = compileVegaLite(spec);
+  assert.doesNotThrow(() => assertSafeVegaLiteSpec(compiled));
+  assert.throws(
+    () => assertSafeVegaLiteSpec({ ...compiled, data: { url: "https://example.test/data.csv" } }),
+    /CHART_EXTERNAL_DATA_FORBIDDEN/,
+  );
+  assert.throws(
+    () => assertSafeVegaLiteSpec({ ...compiled, transform: [{ calculate: "datum.x", as: "injected" }] }),
+    /CHART_EXECUTABLE_OR_RESOURCE_FORBIDDEN/,
+  );
+  assert.throws(
+    () => assertSafeVegaLiteSpec({ ...compiled, mark: { type: "image", url: "https://example.test/pixel" } }),
+    /CHART_MARK_FORBIDDEN/,
+  );
 });
 
 test("Area exports have a filled data mark", async () => {
   const rendered = await renderChart({ ...spec, chartSpec: { ...spec.chartSpec, chartType: "Area Chart" } });
-  const filledPaths = [...rendered.svg.matchAll(/<path\b[^>]*\bfill="([^\"]+)"[^>]*>/g)].filter(
+  const filledPaths = [...rendered.svg.matchAll(/<path\b[^>]*\bfill="([^"]+)"[^>]*>/g)].filter(
     (match) => match[1] !== "none",
   );
   assert.ok(filledPaths.length > 0, "Area must contain filled paths, not only a line");
+});
+
+test("multi-series charts keep grouped bars, unstacked areas and gaps at null values", () => {
+  const multi = {
+    ...spec,
+    data: {
+      values: [
+        { 月份: "2026-01", 区域: "华东", 销售额: 10 },
+        { 月份: "2026-01", 区域: "华南", 销售额: 20 },
+        { 月份: "2026-02", 区域: "华东", 销售额: null },
+        { 月份: "2026-02", 区域: "华南", 销售额: 30 },
+      ],
+    },
+    semanticTypes: { 月份: "Month", 区域: "Category", 销售额: "Quantity" },
+    chartSpec: {
+      ...spec.chartSpec,
+      encodings: { x: { field: "月份" }, y: { field: "销售额" }, color: { field: "区域" } },
+    },
+  };
+  const bars = compileVegaLite({ ...multi, chartSpec: { ...multi.chartSpec, chartType: "Bar Chart" } });
+  assert.deepEqual((bars.encoding as { xOffset: unknown }).xOffset, { field: "区域" });
+  assert.equal((bars.encoding as { y: { stack: unknown } }).y.stack, null);
+  for (const chartType of ["Line Chart", "Area Chart"] as const) {
+    const compiled = compileVegaLite({ ...multi, chartSpec: { ...multi.chartSpec, chartType } });
+    assert.equal((compiled.mark as { invalid: string }).invalid, "break-paths-filter-domains");
+    assert.equal((compiled.encoding as { y: { stack: unknown } }).y.stack, null);
+    assert.equal((compiled.data as { values: unknown[] }).values.length, 4);
+  }
 });
 
 test("negative and positive bars have proportional heights and stay inside the canvas", async () => {
@@ -70,15 +178,12 @@ test("negative and positive bars have proportional heights and stay inside the c
     },
     chartSpec: { ...spec.chartSpec, chartType: "Bar Chart" },
   });
-  const rectangles = [...rendered.svg.matchAll(/<rect\b([^>]+)>\s*<title>/g)].map((match) => {
-    const attribute = (name: string) => Number(new RegExp(`\\b${name}="([^\"]+)"`).exec(match[1])?.[1]);
-    return { x: attribute("x"), y: attribute("y"), width: attribute("width"), height: attribute("height") };
-  });
-  assert.equal(rectangles.length, 2);
-  assert.ok(Math.abs(rectangles[0].height / rectangles[1].height - 0.5) < 0.01);
-  assert.ok(
-    rectangles.every((rect) => rect.x >= 0 && rect.x + rect.width <= 500 && rect.y >= 0 && rect.y + rect.height <= 300),
+  const bars = [...rendered.svg.matchAll(/aria-roledescription="bar" d="M[^"]+?h([\d.]+)v(-?[\d.]+)/g)].map(
+    (match) => ({ width: Number(match[1]), height: Math.abs(Number(match[2])) }),
   );
+  assert.equal(bars.length, 2);
+  assert.ok(Math.abs(bars[0].height / bars[1].height - 0.5) < 0.01);
+  assert.ok(bars.every((bar) => bar.width > 0 && bar.width < 500 && bar.height > 0 && bar.height < 300));
 });
 
 test("plugin theme config reaches Flint and deterministic SVG output", async () => {
@@ -86,7 +191,7 @@ test("plugin theme config reaches Flint and deterministic SVG output", async () 
   assert.deepEqual(input.theme_spec, { extends: "economist", ink: { series: { single: "#2563EB" } } });
   const rendered = await renderChart(spec);
   assert.match(rendered.svg, /#2563EB/);
-  assert.ok(rendered.svg.includes(`font-family="${DESIGN_FONT_FAMILIES.display.replaceAll('"', "&quot;")}"`));
+  assert.ok(rendered.svg.includes(`font-family="${DESIGN_FONT_FAMILIES.sans.replaceAll('"', "&quot;")}"`));
   assert.ok(rendered.svg.includes(`font-family="${DESIGN_FONT_FAMILIES.mono.replaceAll('"', "&quot;")}"`));
 });
 
@@ -114,15 +219,29 @@ test("display annotations and value labels remain present in deterministic SVG e
 
 test("render validation records concrete Vega-Lite, SVG, and PNG artifacts independently", async () => {
   const rendered = await renderChart(spec);
-  const valid = validateRenderedChart(rendered);
+  const valid = await validateRenderedChart(rendered);
   assert.equal(valid.status, "passed");
   assert.equal(valid.validatorVersion, "flint-render-v1");
 
-  const invalid = validateRenderedChart({ vegaLiteSpec: {}, svg: "<svg>", png: Buffer.from("not-a-png") });
+  const invalid = await validateRenderedChart({ vegaLiteSpec: {}, svg: "<svg>", png: Buffer.from("not-a-png") });
   assert.equal(invalid.status, "failed");
   assert.deepEqual(
     invalid.errors.map((error) => error.code),
     ["RENDER_VEGA_LITE_EMPTY", "RENDER_SVG_INVALID", "RENDER_PNG_INVALID"],
+  );
+});
+
+test("render validation rejects malformed SVG and PNG with a valid signature", async () => {
+  const rendered = await renderChart(spec);
+  const invalid = await validateRenderedChart({
+    ...rendered,
+    svg: "<svg><broken></svg>",
+    png: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1]),
+  });
+  assert.equal(invalid.status, "failed");
+  assert.deepEqual(
+    invalid.errors.map((error) => error.code),
+    ["RENDER_SVG_INVALID", "RENDER_PNG_INVALID"],
   );
 });
 
@@ -155,8 +274,8 @@ test("static HTML wraps trusted SVG and escapes evidence metadata without script
   );
 });
 
-test("render validation explains every missing artifact before a Chart Revision can be drafted", () => {
-  const invalid = validateRenderedChart({ vegaLiteSpec: {}, svg: "", png: Buffer.alloc(0) });
+test("render validation explains every missing artifact before a Chart Revision can be drafted", async () => {
+  const invalid = await validateRenderedChart({ vegaLiteSpec: {}, svg: "", png: Buffer.alloc(0) });
 
   assert.equal(invalid.status, "failed");
   assert.deepEqual(
@@ -193,7 +312,7 @@ test("adapter payload validation rejects unknown fields and accepts the builtin 
 
 test("platform renderer registry resolves only the built-in Vega-Lite adapter", () => {
   const renderer = resolveRendererAdapter("vega-lite");
-  assert.equal(renderer.version, "vega-lite-svg-v2");
+  assert.equal(renderer.version, "vega-lite-svg-v4");
   assert.equal(renderer.render, renderChart);
   assert.throws(() => resolveRendererAdapter("untrusted-renderer"), /平台未注册渲染器/);
 });
