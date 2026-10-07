@@ -177,6 +177,40 @@ async function run() {
             );
           `);
         }
+        if (migration === "0031_lark_table_intake.sql") {
+          await transaction.unsafe(`
+            INSERT INTO "chart_artifacts" ("id", "project_id", "name", "created_by")
+            VALUES ('00000000-0000-0000-0000-000000000011',
+              '00000000-0000-0000-0000-000000000002', 'Historical chart with gap', 'historical-user');
+            INSERT INTO "chart_revisions" (
+              "id", "artifact_id", "snapshot_id", "revision", "created_by", "transform_plan",
+              "field_lineage", "flint_spec", "theme_snapshot", "vega_lite_spec", "validation", "output_objects"
+            ) VALUES (
+              '00000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-000000000011',
+              '00000000-0000-0000-0000-00000000000a', 4, 'historical-user', '{}'::jsonb,
+              '[]'::jsonb, '{"mark":"bar"}'::jsonb, '{}'::jsonb, '{"mark":"bar"}'::jsonb,
+              '{"valid":true}'::jsonb, '{"svg":"historical-r4.svg"}'::jsonb
+            );
+            INSERT INTO "chart_artifacts" ("id", "project_id", "name", "created_by")
+            VALUES ('00000000-0000-0000-0000-000000000013',
+              '00000000-0000-0000-0000-000000000002', 'Historical empty chart', 'historical-user');
+          `);
+        }
+        if (migration === "0032_revision_identity_reservation.sql") {
+          const counters = await transaction.unsafe(`
+            SELECT "id", "next_revision_number" FROM "chart_artifacts"
+            WHERE "id" IN ('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000013')
+            ORDER BY "id"
+          `);
+          assert.deepEqual(
+            counters.map((row) => [row.id, row.next_revision_number]),
+            [
+              ["00000000-0000-0000-0000-000000000011", 5],
+              ["00000000-0000-0000-0000-000000000013", 1],
+            ],
+            "legacy Artifact counters must use MAX(revision)+1, leaving empty Artifacts at 1",
+          );
+        }
       }
 
       const memoryVersions = Array.from(

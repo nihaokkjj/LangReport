@@ -9,6 +9,10 @@
 
 ## A 批实施验证（新增）
 
+### 2026-10-07 T6 历史版本计数器迁移补验
+
+迁移兼容性脚本在执行 0032 前插入两条真实 SQL 夹具：有编号 4 历史 Revision 的 Artifact，以及没有 Revision 的 Artifact。`pnpm --filter @langreport/db db:verify` 执行完整迁移链后，断言 `nextRevisionNumber` 分别为 5 和 1，命令退出 0。首次尝试复用 0006 历史 Artifact 失败，因为该行按 0021 来源清理规则已被删除；修正为 0031 后创建的保留夹具再验证。本项补上非空历史库回填证据，不代表生产数据迁移或回滚演练。下方“尚无非空旧库夹具”属于补验前的历史记录。
+
 ### 2026-10-07 T6 版本身份预留（限定结果）
 
 新增 0032 迁移：历史 Chart Artifact 的 `nextRevisionNumber` 按最大现存 Revision 编号加一回填；Generation Job 保存候选 Artifact UUID、Revision UUID 与编号，三字段需同时存在。Render Worker 在渲染产物写入前、持有有效租约时预留身份；同一 Job 重试复用该身份，编辑 Job 在 Job→Artifact 行锁顺序下递增编号。新对象键包含预留 Revision UUID 与随机尝试标识。Chart 创建时使用预留身份；直接创建派生版本的既有路径也改为 Artifact 行锁与单调计数器，低编号晚完成不回退 head。新 Artifact 的计数器从 2 起步。

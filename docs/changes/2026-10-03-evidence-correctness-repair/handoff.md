@@ -7,6 +7,8 @@
 
 ## 最新续做状态（优先于下方历史段落）
 
+2026-10-07 T6 历史计数器补验：0032 前插入保留 Artifact 的 Revision R4 与空 Artifact，完整迁移后编号计数器分别为 5 与 1；`db:verify` 通过。产品业务代码未变，原子发布、业务写入 fencing、输出清单、孤儿对账仍待完成。下方“历史非空库迁移回填夹具未完成”是补验前状态。
+
 2026-10-07 T6 第二个限定结果：0032 迁移回填 Artifact 单调编号计数器，Job 冻结候选 Artifact/Revision 身份；Render Worker 预留后写入包含目标 Revision UUID 和随机尝试标识的对象键，Chart 落库使用预留身份。直接派生路径也通过 Artifact 行锁分配编号，低编号晚完成不回退 head。隔离真实集成最终 API14/浏览器2/Worker2 全过；新增并发预留、故障重试复用、旧租约拒绝、两种行锁等待超期拒绝与反序落库 head 断言。独立只读复核最终限定通过，详见 test-report。历史非空库迁移回填夹具、候选输出清单、Revision/Evidence/Job 原子完成、旧 Worker 的业务写入 fencing 与孤儿对账仍未完成，T6 保持部分实施。`apps/web/next-env.d.ts` 原有生成差异继续保留、不纳入提交。
 
 2026-10-07 T6 先完成候选对象键隔离：新渲染的四种输出使用同一独立尝试标识；已有 Revision 恢复时 HTML 改写入新键。真实数据库/MinIO 用例分别覆盖创建 Revision 前和 HTML 已写入、Revision 已创建后的故障，真实 API 重试均成功；后者沿用 Revision ID，旧 HTML 键内容不变。默认集成 API14/浏览器2/Worker2 自然退出。独立只读复核发现并推动修正恢复分支的旧键覆写，最终复验见 test-report。此项未覆盖候选对账、版本预留、事务内原子提交和数据库 fencing；T6 未验收，下一步实现预留与事务完成路径。
