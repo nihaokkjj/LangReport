@@ -9,6 +9,12 @@
 
 ## A 批实施验证（新增）
 
+### 2026-10-07 T6 验收审计：未通过
+
+针对产品 HEAD `5b100b3`，运行默认 `node scripts/test-integration.mjs`。首次在 Windows 沙箱中被 Node 测试子进程 `spawn EPERM` 阻断，未进入有效断言；同命令在允许子进程的隔离 PostgreSQL/MinIO 环境中重跑，自然退出 0：API 14/14、浏览器桌面/移动 2/2、Worker 2/2。通过范围是现有测试集，不包含 TP09 的 COMMIT 回执丢失、TP12 六个完整编辑/回滚业务提交、TP13 Evidence/head/audit 故障全回滚与候选对账、TP14 提交前失租后的业务 fencing。
+
+[T6 验收判定](./acceptance.md)为未通过。[独立只读审计](./evidence/t6-acceptance-readonly.md)核对到确定性阻断：Revision/head/审计、Evidence、回复和 Job 成功分事务；新编辑可改绑同 Artifact 的旧 Evidence；恢复分支先改 HTML 指针再核验其余对象；业务事务不与租约检查同原子边界。独立角色没有修改产品代码或独立重跑集成。本轮仅记录验收事实，没有修改运行时代码或把上述风险标为通过。
+
 ### 2026-10-07 T6 四输出候选清单（限定结果）
 
 0033 迁移为 Generation Job 增加 `candidateOutputManifest`。新渲染在预留 Revision 身份后，先生成带目标 UUID/编号的静态 HTML，再把 Vega-Lite JSON、SVG、PNG、HTML 写入带目标 UUID、尝试 UUID 与内容哈希前缀的独立对象键；四对象逐一从 MinIO 读回，与待发布字节比较，通过后保存格式、key、SHA-256、字节数、Content-Type、渲染器版本与校验状态。只有保存完整候选清单后才创建 Revision，Revision 的 `outputObjects` 一开始就包含四个实际可读键。新尝试先清空旧清单，避免重试沿用上次候选。已有 Revision 的历史恢复分支重新写 HTML 并重建可读性清单，不把新 HTML 键与旧清单混用。
