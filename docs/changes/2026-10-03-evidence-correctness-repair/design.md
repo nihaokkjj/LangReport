@@ -97,6 +97,8 @@ Render Worker 的新生成/编辑路径现由单一 `commitCompletedRevision(lea
 
 真实 COMMIT 回执丢失已对新编辑发布事务注入并通过：仅该事务经 PostgreSQL 代理，服务器完成 COMMIT 后断开返回连接；Worker 通过 Job/Revision 直连查询已发布事实，保留四个被引用对象且不重复业务行。逐次候选账本、提交前接管及复制/回滚 Job 化仍待完成。
 
+提交前失租已对新编辑 Job 注入并通过：A 写完四候选、发布前数据库租约过期；B 接管后以新对象键发布，A 的迟到完成/失败均不修改 B 的结果。成功 Job 的幂等读取只接受同一候选清单与输出键；共享预留 Revision 身份不足以让旧尝试认领新结果。逐次候选账本、六完整编辑/回滚并发和复制/回滚 Job 化仍待完成。
+
 ## D4：Evidence 固定绑定与审核（R5、R6）
 
 新规则：一个成功 Revision 恰有一个 Evidence 内容记录；finding/title/summary/Brief/Metric/质量警告/Job 绑定在创建后不改写。允许新增不同 Revision 的 Evidence，禁止按 artifactId 批量改旧 Evidence 指针或内容。

@@ -70,6 +70,16 @@ export async function commitCompletedRevision(
         .where(eq(chartRevisions.generationJobId, job.id))
         .limit(1);
       if (!alreadyCommitted) throw new Error("成功 Job 缺少 Chart Revision");
+      // A taken-over attempt shares the reserved Revision ID but has different
+      // candidate objects. It must not report B's publication as its own.
+      if (
+        alreadyCommitted.id !== candidate.identity.revisionId ||
+        alreadyCommitted.artifactId !== candidate.identity.artifactId ||
+        alreadyCommitted.revision !== candidate.identity.revisionNumber ||
+        !isDeepStrictEqual(job.candidateOutputManifest, candidate.outputManifest) ||
+        !isDeepStrictEqual(alreadyCommitted.outputObjects, candidate.outputObjects)
+      )
+        throw new GenerationJobLeaseLostError(job.id);
       return alreadyCommitted;
     }
     await assertPublicationLease(tx, lease);

@@ -7,6 +7,8 @@
 
 ## 最新续做状态（优先于下方历史段落）
 
+2026-10-07 T6 TP14 提交前失租限定补验：真实数据库中 A 写完四候选后、发布前使租约截止并恢复；A 被 fencing 拒绝。B 取得更高 token、以新尝试键重新渲染并唯一发布；A 迟到完成/失败写入均不能修改 B，旧候选字节不变。成功 Job 的幂等分支现校验候选清单和输出键，避免旧尝试认领新结果。完整隔离集成 API14/浏览器2/Worker2 自然退出 0。逐次候选账本/对账、六完整编辑/回滚并发及 TP13 其他故障仍待补，T6 未验收。
+
 2026-10-07 T6 TP09 限定补验：真实隔离 PostgreSQL 代理在完成事务 `CommandComplete(COMMIT)` 后丢回执，Render Worker 从直连 Job/Revision 查明已成功；四个被引用 MinIO 对象可读，同 Job 再处理不重复 Revision/Evidence/审计/回复。完整集成 API14/浏览器2/Worker2 自然退出 0。仅覆盖新编辑的发布事务，逐次候选账本/对账、TP12 六并发、TP14 提交前接管和复制/回滚 Job 化仍待完成，T6 保持 IMPLEMENTING。
 
 2026-10-07 T6 先完成新生成/编辑的单事务业务发布：Render Worker 把候选四输出交给 `commitCompletedRevision`，事务按 Job→Artifact 锁序核对租约、身份、冻结输入、清单与双层校验，然后一次写 Revision、独立 Evidence、单调 head、审计、回复和 Job 成功。真实 Evidence 插入故障会全部回滚，真实 API 重试成功；原 Evidence 绑定保持不变。旧的半成品恢复写入路径已删除，异常旧 Job 只失败且不改既有 Revision。移除恢复路径后的默认隔离集成最终 API14/浏览器2/Worker2 自然退出 0。独立只读复核固定快照未发现本轮原子路径的确定性 P1/P2，未独立重跑测试。逐次候选账本、COMMIT 丢失故障注入、提交前接管、复制/回滚 Job 化尚待做，T6 未验收。

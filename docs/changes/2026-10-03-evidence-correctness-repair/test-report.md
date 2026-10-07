@@ -9,6 +9,14 @@
 
 ## A 批实施验证（新增）
 
+### 2026-10-07 T6 提交前失租与接管（TP14 限定结果）
+
+新编辑 Job 经真实 API 入队与 Generation Worker 处理后，Render Worker A 写入并读回四个候选对象；在调用发布事务的边界，将其数据库租约截止时间设为过去并运行真实过期租约恢复。A 的 `commitCompletedRevision` 以 `GenerationJobLeaseLostError` 拒绝，Job 仍为可接管的 `rendering`，此时没有目标 Revision、Evidence 或审计。Render Worker B 重新取得更高 fencing token，重建四个使用新尝试键的候选对象并唯一发布。A 的旧对象字节不变；A 在 B 成功后迟到调用发布事务和失败状态写入均被拒绝。最终 Job 保持 `succeeded`，head 指向 B 的 Revision，Revision/Evidence/审计/回复各仅增加一份。成功 Job 的幂等分支增加候选清单与四输出键比较，防止持有同一预留 Revision ID 的旧尝试把 B 的结果当成自己的完成结果。
+
+完整隔离 PostgreSQL/MinIO 集成 `node scripts/test-integration.mjs` 自然退出 0（API14/浏览器2/Worker2）。此测试通过数据库截止时间驱动真实恢复，不依赖 sleep 猜测租约；它覆盖 A 提交前失效、B 完成与 A 迟到写入，不覆盖六个完整并发编辑/回滚、候选账本/对账或 T6 整体验收。
+
+[固定快照独立只读复核](./evidence/t6-takeover-independent.md)核对 7 个文件的 SHA-256，未发现本轮确定性 P1/P2。复核指出本测试是受控顺序交错，不是两个完整 Worker 同时争抢；A 的迟到失败直接调用生产失败路径底层的租约条件更新。独立角色未重跑集成，因此这些边界保留在 T6 剩余验收中。
+
 ### 2026-10-07 T6 COMMIT 回执丢失（TP09 限定结果）
 
 在真实隔离 PostgreSQL/MinIO 的 Worker 集成中，新编辑 Job 经 API 入队、Generation Worker 处理后，由 Render Worker 完成四对象写入。仅发布事务走测试代理；代理在 PostgreSQL 发出 `CommandComplete(COMMIT)` 后断开连接，确保数据库已经提交而 Worker 没收到成功回执。Worker 随即通过独立直连查询 Job/Revision，避免把既成成功误记为失败。断言 Job `succeeded`、预留 Revision 身份一致、Evidence/审计各一条、所属 Conversation 恰一条新助手回复；四个被 Revision 引用的 MinIO 对象均可读，再次处理同 Job 不增加业务行或回复。

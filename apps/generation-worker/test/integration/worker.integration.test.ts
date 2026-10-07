@@ -19,6 +19,7 @@ import {
   db,
   evidenceBlocks,
   generationJobs,
+  GenerationJobLeaseLostError,
   members,
   projectMembers,
   projects,
@@ -630,6 +631,135 @@ test("real generation and render workers persist plugin usage and historical sna
       );
     } finally {
       await commitLossApi.close();
+    }
+
+    // TP14: A loses the database lease after writing candidates but before publication.
+    // B owns a new attempt; A's late completion/failure must not affect B's result.
+    const takeoverApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
+    let takeoverJobId: string;
+    try {
+      const queued = await takeoverApi.inject({
+        method: "POST",
+        url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+        payload: {
+          operation: "edit",
+          baseRevisionId: visualRevision.id,
+          patch: { title: "提交前接管验证" },
+          idempotencyKey: `takeover-before-commit-${suffix}`,
+        },
+      });
+      assert.equal(queued.statusCode, 202, queued.body);
+      takeoverJobId = queued.json().job.id;
+      await processGenerationJob(takeoverJobId);
+      const [preparedJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, takeoverJobId));
+      const messagesBefore = await db
+        .select({ id: conversationMessages.id })
+        .from(conversationMessages)
+        .where(eq(conversationMessages.conversationId, preparedJob.conversationId));
+      let staleLease: Parameters<typeof commitCompletedRevision>[0] | undefined;
+      let staleCandidate: Parameters<typeof commitCompletedRevision>[1] | undefined;
+      let rejectedBeforeTakeover = false;
+      await processRenderJob(takeoverJobId, putObject, async (lease, candidate) => {
+        staleLease = lease;
+        staleCandidate = candidate;
+        await db
+          .update(generationJobs)
+          .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
+          .where(eq(generationJobs.id, takeoverJobId));
+        assert.ok((await recoverExpiredGenerationJobLeases()).includes(takeoverJobId));
+        try {
+          return await commitCompletedRevision(lease, candidate);
+        } catch (error) {
+          rejectedBeforeTakeover = error instanceof GenerationJobLeaseLostError;
+          throw error;
+        }
+      });
+      assert.equal(rejectedBeforeTakeover, true);
+      assert.ok(staleLease && staleCandidate);
+      const staleKeys = [
+        staleCandidate.outputObjects.vegaLite,
+        staleCandidate.outputObjects.svg,
+        staleCandidate.outputObjects.png,
+        staleCandidate.outputObjects.html,
+      ];
+      objectKeys.push(...staleKeys);
+      const staleBytes = await Promise.all(staleKeys.map(getObject));
+      const [afterA] = await db.select().from(generationJobs).where(eq(generationJobs.id, takeoverJobId));
+      assert.equal(afterA.status, "rendering");
+      assert.equal(afterA.leaseOwner, null);
+      assert.equal(
+        (await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, takeoverJobId))).length,
+        0,
+      );
+      assert.equal(
+        (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, takeoverJobId))).length,
+        0,
+      );
+      assert.equal(
+        (await db.select().from(auditEvents).where(eq(auditEvents.entityId, staleCandidate.identity.revisionId)))
+          .length,
+        0,
+      );
+
+      await processRenderJob(takeoverJobId);
+      const [afterB] = await db.select().from(generationJobs).where(eq(generationJobs.id, takeoverJobId));
+      const [published] = await db
+        .select()
+        .from(chartRevisions)
+        .where(eq(chartRevisions.generationJobId, takeoverJobId));
+      assert.equal(afterB.status, "succeeded");
+      assert.ok(afterB.leaseFencingToken > staleLease.fencingToken);
+      assert.equal(published.id, staleCandidate.identity.revisionId);
+      const freshKeys = [
+        (published.outputObjects as { vegaLite: string }).vegaLite,
+        (published.outputObjects as { svg: string }).svg,
+        (published.outputObjects as { png: string }).png,
+        (published.outputObjects as { html: string }).html,
+      ];
+      objectKeys.push(...freshKeys);
+      for (let index = 0; index < staleKeys.length; index += 1) {
+        assert.notEqual(freshKeys[index], staleKeys[index]);
+        assert.deepEqual(await getObject(staleKeys[index]), staleBytes[index]);
+        assert.ok((await getObject(freshKeys[index])).length > 0);
+      }
+      await assert.rejects(commitCompletedRevision(staleLease, staleCandidate), GenerationJobLeaseLostError);
+      assert.equal(
+        await updateGenerationJobUnderLease({
+          lease: staleLease,
+          status: "failed",
+          release: true,
+          values: { errorCode: "STALE_WORKER", errorMessage: "must not persist" },
+        }),
+        false,
+      );
+      const [afterLateA] = await db.select().from(generationJobs).where(eq(generationJobs.id, takeoverJobId));
+      const [artifactAfterTakeover] = await db
+        .select()
+        .from(chartArtifacts)
+        .where(eq(chartArtifacts.id, revision.artifactId));
+      assert.equal(afterLateA.status, "succeeded");
+      assert.equal(afterLateA.errorCode, null);
+      assert.equal(artifactAfterTakeover.headRevisionId, published.id);
+      assert.equal(
+        (await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, takeoverJobId))).length,
+        1,
+      );
+      assert.equal(
+        (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, takeoverJobId))).length,
+        1,
+      );
+      assert.equal((await db.select().from(auditEvents).where(eq(auditEvents.entityId, published.id))).length, 1);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(conversationMessages)
+            .where(eq(conversationMessages.conversationId, afterB.conversationId))
+        ).length,
+        messagesBefore.length + 1,
+      );
+    } finally {
+      await takeoverApi.close();
     }
 
     // A real Worker failure before the first object write must retain the frozen finding through API retry.
