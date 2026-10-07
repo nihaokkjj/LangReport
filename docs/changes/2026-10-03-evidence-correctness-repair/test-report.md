@@ -9,6 +9,12 @@
 
 ## A 批实施验证（新增）
 
+### 2026-10-07 T6 TP13 六处真实故障矩阵（限定结果）
+
+在隔离 PostgreSQL/MinIO 中，经真实 API 入队和 Generation Worker 准备六个新编辑 Job。四个 Job 分别在 Vega-Lite、SVG、PNG、HTML 的第 1–4 次 MinIO PUT 前注入带阶段标记的故障；另两个 Job 分别用 PostgreSQL `CHECK ... NOT VALID` 约束令目标 Artifact 的 head 更新和新 Revision 的审计插入失败。测试逐例核对错误来源、候选账本在对象故障时为 `writing`、事务故障时为 `validated`，已写对象保持可读，但目标 Revision/Evidence/审计、head 推进和成功回复均未出现。每例再经真实 API retry：复用预留 Revision ID，使用新候选尝试发布四个可读对象，最终 Revision/Evidence/审计/回复各一份；再次处理同 Job 仍不重复。
+
+首次完整 `pnpm test:integration` 自然退出 0（API14/浏览器2/Worker2）。随后补充约束名断言时，Worker 测试在 head 场景失败：Drizzle 保存到 Job 的错误文本只有失败 SQL，底层 PostgreSQL 约束名位于异常 `cause`。测试改为在发布回调捕获异常并核对 PostgreSQL `23514` 与 `constraint_name`，Job 错误文本只核对失败 SQL；最终完整隔离集成自然退出 0（API14/浏览器2/Worker2）。Generation Worker 测试类型、变更文件格式/ESLint、docs 和 diff 检查通过。[独立只读复核](./evidence/t6-fault-matrix-independent.md)未发现新增确定性 P1/P2，未独立重跑集成。此结果覆盖对象写入边界及 head/审计失败回滚，与既有 Evidence 插入故障合起来覆盖 TP13 的这些阶段；仍未通过独立子进程崩溃证明“写完成前崩溃”，也未执行 TP12 六完整并发编辑/回滚，T6 保持未通过。
+
 ### 2026-10-07 T6 逐次候选对象账本与对账（TP13 限定结果）
 
 0034 迁移及完整历史迁移链通过。Render Worker 在首个 MinIO PUT 前登记四个计划对象键；真实失败注入在首个对象写入后中断，同 Job 经 API 重试成功时账本保留两次尝试，旧行为 `writing`、新行为 `published`。测试显式将旧尝试创建时间调至保留期外，仍有有效数据库租约时对账返回 0 且字节可读；Job 失败并重试成功后，旧对象清理为 `deleted`，已发布 Revision 的四个对象保持可读。注入第二次 S3 删除失败时记录保持 `deleting`，一分钟后重试完成；模拟迟到 PUT 后，下一保留期重扫再次删除旧对象。

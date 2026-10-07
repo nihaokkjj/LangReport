@@ -535,6 +535,203 @@ test("real generation and render workers persist plugin usage and historical sna
       await atomicApi.close();
     }
 
+    // TP13: each object PUT boundary and both remaining business-write boundaries
+    // must leave no visible Revision/Evidence/head/audit/reply and allow one replay.
+    const faultApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
+    try {
+      for (const fault of [
+        { label: "object-1", failAtPut: 1 },
+        { label: "object-2", failAtPut: 2 },
+        { label: "object-3", failAtPut: 3 },
+        { label: "object-4", failAtPut: 4 },
+        { label: "head" },
+        { label: "audit" },
+      ]) {
+        const queued = await faultApi.inject({
+          method: "POST",
+          url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+          payload: {
+            operation: "edit",
+            baseRevisionId: visualRevision.id,
+            patch: { title: `TP13 ${fault.label}` },
+            idempotencyKey: `tp13-${fault.label}-${suffix}`,
+          },
+        });
+        assert.equal(queued.statusCode, 202, queued.body);
+        const faultJobId: string = queued.json().job.id;
+        await processGenerationJob(faultJobId);
+        const [prepared] = await db.select().from(generationJobs).where(eq(generationJobs.id, faultJobId));
+        assert.equal(prepared.status, "rendering");
+        const [artifactBefore] = await db
+          .select()
+          .from(chartArtifacts)
+          .where(eq(chartArtifacts.id, revision.artifactId));
+        const headBefore = artifactBefore.headRevisionId;
+        const messagesBefore = await db
+          .select({ id: conversationMessages.id })
+          .from(conversationMessages)
+          .where(eq(conversationMessages.conversationId, prepared.conversationId));
+        const writtenKeys: string[] = [];
+        let putCalls = 0;
+        const constraintName =
+          fault.label === "head" ? "t6_fail_head_update" : fault.label === "audit" ? "t6_fail_audit_insert" : null;
+        let publicationError: unknown;
+        if (constraintName === "t6_fail_head_update") {
+          await db.execute(
+            sql.raw(
+              `ALTER TABLE "chart_artifacts" ADD CONSTRAINT "${constraintName}" CHECK ("id" <> '${revision.artifactId}'::uuid OR "head_revision_id" = '${headBefore}'::uuid) NOT VALID`,
+            ),
+          );
+        } else if (constraintName === "t6_fail_audit_insert") {
+          await db.execute(
+            sql.raw(
+              `ALTER TABLE "audit_events" ADD CONSTRAINT "${constraintName}" CHECK ("project_id" <> '${project.id}'::uuid OR "action" <> 'chart_revision.created') NOT VALID`,
+            ),
+          );
+        }
+        try {
+          await processRenderJob(
+            faultJobId,
+            async (output) => {
+              putCalls++;
+              if (putCalls === fault.failAtPut) throw new Error(`TP13_OBJECT_PUT_${putCalls}_FAILED`);
+              await putObject(output);
+              writtenKeys.push(output.key);
+            },
+            async (lease, candidate) => {
+              try {
+                return await commitCompletedRevision(lease, candidate);
+              } catch (error) {
+                publicationError = error;
+                throw error;
+              }
+            },
+          );
+        } finally {
+          if (constraintName)
+            await db.execute(
+              sql.raw(
+                `ALTER TABLE "${constraintName === "t6_fail_head_update" ? "chart_artifacts" : "audit_events"}" DROP CONSTRAINT IF EXISTS "${constraintName}"`,
+              ),
+            );
+        }
+        objectKeys.push(...writtenKeys);
+        if (fault.failAtPut) assert.equal(putCalls, fault.failAtPut);
+        else assert.equal(putCalls, 4);
+        const [failed] = await db.select().from(generationJobs).where(eq(generationJobs.id, faultJobId));
+        assert.equal(failed.status, "failed", fault.label);
+        assert.equal(failed.errorCode, "RENDER_FAILED", fault.label);
+        if (fault.failAtPut) {
+          assert.match(failed.errorMessage ?? "", new RegExp(`TP13_OBJECT_PUT_${fault.failAtPut}_FAILED`));
+          assert.equal(publicationError, undefined);
+        } else {
+          assert.match(
+            failed.errorMessage ?? "",
+            new RegExp(fault.label === "head" ? 'update "chart_artifacts"' : 'insert into "audit_events"'),
+          );
+          let databaseCause: unknown = publicationError;
+          while (databaseCause && typeof databaseCause === "object" && "cause" in databaseCause)
+            databaseCause = (databaseCause as { cause: unknown }).cause;
+          assert.equal((databaseCause as { code?: string })?.code, "23514");
+          assert.equal((databaseCause as { constraint_name?: string })?.constraint_name, constraintName);
+        }
+        assert.equal(
+          (await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, faultJobId))).length,
+          0,
+        );
+        assert.equal(
+          (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, faultJobId))).length,
+          0,
+        );
+        assert.equal(
+          (await db.select().from(auditEvents).where(eq(auditEvents.entityId, failed.candidateRevisionId!))).length,
+          0,
+        );
+        const [artifactAfter] = await db
+          .select()
+          .from(chartArtifacts)
+          .where(eq(chartArtifacts.id, revision.artifactId));
+        assert.equal(artifactAfter.headRevisionId, headBefore);
+        assert.equal(
+          (
+            await db
+              .select()
+              .from(conversationMessages)
+              .where(eq(conversationMessages.conversationId, prepared.conversationId))
+          ).length,
+          messagesBefore.length,
+        );
+        const [failedAttempt] = await db
+          .select()
+          .from(renderCandidateAttempts)
+          .where(eq(renderCandidateAttempts.generationJobId, faultJobId));
+        assert.equal(failedAttempt.status, fault.failAtPut ? "writing" : "validated");
+        assert.equal(Object.keys(failedAttempt.outputKeys as object).length, 4);
+        assert.equal(writtenKeys.length, fault.failAtPut ? fault.failAtPut - 1 : 4);
+        for (const key of writtenKeys) assert.ok((await getObject(key)).length > 0);
+
+        const retry = await faultApi.inject({ method: "POST", url: `/api/v1/generation-jobs/${faultJobId}/retry` });
+        assert.equal(retry.statusCode, 202, retry.body);
+        await processGenerationJob(faultJobId);
+        await processRenderJob(faultJobId);
+        const [succeeded] = await db.select().from(generationJobs).where(eq(generationJobs.id, faultJobId));
+        const [published] = await db
+          .select()
+          .from(chartRevisions)
+          .where(eq(chartRevisions.generationJobId, faultJobId));
+        assert.equal(succeeded.status, "succeeded");
+        assert.equal(published.id, failed.candidateRevisionId);
+        assert.equal(
+          (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, faultJobId))).length,
+          1,
+        );
+        assert.equal((await db.select().from(auditEvents).where(eq(auditEvents.entityId, published.id))).length, 1);
+        assert.equal(
+          (
+            await db
+              .select()
+              .from(conversationMessages)
+              .where(eq(conversationMessages.conversationId, prepared.conversationId))
+          ).length,
+          messagesBefore.length + 1,
+        );
+        const outputs = published.outputObjects as { vegaLite: string; svg: string; png: string; html: string };
+        for (const key of [outputs.vegaLite, outputs.svg, outputs.png, outputs.html]) {
+          objectKeys.push(key);
+          assert.ok((await getObject(key)).length > 0);
+        }
+        const attempts = await db
+          .select()
+          .from(renderCandidateAttempts)
+          .where(eq(renderCandidateAttempts.generationJobId, faultJobId));
+        assert.deepEqual(
+          attempts.map((attempt) => attempt.status).sort(),
+          [fault.failAtPut ? "writing" : "validated", "published"].sort(),
+        );
+        await processRenderJob(faultJobId);
+        assert.equal(
+          (await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, faultJobId))).length,
+          1,
+        );
+        assert.equal(
+          (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, faultJobId))).length,
+          1,
+        );
+        assert.equal((await db.select().from(auditEvents).where(eq(auditEvents.entityId, published.id))).length, 1);
+        assert.equal(
+          (
+            await db
+              .select()
+              .from(conversationMessages)
+              .where(eq(conversationMessages.conversationId, prepared.conversationId))
+          ).length,
+          messagesBefore.length + 1,
+        );
+      }
+    } finally {
+      await faultApi.close();
+    }
+
     // TP09: PostgreSQL commits the publication transaction, then drops the COMMIT response.
     // The Worker must query the authoritative Job and keep all four referenced objects.
     const commitLossApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
