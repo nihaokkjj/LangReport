@@ -9,6 +9,12 @@
 
 ## A 批实施验证（新增）
 
+### 2026-10-07 T6 逐次候选对象账本与对账（TP13 限定结果）
+
+0034 迁移及完整历史迁移链通过。Render Worker 在首个 MinIO PUT 前登记四个计划对象键；真实失败注入在首个对象写入后中断，同 Job 经 API 重试成功时账本保留两次尝试，旧行为 `writing`、新行为 `published`。测试显式将旧尝试创建时间调至保留期外，仍有有效数据库租约时对账返回 0 且字节可读；Job 失败并重试成功后，旧对象清理为 `deleted`，已发布 Revision 的四个对象保持可读。注入第二次 S3 删除失败时记录保持 `deleting`，一分钟后重试完成；模拟迟到 PUT 后，下一保留期重扫再次删除旧对象。
+
+对账预筛和锁内复查以 PostgreSQL `clock_timestamp()` 判断保留期与租约，逐条失败退避并继续其他对象；无效键隔离，任何 Revision 引用的对象保留。完整 `pnpm test:integration` 在隔离 PostgreSQL/MinIO 自然退出 0：API 14/14、浏览器 2/2、Worker 2/2；DB/Render Worker/Generation Worker 类型检查及 `db:verify` 通过。[独立只读复核](./evidence/t6-candidate-ledger-independent.md)最初指出进程时钟误删风险、单条删除失败导致队列饥饿及活跃租约测试未老化候选；修正后静态复核未发现新增确定性 P1/P2，独立角色未重跑集成。此证据不覆盖六个完整编辑/回滚并发或 TP13 其余故障，T6 保持未通过。
+
 ### 2026-10-07 T6 提交前失租与接管（TP14 限定结果）
 
 新编辑 Job 经真实 API 入队与 Generation Worker 处理后，Render Worker A 写入并读回四个候选对象；在调用发布事务的边界，将其数据库租约截止时间设为过去并运行真实过期租约恢复。A 的 `commitCompletedRevision` 以 `GenerationJobLeaseLostError` 拒绝，Job 仍为可接管的 `rendering`，此时没有目标 Revision、Evidence 或审计。Render Worker B 重新取得更高 fencing token，重建四个使用新尝试键的候选对象并唯一发布。A 的旧对象字节不变；A 在 B 成功后迟到调用发布事务和失败状态写入均被拒绝。最终 Job 保持 `succeeded`，head 指向 B 的 Revision，Revision/Evidence/审计/回复各仅增加一份。成功 Job 的幂等分支增加候选清单与四输出键比较，防止持有同一预留 Revision ID 的旧尝试把 B 的结果当成自己的完成结果。

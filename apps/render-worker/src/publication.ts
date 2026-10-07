@@ -11,6 +11,7 @@ import {
   evidenceBlocks,
   generationJobs,
   projects,
+  renderCandidateAttempts,
   type GenerationJobLease,
   type ReservedRevisionIdentity,
 } from "@langreport/db";
@@ -103,6 +104,27 @@ export async function commitCompletedRevision(
     )
       throw new Error("未通过 Plan/Render Validation，不能发布 Chart Revision");
     assertCandidateManifest(candidate);
+    const manifest = candidate.outputManifest as { attemptId: string };
+    const [attempt] = await tx
+      .select()
+      .from(renderCandidateAttempts)
+      .where(eq(renderCandidateAttempts.id, manifest.attemptId))
+      .for("update")
+      .limit(1);
+    if (
+      !attempt ||
+      attempt.generationJobId !== job.id ||
+      attempt.revisionId !== candidate.identity.revisionId ||
+      attempt.leaseFencingToken !== lease.fencingToken ||
+      attempt.status !== "validated" ||
+      !isDeepStrictEqual(attempt.outputKeys, {
+        vegaLite: candidate.outputObjects.vegaLite,
+        svg: candidate.outputObjects.svg,
+        png: candidate.outputObjects.png,
+        html: candidate.outputObjects.html,
+      })
+    )
+      throw new GenerationJobLeaseLostError(job.id);
     const [project] = await tx
       .select({ workspaceId: projects.workspaceId })
       .from(projects)
@@ -259,6 +281,10 @@ export async function commitCompletedRevision(
       )
       .returning({ id: generationJobs.id });
     if (!completed) throw new GenerationJobLeaseLostError(job.id);
+    await tx
+      .update(renderCandidateAttempts)
+      .set({ status: "published", updatedAt: now })
+      .where(eq(renderCandidateAttempts.id, attempt.id));
     return revision;
   });
 }
@@ -298,7 +324,12 @@ async function assertPublicationLease(tx: PublicationTx, lease: GenerationJobLea
 
 function assertCandidateManifest(candidate: CompletedRevisionCandidate): void {
   const manifest = candidate.outputManifest;
-  if (!isRecord(manifest) || manifest.revisionId !== candidate.identity.revisionId || !Array.isArray(manifest.outputs))
+  if (
+    !isRecord(manifest) ||
+    manifest.revisionId !== candidate.identity.revisionId ||
+    typeof manifest.attemptId !== "string" ||
+    !Array.isArray(manifest.outputs)
+  )
     throw new Error("候选输出清单缺失或版本身份不一致");
   for (const format of ["vegaLite", "svg", "png", "html"] as const) {
     const entries = manifest.outputs.filter((entry) => isRecord(entry) && entry.format === format);

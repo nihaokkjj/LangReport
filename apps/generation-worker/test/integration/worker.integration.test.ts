@@ -24,6 +24,7 @@ import {
   projectMembers,
   projects,
   recoverExpiredGenerationJobLeases,
+  renderCandidateAttempts,
   reserveGenerationRevisionIdentity,
   heartbeatGenerationJobLease,
   privateGenerationMemoryContexts,
@@ -62,6 +63,7 @@ import { buildApp } from "../../../api/src/app.js";
 const { processGenerationJob } = await import("../../src/index.js");
 const { processRenderJob } = await import("../../../render-worker/src/index.js");
 const { commitCompletedRevision } = await import("../../../render-worker/src/publication.js");
+const { reconcileOrphanRenderCandidates } = await import("../../../render-worker/src/candidate-attempts.js");
 
 test("real generation and render workers persist plugin usage and historical snapshot", async () => {
   const suffix = randomUUID();
@@ -791,6 +793,17 @@ test("real generation and render workers persist plugin usage and historical sna
         if (!failedCandidateKey) {
           failedCandidateKey = output.key;
           await putObject(output);
+          await db
+            .update(renderCandidateAttempts)
+            .set({ createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) })
+            .where(eq(renderCandidateAttempts.generationJobId, retryJobId));
+          assert.equal(await reconcileOrphanRenderCandidates({ jobId: retryJobId, retentionMs: 0 }), 0);
+          const [activeAttempt] = await db
+            .select()
+            .from(renderCandidateAttempts)
+            .where(eq(renderCandidateAttempts.generationJobId, retryJobId));
+          assert.equal(activeAttempt.status, "writing");
+          assert.ok((await getObject(output.key)).length > 0);
           return;
         }
         throw new Error("TRANSIENT_OBJECT_STORE_UNAVAILABLE");
@@ -799,6 +812,13 @@ test("real generation and render workers persist plugin usage and historical sna
       assert.equal(failed.status, "failed");
       assert.equal(failed.errorCode, "RENDER_FAILED");
       assert.match(failed.errorMessage ?? "", /TRANSIENT_OBJECT_STORE_UNAVAILABLE/);
+      const [failedAttempt] = await db
+        .select()
+        .from(renderCandidateAttempts)
+        .where(eq(renderCandidateAttempts.generationJobId, retryJobId));
+      assert.equal(failedAttempt.status, "writing");
+      assert.equal(Object.keys(failedAttempt.outputKeys as object).length, 4);
+      assert.ok(Object.values(failedAttempt.outputKeys as Record<string, string>).includes(failedCandidateKey!));
       assert.equal(failed.candidateArtifactId, revision.artifactId);
       assert.ok(failed.candidateRevisionId);
       assert.ok(failed.candidateRevisionNumber);
@@ -850,6 +870,59 @@ test("real generation and render workers persist plugin usage and historical sna
     assert.ok(failedCandidateKey);
     assert.notEqual((retriedRevision.outputObjects as { vegaLite: string }).vegaLite, failedCandidateKey);
     assert.ok((await getObject(failedCandidateKey)).length > 0);
+    const attemptsBeforeReconcile = await db
+      .select()
+      .from(renderCandidateAttempts)
+      .where(eq(renderCandidateAttempts.generationJobId, retryJobId));
+    assert.equal(attemptsBeforeReconcile.length, 2);
+    assert.deepEqual(attemptsBeforeReconcile.map((attempt) => attempt.status).sort(), ["published", "writing"]);
+    let removalCount = 0;
+    assert.equal(
+      await reconcileOrphanRenderCandidates({
+        jobId: retryJobId,
+        retentionMs: 0,
+        remove: async (key) => {
+          if (++removalCount === 2) throw new Error("TRANSIENT_DELETE_FAILURE");
+          await deleteObject(key);
+        },
+      }),
+      0,
+    );
+    const [deletingAttempt] = await db
+      .select()
+      .from(renderCandidateAttempts)
+      .where(
+        eq(renderCandidateAttempts.id, attemptsBeforeReconcile.find((attempt) => attempt.status === "writing")!.id),
+      );
+    assert.equal(deletingAttempt.status, "deleting");
+    assert.equal(
+      await reconcileOrphanRenderCandidates({
+        jobId: retryJobId,
+        retentionMs: 0,
+        now: new Date(Date.now() + 2 * 60 * 1000),
+      }),
+      1,
+    );
+    await assert.rejects(getObject(failedCandidateKey));
+    await putObject({
+      key: failedCandidateKey,
+      body: Buffer.from("late fenced write"),
+      contentType: "application/json",
+    });
+    assert.equal(
+      await reconcileOrphanRenderCandidates({
+        jobId: retryJobId,
+        now: new Date(Date.now() + 25 * 60 * 60 * 1000),
+      }),
+      1,
+    );
+    await assert.rejects(getObject(failedCandidateKey));
+    assert.ok((await getObject((retriedRevision.outputObjects as { vegaLite: string }).vegaLite)).length > 0);
+    const attemptsAfterReconcile = await db
+      .select()
+      .from(renderCandidateAttempts)
+      .where(eq(renderCandidateAttempts.generationJobId, retryJobId));
+    assert.deepEqual(attemptsAfterReconcile.map((attempt) => attempt.status).sort(), ["deleted", "published"]);
     assert.equal(retriedEvidence.finding, retryFinding);
     assert.equal(JSON.stringify(retriedRevision).includes(privatePreference.statement), false);
     const retriedHtml = await getObject((retriedRevision.outputObjects as { html: string }).html);

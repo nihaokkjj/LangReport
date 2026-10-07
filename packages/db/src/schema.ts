@@ -449,6 +449,33 @@ export const generationJobs = pgTable(
   ],
 );
 
+/** Durable record written before the first render object PUT. */
+export const renderCandidateAttempts = pgTable(
+  "render_candidate_attempts",
+  {
+    id: uuid("id").primaryKey(),
+    generationJobId: uuid("generation_job_id")
+      .notNull()
+      .references(() => generationJobs.id, { onDelete: "cascade" }),
+    revisionId: uuid("revision_id").notNull(),
+    leaseFencingToken: integer("lease_fencing_token").notNull(),
+    outputKeys: jsonb("output_keys").notNull(),
+    status: text("status").notNull().default("writing"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("render_candidate_attempts_job_idx").on(table.generationJobId),
+    index("render_candidate_attempts_reconcile_idx").on(table.status, table.createdAt),
+    index("render_candidate_attempts_resweep_idx").on(table.status, table.updatedAt),
+    check(
+      "render_candidate_attempts_status_check",
+      sql`${table.status} IN ('writing', 'validated', 'published', 'deleting', 'deleted', 'quarantined')`,
+    ),
+  ],
+);
+
 export const chartArtifacts = pgTable(
   "chart_artifacts",
   {

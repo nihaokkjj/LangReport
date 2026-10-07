@@ -232,6 +232,13 @@
       "when": 1790899200000,
       "tag": "0033_candidate_output_manifest",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790985600000,
+      "tag": "0034_render_candidate_attempts",
+      "breakpoints": true
     }
   ]
 }

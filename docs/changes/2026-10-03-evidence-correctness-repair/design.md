@@ -75,6 +75,10 @@ Worker 获租约后，在短事务中按固定顺序锁 Job → Artifact；验�
 
 ### 渲染与存储
 
+  逐次候选对象账本已落地：Render Worker 在首个 S3 PUT 之前用有效 Job 租约持久化尝试 UUID、预留 Revision UUID、fencing token 和四个计划键；四对象读回后，账本 `validated` 与 Job 清单在一个短事务中保存。业务发布事务以 Job→尝试行锁核对账本身份和全部对象键，并将账本标为 `published`。失败重试保留旧尝试记录，新尝试使用独立键。
+
+  Render Worker 每轮最多对账 10 个候选。默认保留期 24 小时；年龄及有效租约均由 PostgreSQL `clock_timestamp()` 判定。只有无有效租约、键符合本 Job 的 Workspace/Project/Asset/Revision/尝试身份且没有任何 Revision 引用时，才先标记 `deleting`，随后逐键删除。删除失败保留状态并至少延迟 1 分钟重试，不阻断其余候选或正常 Job；无效键隔离为 `quarantined`，已引用键保留为 `published`。已删除尝试每 24 小时重扫一次，以清理由失租 Worker 的迟到 PUT；写入后的 Worker 再验租约，失租时清理该次写入。对账不删除成功 Revision 引用的对象。
+
 数据库事务外渲染并写入候选对象，路径包含 Workspace/Project、目标 Revision、执行尝试及内容标识。不同租约尝试不覆盖同一路径。清单保存格式、key、内容哈希、长度、渲染器版本和验证结果。四种必要输出全部可读取且内容校验通过后，才进入完成提交。
 
 拟提供 `commitCompletedRevision(lease, candidate)`：同一数据库事务中完成以下动作。
@@ -93,11 +97,11 @@ COMMIT 响应丢失先按 Job 查明事实。只有确认无成功 Revision/引�
 
 Render Worker 的新生成/编辑路径现由单一 `commitCompletedRevision(lease, candidate)` 事务提交：Job→Artifact 固定锁序，数据库时间核验租约和 fencing，核对冻结输入、候选身份、Plan/Render Validation 与四输出清单，再写 Revision、仅新增的 Evidence、单调 head、审计、助手回复和 Job `succeeded`；事务中任一写入失败则全部回滚。事务响应不明时先查询 Job 与 Revision，无法查询时保留租约待恢复，不把未知结果记作失败。原有“已有 Revision 且 Job 未成功时重写 HTML/Evidence”的历史恢复路径已移除；这类不一致状态仅报错，不修改既有 Revision。用户已明确允许本轮不迁就旧业务数据，因此不再以该路径兼容历史半成品。
 
-此实施只覆盖新生成/编辑的业务原子发布。逐次候选对象账本及保留窗口对账、真实 COMMIT 回执丢失与提交前接管故障注入、同步复制/回滚改持久 Job、审核入口固定绑定仍须按任务表继续，不能据此关闭 T6/T7/T8。
+当前业务原子发布只覆盖新生成/编辑；同步复制/回滚改持久 Job、审核入口固定绑定仍须按任务表继续，不能据此关闭 T6/T7/T8。
 
-真实 COMMIT 回执丢失已对新编辑发布事务注入并通过：仅该事务经 PostgreSQL 代理，服务器完成 COMMIT 后断开返回连接；Worker 通过 Job/Revision 直连查询已发布事实，保留四个被引用对象且不重复业务行。逐次候选账本、提交前接管及复制/回滚 Job 化仍待完成。
+真实 COMMIT 回执丢失已对新编辑发布事务注入并通过：仅该事务经 PostgreSQL 代理，服务器完成 COMMIT 后断开返回连接；Worker 通过 Job/Revision 直连查询已发布事实，保留四个被引用对象且不重复业务行。
 
-提交前失租已对新编辑 Job 注入并通过：A 写完四候选、发布前数据库租约过期；B 接管后以新对象键发布，A 的迟到完成/失败均不修改 B 的结果。成功 Job 的幂等读取只接受同一候选清单与输出键；共享预留 Revision 身份不足以让旧尝试认领新结果。逐次候选账本、六完整编辑/回滚并发和复制/回滚 Job 化仍待完成。
+提交前失租已对新编辑 Job 注入并通过：A 写完四候选、发布前数据库租约过期；B 接管后以新对象键发布，A 的迟到完成/失败均不修改 B 的结果。成功 Job 的幂等读取只接受同一候选清单与输出键；共享预留 Revision 身份不足以让旧尝试认领新结果。六完整编辑/回滚并发和复制/回滚 Job 化仍待完成。
 
 ## D4：Evidence 固定绑定与审核（R5、R6）
 

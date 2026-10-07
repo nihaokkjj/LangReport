@@ -40,9 +40,15 @@ import {
   validateStaticSvgHtml,
 } from "@langreport/flint-adapter";
 import { buildPluginSnapshot, PluginServiceError } from "@langreport/plugins";
-import { getObject, putObject, renderOutputObjectKey } from "@langreport/storage";
+import { deleteObject, getObject, putObject, renderOutputObjectKey } from "@langreport/storage";
 import { ensureMemoryRevocationReady } from "@langreport/memory";
 import { commitCompletedRevision, readCommittedRevision } from "./publication.js";
+import {
+  recordCandidateAttempt,
+  reconcileOrphanRenderCandidates,
+  validateCandidateAttempt,
+  type CandidateOutputKeys,
+} from "./candidate-attempts.js";
 
 const workerName = "render-worker";
 const pollIntervalMs = Number(process.env.RENDER_POLL_INTERVAL_MS ?? 1000);
@@ -259,8 +265,25 @@ async function processRenderJobLocked(
         filename: `${candidateName}.${createHash("sha256").update(output.body).digest("hex").slice(0, 16)}.${output.extension}`,
       }),
     }));
+    await recordCandidateAttempt({
+      lease,
+      attemptId,
+      revisionId: reservedRevision.revisionId,
+      outputKeys: Object.fromEntries(
+        candidateOutputs.map((output) => [output.format, output.key]),
+      ) as CandidateOutputKeys,
+    });
     for (const output of candidateOutputs) {
+      await assertGenerationJobLease(lease);
       await writeOutput({ key: output.key, body: output.body, contentType: output.contentType });
+      try {
+        await assertGenerationJobLease(lease);
+      } catch (error) {
+        await deleteObject(output.key).catch((deleteError) =>
+          console.error(`${workerName} could not remove a fenced candidate`, { jobId, key: output.key, deleteError }),
+        );
+        throw error;
+      }
     }
     const manifestEntries = [];
     for (const output of candidateOutputs) {
@@ -282,11 +305,7 @@ async function processRenderJobLocked(
       validation: renderValidation,
       outputs: manifestEntries,
     };
-    const savedManifest = await updateGenerationJobUnderLease({
-      lease,
-      values: { candidateOutputManifest },
-    });
-    if (!savedManifest) throw new GenerationJobLeaseLostError(jobId);
+    await validateCandidateAttempt({ lease, attemptId, manifest: candidateOutputManifest });
     const [vegaLiteOutput, svgOutput, pngOutput, htmlOutput] = candidateOutputs;
     const vegaLiteKey = vegaLiteOutput.key;
     const svgKey = svgOutput.key;
@@ -409,6 +428,11 @@ async function pollOnce(): Promise<void> {
   try {
     await ensureMemoryRevocationReady();
     await recoverExpiredGenerationJobLeases();
+    try {
+      await reconcileOrphanRenderCandidates();
+    } catch (error) {
+      console.error(`${workerName} candidate reconciliation failed`, error);
+    }
     const queued = await db
       .select({ id: generationJobs.id })
       .from(generationJobs)
