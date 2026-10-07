@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import {
   auditEvents,
+  chartArtifacts,
   chartRevisions,
   claimGenerationJobLease,
   closeDatabase,
@@ -17,6 +18,7 @@ import {
   projectMembers,
   projects,
   recoverExpiredGenerationJobLeases,
+  reserveGenerationRevisionIdentity,
   heartbeatGenerationJobLease,
   privateGenerationMemoryContexts,
   updateGenerationJobUnderLease,
@@ -412,6 +414,7 @@ test("real generation and render workers persist plugin usage and historical sna
     // A real Worker failure before the first object write must retain the frozen finding through API retry.
     const retryFinding = "故障前已经确认的来源发现";
     let failedCandidateKey: string | undefined;
+    let failedReservedRevision: { artifactId: string; revisionId: string; revisionNumber: number } | undefined;
     await db.update(evidenceBlocks).set({ finding: retryFinding }).where(eq(evidenceBlocks.id, visualEvidence.id));
     const retryApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
     let retryJobId: string;
@@ -445,6 +448,14 @@ test("real generation and render workers persist plugin usage and historical sna
       assert.equal(failed.status, "failed");
       assert.equal(failed.errorCode, "RENDER_FAILED");
       assert.match(failed.errorMessage ?? "", /TRANSIENT_OBJECT_STORE_UNAVAILABLE/);
+      assert.equal(failed.candidateArtifactId, revision.artifactId);
+      assert.ok(failed.candidateRevisionId);
+      assert.ok(failed.candidateRevisionNumber);
+      failedReservedRevision = {
+        artifactId: failed.candidateArtifactId,
+        revisionId: failed.candidateRevisionId,
+        revisionNumber: failed.candidateRevisionNumber,
+      };
       assert.equal(
         (
           await db
@@ -465,10 +476,22 @@ test("real generation and render workers persist plugin usage and historical sna
     }
     const [retriedJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, retryJobId));
     assert.equal(retriedJob.status, "succeeded");
+    assert.deepEqual(
+      {
+        artifactId: retriedJob.candidateArtifactId,
+        revisionId: retriedJob.candidateRevisionId,
+        revisionNumber: retriedJob.candidateRevisionNumber,
+      },
+      failedReservedRevision,
+    );
     const [retriedRevision] = await db
       .select()
       .from(chartRevisions)
       .where(eq(chartRevisions.generationJobId, retryJobId));
+    assert.equal(retriedJob.candidateArtifactId, retriedRevision.artifactId);
+    assert.equal(retriedJob.candidateRevisionId, retriedRevision.id);
+    assert.equal(retriedJob.candidateRevisionNumber, retriedRevision.revision);
+    assert.match(failedCandidateKey ?? "", new RegExp(retriedRevision.id));
     const [retriedEvidence] = await db
       .select()
       .from(evidenceBlocks)
@@ -648,6 +671,139 @@ test("real generation and render workers persist plugin usage and historical sna
       .where(eq(chartRevisions.generationJobId, editJob.id))
       .limit(1);
     assert.ok(derivedRevision);
+    assert.equal(renderedEditJob.candidateArtifactId, derivedRevision.artifactId);
+    assert.equal(renderedEditJob.candidateRevisionId, derivedRevision.id);
+    assert.equal(renderedEditJob.candidateRevisionNumber, derivedRevision.revision);
+    assert.match((derivedRevision.outputObjects as { svg: string }).svg, new RegExp(derivedRevision.id));
+    const reserveJobs = await db
+      .insert(generationJobs)
+      .values(
+        [1, 2].map((index) => ({
+          projectId: project.id,
+          conversationId: conversation.id,
+          dataAssetId: asset.id,
+          snapshotId: snapshot.id,
+          prompt: `并发预留 ${index}`,
+          idempotencyKey: `reservation-${suffix}-${index}`,
+          inputFingerprint: `reservation-fingerprint-${suffix}-${index}`,
+          operation: "edit" as const,
+          artifactId: revision.artifactId,
+          baseRevisionId: revision.id,
+          status: "rendering" as const,
+          createdBy: userId,
+        })),
+      )
+      .returning();
+    const leases = await Promise.all(
+      reserveJobs.map(async (candidate, index) => {
+        const lease = await claimGenerationJobLease({
+          jobId: candidate.id,
+          owner: `reservation-test-${index}`,
+          currentStatuses: ["rendering"],
+          nextStatus: "rendering",
+          leaseDurationMs: 30_000,
+        });
+        assert.ok(lease);
+        return lease;
+      }),
+    );
+    const identities = await Promise.all(leases.map(reserveGenerationRevisionIdentity));
+    assert.notEqual(identities[0].revisionId, identities[1].revisionId);
+    assert.notEqual(identities[0].revisionNumber, identities[1].revisionNumber);
+    assert.ok(identities.every((identity) => identity.artifactId === revision.artifactId));
+    assert.deepEqual(await reserveGenerationRevisionIdentity(leases[0]), identities[0]);
+    assert.equal(await updateGenerationJobUnderLease({ lease: leases[0], release: true }), true);
+    const takeover = await claimGenerationJobLease({
+      jobId: reserveJobs[0].id,
+      owner: "reservation-takeover",
+      currentStatuses: ["rendering"],
+      nextStatus: "rendering",
+      leaseDurationMs: 30_000,
+    });
+    assert.ok(takeover);
+    assert.deepEqual(await reserveGenerationRevisionIdentity(takeover), identities[0]);
+    await assert.rejects(reserveGenerationRevisionIdentity(leases[0]), /租约已失效/);
+    const [expiringJob] = await db
+      .insert(generationJobs)
+      .values({
+        projectId: project.id,
+        conversationId: conversation.id,
+        dataAssetId: asset.id,
+        snapshotId: snapshot.id,
+        prompt: "等待行锁后租约过期",
+        idempotencyKey: `reservation-expiry-${suffix}`,
+        inputFingerprint: `reservation-expiry-fingerprint-${suffix}`,
+        operation: "edit",
+        artifactId: revision.artifactId,
+        baseRevisionId: revision.id,
+        status: "rendering",
+        createdBy: userId,
+      })
+      .returning();
+    const expiringLease = await claimGenerationJobLease({
+      jobId: expiringJob.id,
+      owner: "reservation-expiry",
+      currentStatuses: ["rendering"],
+      nextStatus: "rendering",
+      leaseDurationMs: 3_000,
+    });
+    assert.ok(expiringLease);
+    let blockedReservation: ReturnType<typeof reserveGenerationRevisionIdentity> | undefined;
+    await db.transaction(async (tx) => {
+      await tx
+        .select({ id: generationJobs.id })
+        .from(generationJobs)
+        .where(eq(generationJobs.id, expiringJob.id))
+        .for("update");
+      blockedReservation = reserveGenerationRevisionIdentity(expiringLease);
+      await new Promise((resolve) => setTimeout(resolve, 3_200));
+    });
+    assert.ok(blockedReservation);
+    await assert.rejects(blockedReservation, /租约已失效/);
+    const [expiredJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, expiringJob.id));
+    assert.equal(expiredJob.candidateRevisionId, null);
+    await db
+      .update(generationJobs)
+      .set({ leaseExpiresAt: new Date(Date.now() + 3_000) })
+      .where(eq(generationJobs.id, reserveJobs[1].id));
+    let blockedReuse: ReturnType<typeof reserveGenerationRevisionIdentity> | undefined;
+    await db.transaction(async (tx) => {
+      await tx
+        .select({ id: generationJobs.id })
+        .from(generationJobs)
+        .where(eq(generationJobs.id, reserveJobs[1].id))
+        .for("update");
+      blockedReuse = reserveGenerationRevisionIdentity(leases[1]);
+      await new Promise((resolve) => setTimeout(resolve, 3_200));
+    });
+    assert.ok(blockedReuse);
+    await assert.rejects(blockedReuse, /租约已失效/);
+    const [reservedArtifact] = await db.select().from(chartArtifacts).where(eq(chartArtifacts.id, revision.artifactId));
+    assert.ok(reservedArtifact.nextRevisionNumber > Math.max(...identities.map((identity) => identity.revisionNumber)));
+    const [lower, higher] = [...identities].sort((left, right) => left.revisionNumber - right.revisionNumber);
+    const higherRevision = await createDerivedRevision({
+      projectId: project.id,
+      artifactId: revision.artifactId,
+      sourceRevisionId: revision.id,
+      createdBy: userId,
+      changeReason: "reservation-head-order-test",
+      reservedRevision: higher,
+    });
+    const lowerRevision = await createDerivedRevision({
+      projectId: project.id,
+      artifactId: revision.artifactId,
+      sourceRevisionId: revision.id,
+      createdBy: userId,
+      changeReason: "reservation-head-order-test",
+      reservedRevision: lower,
+    });
+    const [headAfterLateLowerRevision] = await db
+      .select()
+      .from(chartArtifacts)
+      .where(eq(chartArtifacts.id, revision.artifactId));
+    assert.equal(higherRevision.id, higher.revisionId);
+    assert.equal(lowerRevision.id, lower.revisionId);
+    assert.equal(headAfterLateLowerRevision.headRevisionId, higherRevision.id);
     assert.deepEqual(
       resultSummarySchema.parse(derivedRevision.resultSummary),
       resultSummarySchema.parse(transformedEditJob.resultSummary),

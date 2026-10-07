@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "./client.js";
-import { generationJobs } from "./schema.js";
+import { chartArtifacts, chartRevisions, generationJobs } from "./schema.js";
 
-export type GenerationJobStatus = typeof generationJobs.$inferSelect["status"];
+export type GenerationJobStatus = (typeof generationJobs.$inferSelect)["status"];
 
 export type GenerationJobLease = {
   jobId: string;
@@ -20,16 +20,106 @@ export class GenerationJobLeaseLostError extends Error {
   }
 }
 
+export type ReservedRevisionIdentity = {
+  artifactId: string;
+  revisionId: string;
+  revisionNumber: number;
+};
+
+/** Reserve once per Job while holding Job then Artifact row locks. Retries reuse the identity. */
+export async function reserveGenerationRevisionIdentity(lease: GenerationJobLease): Promise<ReservedRevisionIdentity> {
+  return db.transaction(async (tx) => {
+    const [job] = await tx
+      .select()
+      .from(generationJobs)
+      .where(
+        and(
+          eq(generationJobs.id, lease.jobId),
+          eq(generationJobs.leaseOwner, lease.owner),
+          eq(generationJobs.leaseToken, lease.token),
+          eq(generationJobs.leaseFencingToken, lease.fencingToken),
+          inArray(generationJobs.status, ["rendering", "validating"]),
+          sql`${generationJobs.leaseExpiresAt} > clock_timestamp()`,
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!job) throw new GenerationJobLeaseLostError(lease.jobId);
+    if (job.candidateArtifactId && job.candidateRevisionId && job.candidateRevisionNumber) {
+      const [stillValid] = await tx
+        .select({ id: generationJobs.id })
+        .from(generationJobs)
+        .where(and(eq(generationJobs.id, job.id), sql`${generationJobs.leaseExpiresAt} > clock_timestamp()`))
+        .limit(1);
+      if (!stillValid) throw new GenerationJobLeaseLostError(lease.jobId);
+      return {
+        artifactId: job.candidateArtifactId,
+        revisionId: job.candidateRevisionId,
+        revisionNumber: job.candidateRevisionNumber,
+      };
+    }
+    if (job.candidateArtifactId || job.candidateRevisionId || job.candidateRevisionNumber)
+      throw new Error("Generation Job candidate identity is incomplete");
+
+    let artifactId: string = randomUUID();
+    let revisionNumber = 1;
+    if (job.operation === "edit") {
+      if (!job.artifactId || !job.baseRevisionId) throw new Error("Edit Generation Job has no source Revision");
+      const [artifact] = await tx
+        .select()
+        .from(chartArtifacts)
+        .where(and(eq(chartArtifacts.id, job.artifactId), eq(chartArtifacts.projectId, job.projectId)))
+        .for("update")
+        .limit(1);
+      const [source] = await tx
+        .select({ id: chartRevisions.id })
+        .from(chartRevisions)
+        .where(and(eq(chartRevisions.id, job.baseRevisionId), eq(chartRevisions.artifactId, job.artifactId)))
+        .limit(1);
+      if (!artifact || !source) throw new Error("Generation Job source Revision is missing");
+      const [latest] = await tx
+        .select({ revision: chartRevisions.revision })
+        .from(chartRevisions)
+        .where(eq(chartRevisions.artifactId, artifact.id))
+        .orderBy(desc(chartRevisions.revision))
+        .limit(1);
+      artifactId = artifact.id;
+      revisionNumber = Math.max(artifact.nextRevisionNumber, (latest?.revision ?? 0) + 1);
+      await tx
+        .update(chartArtifacts)
+        .set({ nextRevisionNumber: revisionNumber + 1 })
+        .where(eq(chartArtifacts.id, artifact.id));
+    }
+    const revisionId = randomUUID();
+    const [reserved] = await tx
+      .update(generationJobs)
+      .set({
+        candidateArtifactId: artifactId,
+        candidateRevisionId: revisionId,
+        candidateRevisionNumber: revisionNumber,
+      })
+      .where(and(eq(generationJobs.id, job.id), sql`${generationJobs.leaseExpiresAt} > clock_timestamp()`))
+      .returning({ id: generationJobs.id });
+    if (!reserved) throw new GenerationJobLeaseLostError(lease.jobId);
+    return { artifactId, revisionId, revisionNumber };
+  });
+}
+
 export const generationJobRunningStatuses = [
   "profiling",
   "planning",
   "transforming",
   "compiling",
   "rendering",
-  "validating"
+  "validating",
 ] as const satisfies readonly GenerationJobStatus[];
 
-const generationJobRecoveryStatuses = ["profiling", "planning", "transforming", "compiling"] as const satisfies readonly GenerationJobStatus[];
+const generationJobRecoveryStatuses = [
+  "profiling",
+  "planning",
+  "transforming",
+  "compiling",
+] as const satisfies readonly GenerationJobStatus[];
 const renderJobRecoveryStatuses = ["rendering", "validating"] as const satisfies readonly GenerationJobStatus[];
 
 export async function claimGenerationJobLease(input: {
@@ -43,39 +133,49 @@ export async function claimGenerationJobLease(input: {
   assertLeaseDuration(input.leaseDurationMs);
   const now = new Date();
   const token = randomUUID();
-  const [claimed] = await db.update(generationJobs).set({
-    status: input.nextStatus,
-    leaseOwner: input.owner,
-    leaseToken: token,
-    leaseFencingToken: sql`${generationJobs.leaseFencingToken} + 1`,
-    leaseExpiresAt: new Date(now.getTime() + input.leaseDurationMs),
-    leaseHeartbeatAt: now,
-    statusVersion: sql`${generationJobs.statusVersion} + 1`,
-    statusChangedAt: now,
-    ...(input.incrementAttempt ? { attemptCount: sql`${generationJobs.attemptCount} + 1` } : {}),
-    updatedAt: now
-  } as never).where(and(
-    eq(generationJobs.id, input.jobId),
-    inArray(generationJobs.status, [...input.currentStatuses]),
-    or(isNull(generationJobs.leaseExpiresAt), lt(generationJobs.leaseExpiresAt, now))
-  )).returning({ fencingToken: generationJobs.leaseFencingToken });
+  const [claimed] = await db
+    .update(generationJobs)
+    .set({
+      status: input.nextStatus,
+      leaseOwner: input.owner,
+      leaseToken: token,
+      leaseFencingToken: sql`${generationJobs.leaseFencingToken} + 1`,
+      leaseExpiresAt: new Date(now.getTime() + input.leaseDurationMs),
+      leaseHeartbeatAt: now,
+      statusVersion: sql`${generationJobs.statusVersion} + 1`,
+      statusChangedAt: now,
+      ...(input.incrementAttempt ? { attemptCount: sql`${generationJobs.attemptCount} + 1` } : {}),
+      updatedAt: now,
+    } as never)
+    .where(
+      and(
+        eq(generationJobs.id, input.jobId),
+        inArray(generationJobs.status, [...input.currentStatuses]),
+        or(isNull(generationJobs.leaseExpiresAt), lt(generationJobs.leaseExpiresAt, now)),
+      ),
+    )
+    .returning({ fencingToken: generationJobs.leaseFencingToken });
   if (!claimed) return undefined;
   return {
     jobId: input.jobId,
     owner: input.owner,
     token,
     fencingToken: claimed.fencingToken,
-    leaseDurationMs: input.leaseDurationMs
+    leaseDurationMs: input.leaseDurationMs,
   };
 }
 
 export async function heartbeatGenerationJobLease(lease: GenerationJobLease): Promise<boolean> {
   const now = new Date();
-  const [renewed] = await db.update(generationJobs).set({
-    leaseExpiresAt: new Date(now.getTime() + lease.leaseDurationMs),
-    leaseHeartbeatAt: now,
-    updatedAt: now
-  }).where(ownedLeaseCondition(lease, now)).returning({ id: generationJobs.id });
+  const [renewed] = await db
+    .update(generationJobs)
+    .set({
+      leaseExpiresAt: new Date(now.getTime() + lease.leaseDurationMs),
+      leaseHeartbeatAt: now,
+      updatedAt: now,
+    })
+    .where(ownedLeaseCondition(lease, now))
+    .returning({ id: generationJobs.id });
   return Boolean(renewed);
 }
 
@@ -86,18 +186,24 @@ export async function updateGenerationJobUnderLease(input: {
   release?: boolean;
 }): Promise<boolean> {
   const now = new Date();
-  const [updated] = await db.update(generationJobs).set({
-    ...(input.values ?? {}),
-    ...(input.status ? { status: input.status } : {}),
-    ...(input.release ? {
-      leaseOwner: null,
-      leaseToken: null,
-      leaseExpiresAt: null
-    } : {}),
-    statusVersion: sql`${generationJobs.statusVersion} + 1`,
-    statusChangedAt: now,
-    updatedAt: now
-  } as never).where(ownedLeaseCondition(input.lease, now)).returning({ id: generationJobs.id });
+  const [updated] = await db
+    .update(generationJobs)
+    .set({
+      ...(input.values ?? {}),
+      ...(input.status ? { status: input.status } : {}),
+      ...(input.release
+        ? {
+            leaseOwner: null,
+            leaseToken: null,
+            leaseExpiresAt: null,
+          }
+        : {}),
+      statusVersion: sql`${generationJobs.statusVersion} + 1`,
+      statusChangedAt: now,
+      updatedAt: now,
+    } as never)
+    .where(ownedLeaseCondition(input.lease, now))
+    .returning({ id: generationJobs.id });
   return Boolean(updated);
 }
 
@@ -111,24 +217,36 @@ export async function recoverExpiredGenerationJobLeases(): Promise<string[]> {
     errorMessage: "Worker 租约已过期，任务已重新排队",
     statusVersion: sql`${generationJobs.statusVersion} + 1`,
     statusChangedAt: now,
-    updatedAt: now
+    updatedAt: now,
   };
-  const generationRecovered = await db.update(generationJobs).set({
-    ...recoveryValues,
-    status: "queued",
-  }).where(and(
-    inArray(generationJobs.status, [...generationJobRecoveryStatuses]),
-    isNotNull(generationJobs.leaseExpiresAt),
-    lt(generationJobs.leaseExpiresAt, now)
-  )).returning({ id: generationJobs.id });
-  const renderRecovered = await db.update(generationJobs).set({
-    ...recoveryValues,
-    status: "rendering"
-  }).where(and(
-    inArray(generationJobs.status, [...renderJobRecoveryStatuses]),
-    isNotNull(generationJobs.leaseExpiresAt),
-    lt(generationJobs.leaseExpiresAt, now)
-  )).returning({ id: generationJobs.id });
+  const generationRecovered = await db
+    .update(generationJobs)
+    .set({
+      ...recoveryValues,
+      status: "queued",
+    })
+    .where(
+      and(
+        inArray(generationJobs.status, [...generationJobRecoveryStatuses]),
+        isNotNull(generationJobs.leaseExpiresAt),
+        lt(generationJobs.leaseExpiresAt, now),
+      ),
+    )
+    .returning({ id: generationJobs.id });
+  const renderRecovered = await db
+    .update(generationJobs)
+    .set({
+      ...recoveryValues,
+      status: "rendering",
+    })
+    .where(
+      and(
+        inArray(generationJobs.status, [...renderJobRecoveryStatuses]),
+        isNotNull(generationJobs.leaseExpiresAt),
+        lt(generationJobs.leaseExpiresAt, now),
+      ),
+    )
+    .returning({ id: generationJobs.id });
   return [...generationRecovered, ...renderRecovered].map((job) => job.id);
 }
 
@@ -144,7 +262,7 @@ export function startGenerationJobLeaseHeartbeat(lease: GenerationJobLease): {
     if (stopped || renewing || lostLease) return;
     renewing = true;
     try {
-      if (!await heartbeatGenerationJobLease(lease)) lostLease = true;
+      if (!(await heartbeatGenerationJobLease(lease))) lostLease = true;
     } catch {
       // A transient database failure must not claim the lease is still valid.
       lostLease = true;
@@ -152,7 +270,9 @@ export function startGenerationJobLeaseHeartbeat(lease: GenerationJobLease): {
       renewing = false;
     }
   };
-  const timer = setInterval(() => { void heartbeat(); }, intervalMs);
+  const timer = setInterval(() => {
+    void heartbeat();
+  }, intervalMs);
   return {
     stop() {
       stopped = true;
@@ -160,12 +280,12 @@ export function startGenerationJobLeaseHeartbeat(lease: GenerationJobLease): {
     },
     hasLostLease() {
       return lostLease;
-    }
+    },
   };
 }
 
 export async function assertGenerationJobLease(lease: GenerationJobLease): Promise<void> {
-  if (!await heartbeatGenerationJobLease(lease)) throw new GenerationJobLeaseLostError(lease.jobId);
+  if (!(await heartbeatGenerationJobLease(lease))) throw new GenerationJobLeaseLostError(lease.jobId);
 }
 
 function ownedLeaseCondition(lease: GenerationJobLease, now: Date) {
@@ -174,7 +294,7 @@ function ownedLeaseCondition(lease: GenerationJobLease, now: Date) {
     eq(generationJobs.leaseOwner, lease.owner),
     eq(generationJobs.leaseToken, lease.token),
     eq(generationJobs.leaseFencingToken, lease.fencingToken),
-    gt(generationJobs.leaseExpiresAt, now)
+    gt(generationJobs.leaseExpiresAt, now),
   );
 }
 

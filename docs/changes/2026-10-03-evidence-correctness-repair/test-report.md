@@ -9,6 +9,12 @@
 
 ## A 批实施验证（新增）
 
+### 2026-10-07 T6 版本身份预留（限定结果）
+
+新增 0032 迁移：历史 Chart Artifact 的 `nextRevisionNumber` 按最大现存 Revision 编号加一回填；Generation Job 保存候选 Artifact UUID、Revision UUID 与编号，三字段需同时存在。Render Worker 在渲染产物写入前、持有有效租约时预留身份；同一 Job 重试复用该身份，编辑 Job 在 Job→Artifact 行锁顺序下递增编号。新对象键包含预留 Revision UUID 与随机尝试标识。Chart 创建时使用预留身份；直接创建派生版本的既有路径也改为 Artifact 行锁与单调计数器，低编号晚完成不回退 head。新 Artifact 的计数器从 2 起步。
+
+`db:check-migrations`、`db:verify`、DB/Chart/Render Worker 源码与 Generation Worker 测试类型检查通过。默认 `node scripts/test-integration.mjs` 首次在 Windows 沙箱中因 Node 子进程 `spawn EPERM` 停止在断言前；同命令经无沙箱执行后四轮均自然退出 0，每轮 API 14/14、真实失败链路浏览器桌面/移动 2/2、Worker 2/2。Worker 新增真实 PostgreSQL 断言：并发编辑 Job 编号不同，预留编号大于已落地版本；同租约重复调用与接管后的新租约复用身份，旧租约被拒绝；已完成编辑版本的候选身份与 Revision/输出对象键一致。后续两轮补验了预留后对象写入失败时同一 Job 沿用候选三元组、两个预留版本反序落库时 head 不回退。独立只读复核指出 SQL `now()` 在等行锁后会使用过旧事务时间；预留函数改用 `clock_timestamp()`，首次分配写候选与已有候选重用都在锁后再次校验租约，最后一轮真实数据库测试覆盖两种行锁等待跨过到期点。最终固定快照[独立只读复核](./evidence/t6-reservation-independent.md)无新 P1/P2。历史数据迁移回填尚无非空旧库夹具；本结果只验证身份预留，不代表完成事务、Evidence 固定绑定、对象清单或旧 Worker 业务写入 fencing 已通过。
+
 ### 2026-10-07 T6 执行尝试隔离候选对象
 
 Render Worker 对新渲染使用独立随机执行标识，为 Vega-Lite、SVG、PNG、HTML 生成同组候选对象键；已有 Revision 的恢复只重写 HTML，改用新的候选 HTML 键。真实隔离集成先在写入候选 Vega-Lite 后使第二次写入失败，确认 Job 失败、无新 Revision；真实 API 重试后成功且新 Revision 未引用旧候选键。独立只读复核发现已有 Revision 的恢复分支仍覆写旧 HTML 键，随后修正并新增第二场景：HTML 对象写入成功后注入故障，保留已创建 Revision，真实 API 重试进入恢复分支；Revision ID 不变，最终 HTML 键不同，旧键内容保持不变。完整 `node scripts/test-integration.mjs` 再次自然退出 0：API 14/14、Generation Worker 2/2、真实预算失败浏览器桌面/移动 2/2。Render Worker 源码、Generation Worker 测试类型检查、两文件定向 ESLint、Prettier 与 `git diff --check` 通过。

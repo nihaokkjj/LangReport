@@ -13,6 +13,7 @@ import {
   generationJobs,
   projects,
   recoverExpiredGenerationJobLeases,
+  reserveGenerationRevisionIdentity,
   startGenerationJobLeaseHeartbeat,
   updateGenerationJobUnderLease,
   withAdvisoryLock,
@@ -251,6 +252,7 @@ async function processRenderJobLocked(
       });
       return;
     }
+    const reservedRevision = await reserveGenerationRevisionIdentity(lease);
     const outputBase = {
       workspaceId: record.workspaceId,
       projectId: record.job.projectId,
@@ -258,7 +260,7 @@ async function processRenderJobLocked(
     };
     // Each lease attempt writes private candidate keys. A late worker cannot overwrite
     // another attempt's validated outputs for the same Job.
-    const candidateName = `${jobId}.${randomUUID()}`;
+    const candidateName = `${reservedRevision.revisionId}.${randomUUID()}`;
     const vegaLiteKey = renderOutputObjectKey({ ...outputBase, filename: `${candidateName}.vega-lite.json` });
     const svgKey = renderOutputObjectKey({ ...outputBase, filename: `${candidateName}.svg` });
     const pngKey = renderOutputObjectKey({ ...outputBase, filename: `${candidateName}.png` });
@@ -309,6 +311,7 @@ async function processRenderJobLocked(
             executionAssembly: record.job.executionAssembly,
             resultSummary,
             outputObjects,
+            reservedRevision,
           })
         : await createInitialRevision({
             jobId,
@@ -336,6 +339,7 @@ async function processRenderJobLocked(
             executionAssembly: record.job.executionAssembly,
             resultSummary,
             outputObjects,
+            reservedRevision,
           });
     const ensured = await ensureStaticHtmlOutput({
       job: record.job,

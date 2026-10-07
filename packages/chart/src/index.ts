@@ -13,6 +13,7 @@ import {
   projectThemes,
   projects,
   db,
+  type ReservedRevisionIdentity,
 } from "@langreport/db";
 import {
   flintSpecSchema,
@@ -331,6 +332,7 @@ export async function createInitialRevision(input: {
   executionAssembly?: unknown;
   resultSummary?: ResultSummary | null;
   outputObjects: unknown;
+  reservedRevision?: ReservedRevisionIdentity;
 }) {
   const existing = await findRevisionByJob(input.jobId);
   if (existing) return existing;
@@ -342,12 +344,16 @@ export async function createInitialRevision(input: {
       .where(eq(chartRevisions.generationJobId, input.jobId))
       .limit(1);
     if (existingInTransaction) return existingInTransaction;
+    if (input.reservedRevision && input.reservedRevision.revisionNumber !== 1)
+      throw new ChartServiceError("REVISION_RESERVATION_INVALID", "初始版本预留编号无效", 409);
 
     const [artifact] = await tx
       .insert(chartArtifacts)
       .values({
+        ...(input.reservedRevision ? { id: input.reservedRevision.artifactId } : {}),
         projectId: input.projectId,
         name: input.name,
+        nextRevisionNumber: 2,
         status: "active",
         createdBy: input.createdBy,
       })
@@ -355,6 +361,7 @@ export async function createInitialRevision(input: {
     const [revision] = await tx
       .insert(chartRevisions)
       .values({
+        ...(input.reservedRevision ? { id: input.reservedRevision.revisionId } : {}),
         artifactId: artifact.id,
         generationJobId: input.jobId,
         snapshotId: input.snapshotId,
@@ -417,6 +424,7 @@ export async function createDerivedRevision(input: {
   executionAssembly?: unknown;
   resultSummary?: ResultSummary | null;
   idempotencyKey?: string;
+  reservedRevision?: ReservedRevisionIdentity;
 }) {
   await assertChartAction(input.projectId, input.createdBy, "create_revision");
   const [source] = await db
@@ -440,66 +448,103 @@ export async function createDerivedRevision(input: {
       return existing;
     }
   }
-  const [artifact] = await db
-    .select()
-    .from(chartArtifacts)
-    .where(and(eq(chartArtifacts.id, input.artifactId), eq(chartArtifacts.projectId, input.projectId)))
-    .limit(1);
-  if (!artifact) throw new ChartServiceError("ARTIFACT_NOT_FOUND", "图表产物不存在", 404);
-
-  const [latest] = await db
-    .select({ revision: chartRevisions.revision })
-    .from(chartRevisions)
-    .where(eq(chartRevisions.artifactId, input.artifactId))
-    .orderBy(desc(chartRevisions.revision))
-    .limit(1);
-  const revisionNumber = (latest?.revision ?? 0) + 1;
-  const [revision] = await db
-    .insert(chartRevisions)
-    .values({
-      artifactId: artifact.id,
-      generationJobId: input.generationJobId ?? null,
-      snapshotId: source.snapshotId,
-      revision: revisionNumber,
-      operationKey: input.idempotencyKey ?? null,
-      status: "draft",
-      parentRevisionId: source.id,
-      createdBy: input.createdBy,
-      changeReason: input.changeReason,
-      transformPlan: input.transformPlan ?? source.transformPlan,
-      fieldLineage: input.fieldLineage ?? source.fieldLineage,
-      flintSpec: input.flintSpec ?? source.flintSpec,
-      themeSnapshot: input.themeSnapshot ?? source.themeSnapshot,
-      vegaLiteSpec: input.vegaLiteSpec ?? source.vegaLiteSpec,
-      validation: input.validation ?? source.validation,
-      analysisBriefSnapshot: frozenProvenance.analysisBriefSnapshot,
-      metricDefinitionSnapshot: frozenProvenance.metricDefinitionSnapshot,
-      memorySnapshot: frozenProvenance.memoryContext,
-      pluginSnapshot: input.pluginSnapshot ?? source.pluginSnapshot,
-      executionAssembly: input.executionAssembly ?? frozenProvenance.executionAssembly,
-      resultSummary: input.resultSummary === undefined ? source.resultSummary : input.resultSummary,
-      outputObjects: input.outputObjects ?? source.outputObjects,
-    })
-    .returning();
-  await db
-    .update(chartArtifacts)
-    .set({ headRevisionId: revision.id, updatedAt: new Date() })
-    .where(eq(chartArtifacts.id, artifact.id));
-  await writeAudit(db, {
-    workspaceId: await workspaceIdForProject(db, input.projectId),
-    projectId: input.projectId,
-    actorId: input.createdBy,
-    action: "chart_revision.created",
-    entityType: "chart_revision",
-    entityId: revision.id,
-    metadata: {
-      artifactId: artifact.id,
-      parentRevisionId: source.id,
-      operation: input.changeReason,
-      idempotencyKey: input.idempotencyKey ?? null,
-    },
+  if (input.reservedRevision && input.reservedRevision.artifactId !== input.artifactId)
+    throw new ChartServiceError("REVISION_RESERVATION_INVALID", "预留版本所属图表不匹配", 409);
+  return db.transaction(async (tx) => {
+    const [artifact] = await tx
+      .select()
+      .from(chartArtifacts)
+      .where(and(eq(chartArtifacts.id, input.artifactId), eq(chartArtifacts.projectId, input.projectId)))
+      .for("update")
+      .limit(1);
+    if (!artifact) throw new ChartServiceError("ARTIFACT_NOT_FOUND", "图表产物不存在", 404);
+    if (input.idempotencyKey) {
+      const [existing] = await tx
+        .select()
+        .from(chartRevisions)
+        .where(
+          and(eq(chartRevisions.artifactId, input.artifactId), eq(chartRevisions.operationKey, input.idempotencyKey)),
+        )
+        .limit(1);
+      if (existing) {
+        if (existing.parentRevisionId !== source.id)
+          throw new ChartServiceError("IDEMPOTENCY_CONFLICT", "幂等键已经用于另一来源版本", 409);
+        return existing;
+      }
+    }
+    const [latest] = await tx
+      .select({ revision: chartRevisions.revision })
+      .from(chartRevisions)
+      .where(eq(chartRevisions.artifactId, input.artifactId))
+      .orderBy(desc(chartRevisions.revision))
+      .limit(1);
+    const revisionNumber =
+      input.reservedRevision?.revisionNumber ?? Math.max(artifact.nextRevisionNumber, (latest?.revision ?? 0) + 1);
+    if (!input.reservedRevision) {
+      await tx
+        .update(chartArtifacts)
+        .set({ nextRevisionNumber: revisionNumber + 1 })
+        .where(eq(chartArtifacts.id, artifact.id));
+    } else if (revisionNumber >= artifact.nextRevisionNumber) {
+      throw new ChartServiceError("REVISION_RESERVATION_INVALID", "预留版本编号尚未登记", 409);
+    }
+    const [revision] = await tx
+      .insert(chartRevisions)
+      .values({
+        ...(input.reservedRevision ? { id: input.reservedRevision.revisionId } : {}),
+        artifactId: artifact.id,
+        generationJobId: input.generationJobId ?? null,
+        snapshotId: source.snapshotId,
+        revision: revisionNumber,
+        operationKey: input.idempotencyKey ?? null,
+        status: "draft",
+        parentRevisionId: source.id,
+        createdBy: input.createdBy,
+        changeReason: input.changeReason,
+        transformPlan: input.transformPlan ?? source.transformPlan,
+        fieldLineage: input.fieldLineage ?? source.fieldLineage,
+        flintSpec: input.flintSpec ?? source.flintSpec,
+        themeSnapshot: input.themeSnapshot ?? source.themeSnapshot,
+        vegaLiteSpec: input.vegaLiteSpec ?? source.vegaLiteSpec,
+        validation: input.validation ?? source.validation,
+        analysisBriefSnapshot: frozenProvenance.analysisBriefSnapshot,
+        metricDefinitionSnapshot: frozenProvenance.metricDefinitionSnapshot,
+        memorySnapshot: frozenProvenance.memoryContext,
+        pluginSnapshot: input.pluginSnapshot ?? source.pluginSnapshot,
+        executionAssembly: input.executionAssembly ?? frozenProvenance.executionAssembly,
+        resultSummary: input.resultSummary === undefined ? source.resultSummary : input.resultSummary,
+        outputObjects: input.outputObjects ?? source.outputObjects,
+      })
+      .returning();
+    const [head] = artifact.headRevisionId
+      ? await tx
+          .select({ revision: chartRevisions.revision })
+          .from(chartRevisions)
+          .where(eq(chartRevisions.id, artifact.headRevisionId))
+          .limit(1)
+      : [];
+    if (!head || revisionNumber > head.revision) {
+      await tx
+        .update(chartArtifacts)
+        .set({ headRevisionId: revision.id, updatedAt: new Date() })
+        .where(eq(chartArtifacts.id, artifact.id));
+    }
+    await writeAudit(tx, {
+      workspaceId: await workspaceIdForProject(tx, input.projectId),
+      projectId: input.projectId,
+      actorId: input.createdBy,
+      action: "chart_revision.created",
+      entityType: "chart_revision",
+      entityId: revision.id,
+      metadata: {
+        artifactId: artifact.id,
+        parentRevisionId: source.id,
+        operation: input.changeReason,
+        idempotencyKey: input.idempotencyKey ?? null,
+      },
+    });
+    return revision;
   });
-  return revision;
 }
 
 export async function copyRevisionToArtifact(input: {
@@ -537,6 +582,7 @@ export async function copyRevisionToArtifact(input: {
       projectId: input.projectId,
       name: input.name,
       creationKey: input.idempotencyKey ?? null,
+      nextRevisionNumber: 2,
       status: "active",
       createdBy: input.createdBy,
     })
