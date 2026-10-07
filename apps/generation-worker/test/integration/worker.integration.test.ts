@@ -49,6 +49,7 @@ import {
   snapshotSourceObjectKey,
 } from "@langreport/storage";
 import type { ColumnProfile, DataRow } from "@langreport/data-engine";
+import { buildApp } from "../../../api/src/app.js";
 
 const { processGenerationJob } = await import("../../src/index.js");
 const { processRenderJob } = await import("../../../render-worker/src/index.js");
@@ -356,6 +357,58 @@ test("real generation and render workers persist plugin usage and historical sna
     assert.deepEqual(resultSummarySchema.parse(evidence.resultSummary), generatedResultSummary);
     assert.match(evidence.finding, /完整变换结果行/);
 
+    // TP06: a title edit must retain the reviewed finding and frozen data facts.
+    const reviewedFinding = "经核对的原始发现：华东销售保持增长。";
+    await db.update(evidenceBlocks).set({ finding: reviewedFinding }).where(eq(evidenceBlocks.id, evidence.id));
+    const api = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
+    let visualJobId: string;
+    try {
+      const response = await api.inject({
+        method: "POST",
+        url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+        payload: {
+          operation: "edit",
+          baseRevisionId: revision.id,
+          patch: { title: "仅更新标题" },
+          idempotencyKey: `visual-${suffix}`,
+        },
+      });
+      assert.equal(response.statusCode, 202, response.body);
+      visualJobId = response.json().job.id;
+      await db
+        .update(evidenceBlocks)
+        .set({ finding: "入队后被修改的发现，不得影响已冻结任务" })
+        .where(eq(evidenceBlocks.id, evidence.id));
+    } finally {
+      await api.close();
+    }
+    await processGenerationJob(visualJobId);
+    await processRenderJob(visualJobId);
+    const [visualRevision] = await db
+      .select()
+      .from(chartRevisions)
+      .where(eq(chartRevisions.generationJobId, visualJobId));
+    assert.ok(visualRevision);
+    for (const field of [
+      "snapshotId",
+      "analysisBriefSnapshot",
+      "metricDefinitionSnapshot",
+      "transformPlan",
+      "fieldLineage",
+      "resultSummary",
+      "executionAssembly",
+    ] as const)
+      assert.deepEqual(visualRevision[field], revision[field], field);
+    assert.deepEqual(flintSpecSchema.parse(visualRevision.flintSpec).data, generatedSpec.data);
+    const [visualEvidence] = await db
+      .select()
+      .from(evidenceBlocks)
+      .where(eq(evidenceBlocks.generationJobId, visualJobId));
+    assert.equal(visualEvidence.finding, reviewedFinding);
+    const visualHtml = await getObject((visualRevision.outputObjects as { html: string }).html);
+    assert.ok(visualHtml.toString("utf8").includes(reviewedFinding));
+    assert.equal(JSON.stringify(visualRevision).includes(privatePreference.statement), false);
+
     const editPlan = {
       version: "v1" as const,
       rationale: "只保留华东订单，按月份聚合后按销售额降序排列。",
@@ -370,42 +423,54 @@ test("real generation and render workers persist plugin usage and historical sna
       ],
       expectedColumns: ["月份", "销售额_sum"],
     };
-    const [editJob] = await db
-      .insert(generationJobs)
-      .values({
-        projectId: project.id,
-        conversationId: conversation.id,
-        dataAssetId: asset.id,
-        snapshotId: snapshot.id,
-        prompt: "编辑图表版本 R1",
-        idempotencyKey: `worker-edit-${suffix}`,
-        inputFingerprint: `worker-edit-fingerprint-${suffix}`,
-        renderer: "vega-lite",
-        rendererVersion: "vega-lite-svg-v1",
-        theme: generatedSpec.theme,
-        themeVersion: generatedSpec.themeVersion,
-        themeSource: "revision",
-        themeConfig: generatedSpec.themeConfig,
+    const logicPatch = {
+      transformPlan: editPlan,
+      encodings: {
+        x: { field: "月份", type: "temporal" as const },
+        y: { field: "销售额_sum", type: "quantitative" as const },
+      },
+      annotations: [{ text: "仅看华东" }],
+      showValues: true,
+      showLegend: false,
+    };
+    const logicApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
+    let editJobId: string;
+    try {
+      const payload = {
         operation: "edit",
-        artifactId: revision.artifactId,
         baseRevisionId: revision.id,
-        editPatch: {
-          transformPlan: editPlan,
-          encodings: {
-            x: { field: "月份", type: "temporal" },
-            y: { field: "销售额_sum", type: "quantitative" },
-          },
-          annotations: [{ text: "仅看华东" }],
-          showValues: true,
-          showLegend: false,
-        },
-        transformPlan: editPlan,
-        pluginContext: pluginResolution.context,
-        analysisBriefSnapshot: {},
-        metricDefinitionSnapshot: {},
-        createdBy: userId,
-      })
-      .returning();
+        patch: logicPatch,
+        idempotencyKey: `worker-edit-${suffix}`,
+      };
+      const response = await logicApi.inject({
+        method: "POST",
+        url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+        payload,
+      });
+      assert.equal(response.statusCode, 202, response.body);
+      editJobId = response.json().job.id;
+      const replay = await logicApi.inject({
+        method: "POST",
+        url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+        payload,
+      });
+      assert.equal(replay.statusCode, 200, replay.body);
+      assert.equal(replay.json().job.id, editJobId);
+      const conflict = await logicApi.inject({
+        method: "POST",
+        url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+        payload: { ...payload, patch: { ...logicPatch, title: "另一组输入" } },
+      });
+      assert.equal(conflict.statusCode, 409, conflict.body);
+      assert.equal(conflict.json().code, "IDEMPOTENCY_CONFLICT");
+    } finally {
+      await logicApi.close();
+    }
+    const [editJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, editJobId));
+    assert.ok(editJob);
+    assert.deepEqual(editJob.analysisBriefSnapshot, revision.analysisBriefSnapshot);
+    assert.deepEqual(editJob.metricDefinitionSnapshot, revision.metricDefinitionSnapshot);
+    assert.deepEqual(editJob.executionAssembly, revision.executionAssembly);
     await processGenerationJob(editJob.id);
     const [transformedEditJob] = await db
       .select()
@@ -435,6 +500,15 @@ test("real generation and render workers persist plugin usage and historical sna
     );
     assert.equal(derivedRevision.parentRevisionId, revision.id);
     assert.notDeepEqual(derivedRevision.transformPlan, revision.transformPlan);
+    assert.notDeepEqual(derivedRevision.fieldLineage, revision.fieldLineage);
+    assert.deepEqual(derivedRevision.analysisBriefSnapshot, revision.analysisBriefSnapshot);
+    assert.deepEqual(derivedRevision.metricDefinitionSnapshot, revision.metricDefinitionSnapshot);
+    const [logicEvidence] = await db
+      .select()
+      .from(evidenceBlocks)
+      .where(eq(evidenceBlocks.generationJobId, editJob.id));
+    assert.notEqual(logicEvidence.finding, reviewedFinding);
+    assert.deepEqual(logicEvidence.resultSummary, derivedRevision.resultSummary);
     assert.equal(revision.revision, 1);
     assert.equal(
       (derivedRevision.flintSpec as { chartSpec: { annotations?: Array<{ text: string }> } }).chartSpec.annotations?.[0]
@@ -707,6 +781,28 @@ test("real generation and render workers persist plugin usage and historical sna
       }),
       (error: unknown) => error instanceof Error && "code" in error && error.code === "REVISION_PROVENANCE_INCOMPLETE",
     );
+    const incompleteApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
+    try {
+      const response = await incompleteApi.inject({
+        method: "POST",
+        url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+        payload: {
+          operation: "edit",
+          baseRevisionId: revision.id,
+          patch: { title: "缺来源不得入队" },
+          idempotencyKey: `incomplete-edit-${suffix}`,
+        },
+      });
+      assert.equal(response.statusCode, 409, response.body);
+      assert.equal(response.json().code, "REVISION_PROVENANCE_INCOMPLETE");
+      const [queued] = await db
+        .select({ id: generationJobs.id })
+        .from(generationJobs)
+        .where(eq(generationJobs.idempotencyKey, `incomplete-edit-${suffix}`));
+      assert.equal(queued, undefined);
+    } finally {
+      await incompleteApi.close();
+    }
   } finally {
     for (const key of objectKeys) await deleteObject(key).catch(() => undefined);
     if (workspaceId) await db.delete(workspaces).where(eq(workspaces.id, workspaceId));

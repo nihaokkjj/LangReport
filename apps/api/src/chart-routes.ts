@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import {
   chartRevisionCommandSchema,
@@ -18,11 +18,11 @@ import {
   createDerivedRevision,
   createShare,
   getArtifact,
-  getProjectAccess,
   getProjectTheme,
   getRevision,
   getShare,
   freezeDerivedProvenance,
+  freezeDerivedFinding,
   listArtifacts,
   listComments,
   listReviews,
@@ -34,13 +34,13 @@ import {
   ChartServiceError,
 } from "@langreport/chart";
 import {
-  chartRevisions,
   conversations,
   conversationMessages,
   dataAssets,
   dataSnapshots,
   db,
   generationJobs,
+  evidenceBlocks,
 } from "@langreport/db";
 import { getObject } from "@langreport/storage";
 import { sendHttpError } from "./http-errors.js";
@@ -170,6 +170,22 @@ export async function registerChartRoutes(app: FastifyInstance): Promise<void> {
               return sendHttpError(reply, 409, "幂等键已经用于另一组编辑输入", "IDEMPOTENCY_CONFLICT");
             return reply.send({ job: existing, reused: true });
           }
+          const visualOnly = command.patch.transformPlan === undefined && command.patch.encodings === undefined;
+          const [sourceEvidence] = visualOnly
+            ? await db
+                .select({ id: evidenceBlocks.id, finding: evidenceBlocks.finding })
+                .from(evidenceBlocks)
+                .where(
+                  and(
+                    eq(evidenceBlocks.chartRevisionId, source.revision.id),
+                    eq(evidenceBlocks.projectId, source.artifact.projectId),
+                  ),
+                )
+                .limit(1)
+            : [];
+          const derivedAudit = visualOnly
+            ? { derivedFinding: freezeDerivedFinding(source.revision.id, sourceEvidence) }
+            : null;
           const conversationId = await createEditConversation(
             source.artifact.projectId,
             source.revision.revision,
@@ -201,6 +217,7 @@ export async function registerChartRoutes(app: FastifyInstance): Promise<void> {
               transformPlan: command.patch.transformPlan ?? source.revision.transformPlan,
               fieldLineage: source.revision.fieldLineage,
               pluginContext,
+              generationAudit: derivedAudit,
               ...frozenProvenance,
               createdBy: userId,
             })

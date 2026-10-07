@@ -1,6 +1,33 @@
 import { expect, test } from "@playwright/test";
 import { captureUiEvidence } from "./visual-evidence";
 
+test("API Console 说明视觉编辑冻结发现与逻辑编辑重算", async ({ page }) => {
+  await page.route("**/api-console/openapi.json", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      json: {
+        openapi: "3.0.3",
+        info: { title: "LangReport", version: "test" },
+        paths: {
+          "/api/v1/chart-artifacts/{artifactId}/revisions": {
+            post: {
+              operationId: "createChartRevisionCommand",
+              tags: ["Chart Revisions"],
+              summary: "编辑版本",
+              responses: { "202": { description: "已排队" } },
+            },
+          },
+        },
+      },
+    }),
+  );
+  await page.goto("/api-console");
+  await page.getByRole("button", { name: /\/revisions/ }).click();
+  await expect(page.getByText(/纯视觉编辑冻结原发现，逻辑编辑重新计算/)).toBeVisible();
+  await expect(page.getByText(/REVISION_PROVENANCE_INCOMPLETE，请重新确认输入后生成/)).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+});
+
 test("API Console 将业务 401 留在响应面板而不跳转登录", async ({ page }) => {
   await page.route("**/api-console/openapi.json", async (route) => {
     await route.fulfill({

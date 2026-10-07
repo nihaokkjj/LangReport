@@ -59,6 +59,8 @@ T2 使用当前锁定 Flint 0.5.1 的实际输出验证候选 Vega/Vega-Lite 运
 
 `undefined` 与空对象不再混用：必需字段缺失时返回 `REVISION_PROVENANCE_INCOMPLETE`，不以 `{}` 达成持久化。旧版本缺来源且无法根据不可变记录证明时，只读保留，重新确认输入后创建新 Cycle。
 
+T5补充实现约定：纯视觉编辑在创建Job时，把来源Revision对应Evidence的finding及Evidence/Revision身份冻结到既有`generationAudit.derivedFinding`，并保存文本SHA-256；这是派生来源审计，不是新模型调用记录。后续渲染、HTML及Evidence均消费同一冻结值，重试不重新读取可变Evidence；缺失或校验不符明确拒绝。逻辑编辑仍依据新统计重建finding。此步骤不改变T6原子完成/T7不可变Evidence的后续范围。
+
 所有派生操作均创建持久化 Generation Job，异步完成。copy/rollback 不调用模型，不访问实时飞书，不建立第二个数据源。各自保留来源 Revision、固定输入和操作 fingerprint；重试不能改变冻结输入。
 
 ## D3：版本预留、对象存储和原子完成（R5、R9）

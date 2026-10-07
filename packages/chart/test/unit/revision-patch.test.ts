@@ -5,9 +5,30 @@ import {
   applyRevisionPatch,
   buildEvidenceFinding,
   freezeDerivedProvenance,
+  freezeDerivedFinding,
+  findingForGenerationJob,
   freezeVisualRevisionInput,
   publicProjectMemoryReferences,
 } from "../../src/index.js";
+
+test("visual findings are frozen, source-bound and checked; logical edits recompute", () => {
+  const source = { id: "evidence", finding: "用户核对的结论" };
+  const frozen = freezeDerivedFinding("revision", source);
+  source.finding = "后来修改";
+  const job = {
+    operation: "edit",
+    baseRevisionId: "revision",
+    editPatch: { title: "标题" },
+    generationAudit: { derivedFinding: frozen },
+  };
+  // Pure visual resolution does not consult spec/summary.
+  assert.equal(findingForGenerationJob(job, {} as FlintSpec, null), "用户核对的结论");
+  assert.throws(() => findingForGenerationJob({ ...job, baseRevisionId: "other" }, {} as FlintSpec, null), /冻结发现/);
+  assert.throws(() => findingForGenerationJob({ ...job, generationAudit: null }, {} as FlintSpec, null), /冻结发现/);
+  assert.throws(() => freezeDerivedFinding("revision", undefined), /可追溯/);
+  frozen.finding = "篡改";
+  assert.throws(() => findingForGenerationJob(job, {} as FlintSpec, null), /冻结发现/);
+});
 
 test("derived jobs inherit isolated source provenance and only public project memory references", () => {
   const source = {

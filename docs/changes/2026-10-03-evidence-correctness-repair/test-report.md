@@ -9,6 +9,22 @@
 
 ## A 批实施验证（新增）
 
+### 2026-10-07 T5 逻辑编辑 API 链路补验
+
+将逻辑编辑集成测试从直接插入 `generationJobs` 改为真实 Fastify `POST /chart-artifacts/:id/revisions` 入队。相同输入与幂等键复用同一个 Job，不同编辑输入复用该键返回 `409 IDEMPOTENCY_CONFLICT`。入队 Job 的 Brief、Metric 和执行来源与源 Revision 一致；Generation Worker 重新执行筛选/聚合，Render Worker 写入新 Revision/Evidence，统计、字段血缘和发现与逻辑编辑结果一致。源 Revision 缺 Brief 时，真实 API 返回 `409 REVISION_PROVENANCE_INCOMPLETE` 且不创建 Job。
+
+完整 `node scripts/test-integration.mjs` 使用隔离 PostgreSQL/MinIO 运行并退出 0：API 14/14、Generation Worker 2/2，内嵌真实预算失败浏览器桌面/移动 2/2；Generation Worker 测试类型、Prettier、定向 ESLint 退出 0。逻辑编辑的 HTTP→两类 Worker→DB/S3 已覆盖。**真实临时故障后的重试仍未验证**；既有“成功后手动改写失败状态再运行 Worker”的用例只能证明已存在 Revision 的重入，不等于真实故障注入。
+
+### 2026-10-06 T5 编辑来源与发现补验
+
+限定[独立复核](./evidence/t5-finding-independent.md)已完成，无新增缺陷；[复现脚本](./evidence/t5-finding-check.mjs)按原字节归档，相对路径应在原t5-edit-finding目录解析。独立实际验证来源变更、JSON往返、缺失/错绑/篡改拒绝及逻辑分支转交新统计；未独立执行DB/S3和真实失败重试。主代理视觉测试从真实API创建Job，逻辑编辑测试直接构造Job后运行两类Worker，不能称逻辑编辑API合同完整验收。T5本轮finding修复与限定验证完成；T6/T7仍另行推进。
+
+本轮补齐TP06的真实API→Generation Worker→Render Worker→DB/S3验证：只改标题时Snapshot、Brief、Metric、TransformPlan、lineage、resultSummary、executionAssembly及完整数据保持来源值。入队后刻意改写来源Evidence的finding，新版本Evidence与HTML仍保留入队时原文，私人偏好正文未扩散。筛选/聚合编辑产生新lineage与resultSummary、重新建立finding，且Brief/Metric保持冻结来源。复制/回滚仍由先前65722ec的回归覆盖。
+
+修复前代码路径会在视觉编辑时调用通用buildEvidenceFinding，未保留人工核对原文。现在API在幂等复用检查之后冻结来源finding与来源身份/SHA-256到generationAudit.derivedFinding，Render三处统一读取并校验。缺失/跨来源/内容篡改拒绝；逻辑编辑继续重算。未增加数据库字段，不代表T6原子提交或T7不可变Evidence已完成。首轮集成执行过程中实现已更新，因此只记录修复后通过，不伪称已取得修复前红灯运行。
+
+验证：Chart离线7/7；完整默认隔离集成API14/14、真实失败态浏览器2/2、Worker2/2（其中新增编辑断言）通过且自然退出；API Console新增说明桌面/移动2/2可见且无横向溢出。API/Generation Worker测试、Render Worker源码、Web类型检查通过；受影响Chart/API chart-routes/Render Worker/Worker测试定向ESLint通过，清理chart-routes四个既有未使用导入。最初从根运行单元命令找不到tsx，改到Chart包目录后正常执行，未安装依赖。固定740文件快照t5-edit-finding供限定独立复核，结论待补。不把这些结果当全项目验收；G6历史性能异常仍保留。
+
 - 原始数据回归：11 项中新增六项失败，旧五项通过；渲染新增两项失败，追加完整数据回归后共三项失败。
 - 数据修复后：15 项通过；之后追加 ISO/日期兼容测试，最终结果见后续复验记录。
 - contracts、generation 测试通过；generation 24 项通过。

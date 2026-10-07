@@ -32,7 +32,7 @@ import {
   type ValidationReport,
 } from "@langreport/contracts";
 import {
-  buildEvidenceFinding,
+  findingForGenerationJob,
   createDerivedRevision,
   createInitialRevision,
   publicProjectMemoryReferences,
@@ -415,7 +415,8 @@ async function ensureStaticHtmlOutput(input: {
       revisionId: input.revision.id,
       revision: input.revision.revision,
       title: input.spec.chartSpec.title,
-      finding: buildEvidenceFinding(
+      finding: findingForGenerationJob(
+        input.job,
         input.spec,
         readResultSummary(input.revision.resultSummary ?? input.job.resultSummary),
       ),
@@ -468,7 +469,7 @@ function validateStaticHtmlCandidate(input: {
       revisionId: "pending-revision",
       revision: 0,
       title: input.spec.chartSpec.title,
-      finding: buildEvidenceFinding(input.spec, input.resultSummary),
+      finding: findingForGenerationJob(input.job, input.spec, input.resultSummary),
       snapshotId: input.job.snapshotId,
       metricDefinition: input.job.metricDefinitionSnapshot,
       theme: input.spec.theme,
@@ -488,7 +489,7 @@ async function persistEvidenceBlock(input: {
 }): Promise<void> {
   const warnings = input.validation.issues.filter((issue) => issue.severity === "warning");
   const resultSummary = readResultSummary(input.revision.resultSummary ?? input.job.resultSummary);
-  const finding = buildEvidenceFinding(input.spec, resultSummary);
+  const finding = findingForGenerationJob(input.job, input.spec, resultSummary);
   const [existingForJob] = await db
     .select({ id: evidenceBlocks.id })
     .from(evidenceBlocks)

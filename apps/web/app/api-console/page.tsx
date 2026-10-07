@@ -2049,8 +2049,8 @@ export default function ApiConsolePage() {
                 </div>
                 {selectedEntry?.operation.operationId === "createChartRevisionCommand" && (
                   <p className={styles.contractHint}>
-                    编辑、复制与回滚继承来源版本的分析问题、指标口径与执行快照；仅复制公开项目记忆引用。来源缺失返回 409
-                    REVISION_PROVENANCE_INCOMPLETE，请重新确认输入后生成。
+                    编辑、复制与回滚继承来源版本的分析问题、指标口径与执行快照；仅复制公开项目记忆引用。纯视觉编辑冻结原发现，逻辑编辑重新计算。来源缺失返回
+                    409 REVISION_PROVENANCE_INCOMPLETE，请重新确认输入后生成。
                   </p>
                 )}
                 {parameterLocations.map(

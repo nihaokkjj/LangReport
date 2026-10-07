@@ -147,6 +147,45 @@ export function freezeVisualRevisionInput(
   });
 }
 
+export function freezeDerivedFinding(sourceRevisionId: string, evidence: { id: string; finding: string } | undefined) {
+  if (!evidence || !nonempty(evidence.finding))
+    throw new ChartServiceError(
+      "REVISION_PROVENANCE_INCOMPLETE",
+      "来源版本缺少可追溯的发现，请重新确认输入后生成",
+      409,
+    );
+  return {
+    sourceRevisionId,
+    sourceEvidenceId: evidence.id,
+    finding: evidence.finding,
+    contentHash: createHash("sha256").update(evidence.finding).digest("hex"),
+  };
+}
+
+export function findingForGenerationJob(
+  job: { operation: string; baseRevisionId: string | null; editPatch: unknown; generationAudit: unknown },
+  spec: FlintSpec,
+  summary: ResultSummary | null,
+): string {
+  const patch = record(job.editPatch);
+  if (job.operation !== "edit" || !patch || patch.transformPlan !== undefined || patch.encodings !== undefined)
+    return buildEvidenceFinding(spec, summary);
+  const frozen = record(record(job.generationAudit)?.derivedFinding);
+  if (
+    !frozen ||
+    frozen.sourceRevisionId !== job.baseRevisionId ||
+    !nonempty(frozen.sourceEvidenceId) ||
+    !nonempty(frozen.finding) ||
+    createHash("sha256").update(frozen.finding).digest("hex") !== frozen.contentHash
+  )
+    throw new ChartServiceError(
+      "REVISION_PROVENANCE_INCOMPLETE",
+      "视觉编辑缺少有效的冻结发现，不能重新猜测来源结论",
+      409,
+    );
+  return frozen.finding;
+}
+
 export async function getProjectAccess(projectId: string, userId: string): Promise<ProjectAccess> {
   const [project] = await db
     .select({ id: projects.id, workspaceId: projects.workspaceId })
