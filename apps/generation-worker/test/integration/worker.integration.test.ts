@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import {
   auditEvents,
@@ -323,6 +323,24 @@ test("real generation and render workers persist plugin usage and historical sna
       .where(eq(chartRevisions.generationJobId, job.id))
       .limit(1);
     assert.ok(revision);
+    const manifest = renderedJob.candidateOutputManifest as {
+      revisionId: string;
+      attemptId: string;
+      validation: { status: string };
+      outputs: Array<{ format: string; key: string; sha256: string; byteLength: number; validation: string }>;
+    };
+    assert.equal(manifest.revisionId, revision.id);
+    assert.equal(manifest.validation.status, "passed");
+    assert.equal(manifest.outputs.length, 4);
+    assert.deepEqual(manifest.outputs.map((entry) => entry.format).sort(), ["html", "png", "svg", "vegaLite"]);
+    for (const entry of manifest.outputs) {
+      const bytes = await getObject(entry.key);
+      assert.equal(entry.key, outputs[entry.format as keyof typeof outputs]);
+      assert.equal(entry.byteLength, bytes.length);
+      assert.equal(entry.sha256, `sha256:${createHash("sha256").update(bytes).digest("hex")}`);
+      assert.equal(entry.validation, "passed");
+      assert.match(entry.key, new RegExp(`${revision.id}\\.${manifest.attemptId}\\.`));
+    }
     const revisionPayload = JSON.stringify(revision);
     assert.equal(revisionPayload.includes(privatePreference.statement), false);
     assert.equal(revisionPayload.includes(privatePreference.id), false);
@@ -513,7 +531,7 @@ test("real generation and render workers persist plugin usage and historical sna
       1,
     );
 
-    // A retry after Revision insertion must publish HTML under a new key.
+    // A corrupted HTML candidate must not create a Revision; retry keeps the reserved identity.
     const postRevisionApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
     let postRevisionJobId: string;
     let failedHtmlKey: string | undefined;
@@ -534,20 +552,21 @@ test("real generation and render workers persist plugin usage and historical sna
       await processRenderJob(postRevisionJobId, async (output) => {
         if (output.contentType === "text/html; charset=utf-8") {
           failedHtmlKey = output.key;
-          await putObject(output);
-          throw new Error("TRANSIENT_HTML_STORE_UNAVAILABLE");
+          await putObject({ ...output, body: Buffer.from("<!doctype html><html>corrupted</html>") });
+          return;
         }
         await putObject(output);
       });
       const [failed] = await db.select().from(generationJobs).where(eq(generationJobs.id, postRevisionJobId));
       assert.equal(failed.status, "failed");
       assert.equal(failed.errorCode, "RENDER_FAILED");
+      assert.equal(validationRecordSchema.parse(failed.renderValidation).errors[0]?.code, "RENDER_OUTPUT_MISMATCH");
       const [partialRevision] = await db
         .select()
         .from(chartRevisions)
         .where(eq(chartRevisions.generationJobId, postRevisionJobId));
-      assert.ok(partialRevision);
-      assert.equal((partialRevision.outputObjects as { html: string }).html, failedHtmlKey);
+      assert.equal(partialRevision, undefined);
+      assert.equal(failed.candidateOutputManifest, null);
       assert.ok(failedHtmlKey);
       const failedHtmlBytes = await getObject(failedHtmlKey);
       const retried = await postRevisionApi.inject({
@@ -555,7 +574,8 @@ test("real generation and render workers persist plugin usage and historical sna
         url: `/api/v1/generation-jobs/${postRevisionJobId}/retry`,
       });
       assert.equal(retried.statusCode, 202, retried.body);
-      assert.equal(retried.json().job.status, "rendering");
+      assert.equal(retried.json().job.status, "queued");
+      await processGenerationJob(postRevisionJobId);
       await processRenderJob(postRevisionJobId);
       const [recoveredRevision] = await db
         .select()
@@ -563,7 +583,7 @@ test("real generation and render workers persist plugin usage and historical sna
         .where(eq(chartRevisions.generationJobId, postRevisionJobId));
       const [recoveredJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, postRevisionJobId));
       assert.equal(recoveredJob.status, "succeeded");
-      assert.equal(recoveredRevision.id, partialRevision.id);
+      assert.equal(recoveredRevision.id, failed.candidateRevisionId);
       const [recoveredEvidence] = await db
         .select()
         .from(evidenceBlocks)
@@ -826,6 +846,8 @@ test("real generation and render workers persist plugin usage and historical sna
       "仅看华东",
     );
 
+    const preRecoveryHtmlKey = (renderedJob.outputs as { html: string }).html;
+    const preRecoveryHtmlBytes = await getObject(preRecoveryHtmlKey);
     await db
       .update(generationJobs)
       .set({ status: "failed", errorCode: "RENDER_FAILED", errorMessage: "simulated post-revision failure" })
@@ -834,6 +856,32 @@ test("real generation and render workers persist plugin usage and historical sna
     await processRenderJob(job.id);
     const [recoveredJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id)).limit(1);
     assert.equal(recoveredJob.status, "succeeded");
+    const recoveredHtmlKey = (recoveredJob.outputs as { html: string }).html;
+    assert.notEqual(recoveredHtmlKey, preRecoveryHtmlKey);
+    assert.deepEqual(await getObject(preRecoveryHtmlKey), preRecoveryHtmlBytes);
+    const recoveredManifest = recoveredJob.candidateOutputManifest as {
+      recovery: boolean;
+      outputs: Array<{ format: string; key: string }>;
+    };
+    assert.equal(recoveredManifest.recovery, true);
+    assert.equal(recoveredManifest.outputs.find((entry) => entry.format === "html")?.key, recoveredHtmlKey);
+    const recoveredPngKey = (recoveredJob.outputs as { png: string }).png;
+    const originalPngBytes = await getObject(recoveredPngKey);
+    await db.update(generationJobs).set({ status: "rendering" }).where(eq(generationJobs.id, job.id));
+    try {
+      await putObject({ key: recoveredPngKey, body: Buffer.from("corrupted-png"), contentType: "image/png" });
+      await processRenderJob(job.id);
+      const [corruptRecovery] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id));
+      assert.equal(corruptRecovery.status, "failed");
+      assert.equal(corruptRecovery.errorCode, "RENDER_FAILED");
+      assert.equal(
+        validationRecordSchema.parse(corruptRecovery.renderValidation).errors[0]?.code,
+        "RENDER_OUTPUT_MISMATCH",
+      );
+      assert.deepEqual(corruptRecovery.candidateOutputManifest, recoveredJob.candidateOutputManifest);
+    } finally {
+      await putObject({ key: recoveredPngKey, body: originalPngBytes, contentType: "image/png" });
+    }
     assert.equal(
       (
         await db

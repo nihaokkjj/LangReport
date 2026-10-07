@@ -5,9 +5,15 @@
 - 创建时间：2026-10-03
 - 更新时间：2026-10-07
 - 业务测试状态：`PARTIAL`；下方保留原文档阶段结果，不代表当前未修改代码。
-- 执行角色：owner 自测；独立角色完成一次冻结快照的只读代码复核，未完成最终独立测试。
+- 执行角色：owner 自测；独立角色完成最终冻结快照的限定只读代码复核，未独立重跑集成测试。
 
 ## A 批实施验证（新增）
+
+### 2026-10-07 T6 四输出候选清单（限定结果）
+
+0033 迁移为 Generation Job 增加 `candidateOutputManifest`。新渲染在预留 Revision 身份后，先生成带目标 UUID/编号的静态 HTML，再把 Vega-Lite JSON、SVG、PNG、HTML 写入带目标 UUID、尝试 UUID 与内容哈希前缀的独立对象键；四对象逐一从 MinIO 读回，与待发布字节比较，通过后保存格式、key、SHA-256、字节数、Content-Type、渲染器版本与校验状态。只有保存完整候选清单后才创建 Revision，Revision 的 `outputObjects` 一开始就包含四个实际可读键。新尝试先清空旧清单，避免重试沿用上次候选。已有 Revision 的历史恢复分支重新写 HTML 并重建可读性清单，不把新 HTML 键与旧清单混用。
+
+真实隔离 PostgreSQL/MinIO 集成首轮 API 14/14、浏览器桌面/移动 2/2 通过，Worker 因对象读回失配的新 Job 错误码不在既有可重试集合而失败；修正为 `RENDER_FAILED` 保持 API 重试合同，具体 `RENDER_OUTPUT_MISMATCH` 留在 Render Validation。最终完整集成自然退出 0：API 14/14、浏览器 2/2、Worker 2/2。测试核对四对象实际字节、长度和 SHA-256；篡改 HTML 后 Job 失败且无 Revision、清单为空，真实 API 重试后使用同一预留 Revision 身份和新候选键成功。已有 Revision 恢复断言确认新 HTML 键不覆盖旧对象，恢复清单指向新键；篡改既有 PNG 后，恢复拒绝旧对象且保留原清单。独立只读复核先发现恢复分支对旧 PNG/SVG/Vega 重新计算哈希会掩盖篡改，修正为与原清单的键、哈希和字节数比较；[最终限定复核](./evidence/t6-manifest-independent.md)未发现新的 P1/P2，复核未重跑集成。历史无清单的恢复仅标记 `readable`，不能据此证明旧内容未被篡改。此结果尚不表示 Revision/Evidence/Job 原子提交、候选清理或旧 Worker 业务写入 fencing 已完成。
 
 ### 2026-10-07 T6 历史版本计数器迁移补验
 

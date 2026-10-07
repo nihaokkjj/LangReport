@@ -423,6 +423,7 @@ export const generationJobs = pgTable(
     candidateArtifactId: uuid("candidate_artifact_id"),
     candidateRevisionId: uuid("candidate_revision_id"),
     candidateRevisionNumber: integer("candidate_revision_number"),
+    candidateOutputManifest: jsonb("candidate_output_manifest"),
     repairCount: integer("repair_count").notNull().default(0),
     attemptCount: integer("attempt_count").notNull().default(0),
     leaseOwner: text("lease_owner"),

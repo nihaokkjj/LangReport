@@ -18,6 +18,7 @@ import {
   updateGenerationJobUnderLease,
   withAdvisoryLock,
   type GenerationJobLease,
+  type ReservedRevisionIdentity,
 } from "@langreport/db";
 import {
   flintSpecSchema,
@@ -55,6 +56,13 @@ const pollIntervalMs = Number(process.env.RENDER_POLL_INTERVAL_MS ?? 1000);
 const leaseDurationMs = Number(process.env.GENERATION_JOB_LEASE_MS ?? 30_000);
 const workerInstanceId = process.env.RENDER_WORKER_ID?.trim() || `${workerName}:${randomUUID()}`;
 let polling = false;
+
+class CandidateOutputMismatchError extends Error {
+  constructor(format: string) {
+    super(`候选输出 ${format} 读回内容与待发布字节不一致`);
+    this.name = "CandidateOutputMismatchError";
+  }
+}
 
 export async function processRenderJob(jobId: string, writeOutput: typeof putObject = putObject): Promise<void> {
   await ensureMemoryRevocationReady();
@@ -145,6 +153,12 @@ async function processRenderJobLocked(
         });
         return;
       }
+      const recoveryManifest = await manifestForRecoveredRevision(
+        ensured.revision,
+        ensured.html,
+        renderValidation,
+        record.job.candidateOutputManifest,
+      );
       await assertGenerationJobLease(lease);
       await persistEvidenceBlock({ job: record.job, revision: ensured.revision, spec, validation });
       await setStatus(
@@ -153,6 +167,7 @@ async function processRenderJobLocked(
         "succeeded",
         {
           outputs: ensured.revision.outputObjects,
+          candidateOutputManifest: recoveryManifest,
           vegaLiteSpec: ensured.revision.vegaLiteSpec,
           ...(planValidation ? { planValidation } : {}),
           renderValidation,
@@ -164,6 +179,11 @@ async function processRenderJobLocked(
       );
       return;
     }
+    const clearedCandidateManifest = await updateGenerationJobUnderLease({
+      lease,
+      values: { candidateOutputManifest: null },
+    });
+    if (!clearedCandidateManifest) throw new GenerationJobLeaseLostError(jobId);
     const validation = validationReportSchema.safeParse(record.job.validation);
     const planValidation = validation.success
       ? readPlanValidation(record.job.planValidation, validation.data)
@@ -242,7 +262,15 @@ async function processRenderJobLocked(
       });
       return;
     }
-    const htmlPreflight = validateStaticHtmlCandidate({ job: record.job, spec, svg: rendered.svg, resultSummary });
+    const reservedRevision = await reserveGenerationRevisionIdentity(lease);
+    const htmlCandidate = buildStaticHtmlCandidate({
+      job: record.job,
+      spec,
+      svg: rendered.svg,
+      resultSummary,
+      reservedRevision,
+    });
+    const htmlPreflight = htmlCandidate.validation;
     if (htmlPreflight.status !== "passed") {
       const renderValidation = mergeRenderValidation(baseRenderValidation, htmlPreflight);
       await failRenderJob(jobId, lease, "RENDER_VALIDATION_FAILED", "固定 Revision HTML 产物未通过必要校验", {
@@ -252,7 +280,7 @@ async function processRenderJobLocked(
       });
       return;
     }
-    const reservedRevision = await reserveGenerationRevisionIdentity(lease);
+    const renderValidation = mergeRenderValidation(baseRenderValidation, htmlPreflight);
     const outputBase = {
       workspaceId: record.workspaceId,
       projectId: record.job.projectId,
@@ -260,18 +288,64 @@ async function processRenderJobLocked(
     };
     // Each lease attempt writes private candidate keys. A late worker cannot overwrite
     // another attempt's validated outputs for the same Job.
-    const candidateName = `${reservedRevision.revisionId}.${randomUUID()}`;
-    const vegaLiteKey = renderOutputObjectKey({ ...outputBase, filename: `${candidateName}.vega-lite.json` });
-    const svgKey = renderOutputObjectKey({ ...outputBase, filename: `${candidateName}.svg` });
-    const pngKey = renderOutputObjectKey({ ...outputBase, filename: `${candidateName}.png` });
-    const htmlKey = renderOutputObjectKey({ ...outputBase, filename: `${candidateName}.html` });
-    await writeOutput({
-      key: vegaLiteKey,
-      body: JSON.stringify(rendered.vegaLiteSpec),
-      contentType: "application/json",
+    const attemptId = randomUUID();
+    const candidateName = `${reservedRevision.revisionId}.${attemptId}`;
+    const candidatePayloads = [
+      {
+        format: "vegaLite",
+        extension: "vega-lite.json",
+        body: Buffer.from(JSON.stringify(rendered.vegaLiteSpec)),
+        contentType: "application/json",
+      },
+      { format: "svg", extension: "svg", body: Buffer.from(rendered.svg), contentType: "image/svg+xml" },
+      { format: "png", extension: "png", body: rendered.png, contentType: "image/png" },
+      {
+        format: "html",
+        extension: "html",
+        body: Buffer.from(htmlCandidate.html),
+        contentType: "text/html; charset=utf-8",
+      },
+    ] as const;
+    const candidateOutputs = candidatePayloads.map((output) => ({
+      ...output,
+      key: renderOutputObjectKey({
+        ...outputBase,
+        filename: `${candidateName}.${createHash("sha256").update(output.body).digest("hex").slice(0, 16)}.${output.extension}`,
+      }),
+    }));
+    for (const output of candidateOutputs) {
+      await writeOutput({ key: output.key, body: output.body, contentType: output.contentType });
+    }
+    const manifestEntries = [];
+    for (const output of candidateOutputs) {
+      const stored = await getObject(output.key);
+      if (!stored.equals(output.body)) throw new CandidateOutputMismatchError(output.format);
+      manifestEntries.push({
+        format: output.format,
+        key: output.key,
+        sha256: `sha256:${createHash("sha256").update(stored).digest("hex")}`,
+        byteLength: stored.length,
+        contentType: output.contentType,
+        rendererVersion: RENDERER_VERSION,
+        validation: "passed" as const,
+      });
+    }
+    const candidateOutputManifest = {
+      revisionId: reservedRevision.revisionId,
+      attemptId,
+      validation: renderValidation,
+      outputs: manifestEntries,
+    };
+    const savedManifest = await updateGenerationJobUnderLease({
+      lease,
+      values: { candidateOutputManifest },
     });
-    await writeOutput({ key: svgKey, body: rendered.svg, contentType: "image/svg+xml" });
-    await writeOutput({ key: pngKey, body: rendered.png, contentType: "image/png" });
+    if (!savedManifest) throw new GenerationJobLeaseLostError(jobId);
+    const [vegaLiteOutput, svgOutput, pngOutput, htmlOutput] = candidateOutputs;
+    const vegaLiteKey = vegaLiteOutput.key;
+    const svgKey = svgOutput.key;
+    const pngKey = pngOutput.key;
+    const htmlKey = htmlOutput.key;
 
     const outputObjects = {
       vegaLite: vegaLiteKey,
@@ -341,26 +415,8 @@ async function processRenderJobLocked(
             outputObjects,
             reservedRevision,
           });
-    const ensured = await ensureStaticHtmlOutput({
-      job: record.job,
-      revision,
-      spec,
-      svg: rendered.svg,
-      htmlKey,
-      workspaceId: record.workspaceId,
-      writeOutput,
-    });
-    const renderValidation = mergeRenderValidation(baseRenderValidation, ensured.htmlValidation);
-    if (renderValidation.status !== "passed") {
-      await failRenderJob(jobId, lease, "RENDER_VALIDATION_FAILED", "固定 Revision 导出产物未通过必要校验", {
-        planValidation,
-        renderValidation,
-        generationAudit: withValidationAudit(record.job.generationAudit, { planValidation, renderValidation }),
-      });
-      return;
-    }
     await assertGenerationJobLease(lease);
-    await persistEvidenceBlock({ job: record.job, revision: ensured.revision, spec, validation: validation.data });
+    await persistEvidenceBlock({ job: record.job, revision, spec, validation: validation.data });
     await appendAssistantMessage(
       record.job.conversationId,
       record.job.operation === "edit"
@@ -373,7 +429,7 @@ async function processRenderJobLocked(
       lease,
       "succeeded",
       {
-        outputs: ensured.revision.outputObjects,
+        outputs: revision.outputObjects,
         vegaLiteSpec: rendered.vegaLiteSpec,
         planValidation,
         renderValidation,
@@ -401,6 +457,14 @@ async function processRenderJobLocked(
       });
       return;
     }
+    if (error instanceof CandidateOutputMismatchError) {
+      const renderValidation = failedRenderValidation("RENDER_OUTPUT_MISMATCH", error.message);
+      await failRenderJob(jobId, lease, "RENDER_FAILED", error.message, {
+        renderValidation,
+        generationAudit: withValidationAudit(record.job.generationAudit, { renderValidation }),
+      });
+      return;
+    }
     const message = error instanceof Error ? error.message : "渲染失败";
     const renderValidation = failedRenderValidation("RENDER_FAILED", message);
     await failRenderJob(jobId, lease, "RENDER_FAILED", message, {
@@ -418,7 +482,7 @@ async function ensureStaticHtmlOutput(input: {
   svg?: string;
   htmlKey?: string;
   writeOutput: typeof putObject;
-}): Promise<{ revision: typeof chartRevisions.$inferSelect; htmlValidation: ValidationRecord }> {
+}): Promise<{ revision: typeof chartRevisions.$inferSelect; htmlValidation: ValidationRecord; html: string | null }> {
   const outputObjects = isRecord(input.revision.outputObjects) ? { ...input.revision.outputObjects } : {};
   const svgKey = typeof outputObjects.svg === "string" ? outputObjects.svg : undefined;
   const svg = input.svg ?? (svgKey ? (await getObject(svgKey)).toString("utf8") : "");
@@ -452,6 +516,7 @@ async function ensureStaticHtmlOutput(input: {
   } catch (error) {
     return {
       revision: input.revision,
+      html: null,
       htmlValidation: failedRenderValidation(
         "RENDER_HTML_INVALID",
         error instanceof Error ? error.message : "静态 HTML 生成失败",
@@ -459,7 +524,7 @@ async function ensureStaticHtmlOutput(input: {
     };
   }
   const htmlValidation = validateStaticSvgHtml(html);
-  if (htmlValidation.status !== "passed") return { revision: input.revision, htmlValidation };
+  if (htmlValidation.status !== "passed") return { revision: input.revision, htmlValidation, html: null };
   await input.writeOutput({ key: htmlKey, body: html, contentType: "text/html; charset=utf-8" });
   const nextOutputObjects = { ...outputObjects, html: htmlKey };
   const [revision] = await db
@@ -468,7 +533,67 @@ async function ensureStaticHtmlOutput(input: {
     .where(eq(chartRevisions.id, input.revision.id))
     .returning();
   if (!revision) throw new Error("固定 Revision 不存在，无法保存 HTML 输出");
-  return { revision, htmlValidation };
+  return { revision, htmlValidation, html };
+}
+
+async function manifestForRecoveredRevision(
+  revision: typeof chartRevisions.$inferSelect,
+  expectedHtml: string | null,
+  validation: ValidationRecord,
+  previousManifest: unknown,
+) {
+  const previous = readPreviousOutputManifest(previousManifest, revision.id);
+  const outputs = isRecord(revision.outputObjects) ? revision.outputObjects : {};
+  const manifestEntries = [];
+  for (const format of ["vegaLite", "svg", "png", "html"] as const) {
+    const key = outputs[format];
+    if (typeof key !== "string") throw new CandidateOutputMismatchError(format);
+    const stored = await getObject(key);
+    if (stored.length === 0 || (format === "html" && (!expectedHtml || !stored.equals(Buffer.from(expectedHtml)))))
+      throw new CandidateOutputMismatchError(format);
+    const digest = `sha256:${createHash("sha256").update(stored).digest("hex")}`;
+    if (previous && format !== "html") {
+      const expected = previous.find((entry) => entry.format === format);
+      if (!expected || expected.key !== key || expected.sha256 !== digest || expected.byteLength !== stored.length)
+        throw new CandidateOutputMismatchError(format);
+    }
+    manifestEntries.push({
+      format,
+      key,
+      sha256: digest,
+      byteLength: stored.length,
+      rendererVersion: RENDERER_VERSION,
+      validation: "readable",
+    });
+  }
+  return { revisionId: revision.id, recovery: true, validation, outputs: manifestEntries };
+}
+
+function readPreviousOutputManifest(
+  value: unknown,
+  revisionId: string,
+): Array<{
+  format: string;
+  key: string;
+  sha256: string;
+  byteLength: number;
+}> | null {
+  if (value === null || value === undefined) return null;
+  if (!isRecord(value) || value.revisionId !== revisionId || !Array.isArray(value.outputs))
+    throw new CandidateOutputMismatchError("manifest");
+  const entries = value.outputs;
+  if (
+    !entries.every(
+      (entry) =>
+        isRecord(entry) &&
+        typeof entry.format === "string" &&
+        typeof entry.key === "string" &&
+        typeof entry.sha256 === "string" &&
+        typeof entry.byteLength === "number",
+    )
+  )
+    throw new CandidateOutputMismatchError("manifest");
+  return entries;
 }
 
 function mergeRenderValidation(base: ValidationRecord, html: ValidationRecord): ValidationRecord {
@@ -481,17 +606,18 @@ function mergeRenderValidation(base: ValidationRecord, html: ValidationRecord): 
   };
 }
 
-function validateStaticHtmlCandidate(input: {
+function buildStaticHtmlCandidate(input: {
   job: typeof generationJobs.$inferSelect;
   spec: FlintSpec;
   svg: string;
   resultSummary: ResultSummary;
-}): ValidationRecord {
+  reservedRevision: ReservedRevisionIdentity;
+}): { html: string; validation: ValidationRecord } {
   try {
     const html = createStaticSvgHtml({
       svg: input.svg,
-      revisionId: "pending-revision",
-      revision: 0,
+      revisionId: input.reservedRevision.revisionId,
+      revision: input.reservedRevision.revisionNumber,
       title: input.spec.chartSpec.title,
       finding: findingForGenerationJob(input.job, input.spec, input.resultSummary),
       snapshotId: input.job.snapshotId,
@@ -499,9 +625,15 @@ function validateStaticHtmlCandidate(input: {
       theme: input.spec.theme,
       themeVersion: input.spec.themeVersion,
     });
-    return validateStaticSvgHtml(html);
+    return { html, validation: validateStaticSvgHtml(html) };
   } catch (error) {
-    return failedRenderValidation("RENDER_HTML_INVALID", error instanceof Error ? error.message : "静态 HTML 生成失败");
+    return {
+      html: "",
+      validation: failedRenderValidation(
+        "RENDER_HTML_INVALID",
+        error instanceof Error ? error.message : "静态 HTML 生成失败",
+      ),
+    };
   }
 }
 
