@@ -1,15 +1,12 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import {
   GenerationJobLeaseLostError,
   assertGenerationJobLease,
   chartRevisions,
   claimGenerationJobLease,
-  conversationMessages,
-  conversations,
   db,
   dataAssets,
-  evidenceBlocks,
   generationJobs,
   projects,
   recoverExpiredGenerationJobLeases,
@@ -33,12 +30,7 @@ import {
   type ValidationRecord,
   type ValidationReport,
 } from "@langreport/contracts";
-import {
-  findingForGenerationJob,
-  createDerivedRevision,
-  createInitialRevision,
-  publicProjectMemoryReferences,
-} from "@langreport/chart";
+import { findingForGenerationJob, publicProjectMemoryReferences } from "@langreport/chart";
 import {
   ChartPointBudgetError,
   createStaticSvgHtml,
@@ -50,6 +42,7 @@ import {
 import { buildPluginSnapshot, PluginServiceError } from "@langreport/plugins";
 import { getObject, putObject, renderOutputObjectKey } from "@langreport/storage";
 import { ensureMemoryRevocationReady } from "@langreport/memory";
+import { commitCompletedRevision, readCommittedRevision } from "./publication.js";
 
 const workerName = "render-worker";
 const pollIntervalMs = Number(process.env.RENDER_POLL_INTERVAL_MS ?? 1000);
@@ -83,6 +76,7 @@ export async function processRenderJob(jobId: string, writeOutput: typeof putObj
         console.warn(`${workerName} lease lost`, { jobId, fencingToken: lease.fencingToken });
         return;
       }
+      if (await readCommittedRevision(jobId)) return;
       const message = error instanceof Error ? error.message : "渲染失败";
       try {
         await failRenderJob(jobId, lease, "RENDER_FAILED", message);
@@ -124,60 +118,7 @@ async function processRenderJobLocked(
       .where(eq(chartRevisions.generationJobId, record.job.id))
       .limit(1);
     if (existingRevision) {
-      const spec = flintSpecSchema.parse(existingRevision.flintSpec);
-      const validation = validationReportSchema.parse(existingRevision.validation);
-      const storedPlanValidation = readPlanValidation(record.job.planValidation, validation);
-      const planValidation =
-        storedPlanValidation?.status === "passed" ? storedPlanValidation : readPlanValidation(undefined, validation);
-      const storedRenderValidation = readRenderValidation(record.job.renderValidation);
-      const baseRenderValidation =
-        storedRenderValidation?.status === "passed" ? storedRenderValidation : legacyRenderValidation();
-      const ensured = await ensureStaticHtmlOutput({
-        job: record.job,
-        revision: existingRevision,
-        spec,
-        workspaceId: record.workspaceId,
-        htmlKey: renderOutputObjectKey({
-          workspaceId: record.workspaceId,
-          projectId: record.job.projectId,
-          assetId: record.job.dataAssetId,
-          filename: `${jobId}.${randomUUID()}.html`,
-        }),
-        writeOutput,
-      });
-      const renderValidation = mergeRenderValidation(baseRenderValidation, ensured.htmlValidation);
-      if (renderValidation.status !== "passed") {
-        await failRenderJob(jobId, lease, "RENDER_VALIDATION_FAILED", "固定 Revision 导出产物未通过必要校验", {
-          renderValidation,
-          generationAudit: withValidationAudit(record.job.generationAudit, { renderValidation }),
-        });
-        return;
-      }
-      const recoveryManifest = await manifestForRecoveredRevision(
-        ensured.revision,
-        ensured.html,
-        renderValidation,
-        record.job.candidateOutputManifest,
-      );
-      await assertGenerationJobLease(lease);
-      await persistEvidenceBlock({ job: record.job, revision: ensured.revision, spec, validation });
-      await setStatus(
-        jobId,
-        lease,
-        "succeeded",
-        {
-          outputs: ensured.revision.outputObjects,
-          candidateOutputManifest: recoveryManifest,
-          vegaLiteSpec: ensured.revision.vegaLiteSpec,
-          ...(planValidation ? { planValidation } : {}),
-          renderValidation,
-          generationAudit: withValidationAudit(record.job.generationAudit, { planValidation, renderValidation }),
-          errorCode: null,
-          errorMessage: null,
-        },
-        true,
-      );
-      return;
+      throw new Error("Generation Job 已有 Chart Revision 但尚未成功，拒绝修改既有版本");
     }
     const clearedCandidateManifest = await updateGenerationJobUnderLease({
       lease,
@@ -355,92 +296,34 @@ async function processRenderJobLocked(
       flintVersion: FLINT_VERSION,
       rendererVersion: RENDERER_VERSION,
     };
-    await assertGenerationJobLease(lease);
-    const revision =
-      record.job.operation === "edit" && record.job.artifactId && record.job.baseRevisionId
-        ? await createDerivedRevision({
-            projectId: record.job.projectId,
-            artifactId: record.job.artifactId,
-            sourceRevisionId: record.job.baseRevisionId,
-            createdBy: record.job.createdBy,
-            changeReason: "edit",
-            generationJobId: jobId,
-            transformPlan: record.job.transformPlan ?? undefined,
-            fieldLineage: record.job.fieldLineage ?? undefined,
-            flintSpec: spec,
-            themeSnapshot: {
-              id: spec.theme,
-              preset: spec.theme,
-              version: spec.themeVersion,
-              config: spec.themeConfig,
-              source: record.job.themeSource,
-              themeRef: parsedPluginContext.success ? parsedPluginContext.data.themeRef : null,
-            },
-            vegaLiteSpec: rendered.vegaLiteSpec,
-            validation: validation.data,
-            analysisBriefSnapshot: record.job.analysisBriefSnapshot,
-            metricDefinitionSnapshot: record.job.metricDefinitionSnapshot,
-            memorySnapshot: memorySnapshotForRevision(record.job.memoryContext),
-            pluginSnapshot,
-            executionAssembly: record.job.executionAssembly,
-            resultSummary,
-            outputObjects,
-            reservedRevision,
-          })
-        : await createInitialRevision({
-            jobId,
-            projectId: record.job.projectId,
-            createdBy: record.job.createdBy,
-            name: readTitle(spec),
-            snapshotId: record.job.snapshotId,
-            transformPlan: record.job.transformPlan ?? {},
-            fieldLineage: record.job.fieldLineage ?? [],
-            flintSpec: spec,
-            themeSnapshot: {
-              id: spec.theme,
-              preset: spec.theme,
-              version: spec.themeVersion,
-              config: spec.themeConfig,
-              source: record.job.themeSource,
-              themeRef: parsedPluginContext.success ? parsedPluginContext.data.themeRef : null,
-            },
-            vegaLiteSpec: rendered.vegaLiteSpec,
-            validation: validation.data,
-            analysisBriefSnapshot: record.job.analysisBriefSnapshot,
-            metricDefinitionSnapshot: record.job.metricDefinitionSnapshot,
-            memorySnapshot: memorySnapshotForRevision(record.job.memoryContext),
-            pluginSnapshot,
-            executionAssembly: record.job.executionAssembly,
-            resultSummary,
-            outputObjects,
-            reservedRevision,
-          });
-    await assertGenerationJobLease(lease);
-    await persistEvidenceBlock({ job: record.job, revision, spec, validation: validation.data });
-    await appendAssistantMessage(
-      record.job.conversationId,
-      record.job.operation === "edit"
-        ? `已创建新的 Draft Chart Revision R${revision.revision}。它保留原始 Data Snapshot 和历史版本，可从结果卡片继续编辑或提交审核。`
-        : `已生成一个 Draft Evidence Block（Revision R${revision.revision}）。图表、发现、指标口径、数据来源和校验记录已绑定到同一个 Data Snapshot。`,
-    );
     const finalGenerationAudit = withValidationAudit(record.job.generationAudit, { planValidation, renderValidation });
-    await setStatus(
-      jobId,
-      lease,
-      "succeeded",
-      {
-        outputs: revision.outputObjects,
-        vegaLiteSpec: rendered.vegaLiteSpec,
-        planValidation,
-        renderValidation,
-        generationAudit: finalGenerationAudit,
-        errorCode: null,
-        errorMessage: null,
+    const revision = await commitCompletedRevision(lease, {
+      identity: reservedRevision,
+      inputFingerprint: record.job.inputFingerprint,
+      spec,
+      validation: validation.data,
+      planValidation,
+      renderValidation,
+      resultSummary,
+      vegaLiteSpec: rendered.vegaLiteSpec,
+      pluginSnapshot,
+      memorySnapshot: memorySnapshotForRevision(record.job.memoryContext),
+      themeSnapshot: {
+        id: spec.theme,
+        preset: spec.theme,
+        version: spec.themeVersion,
+        config: spec.themeConfig,
+        source: record.job.themeSource,
+        themeRef: parsedPluginContext.success ? parsedPluginContext.data.themeRef : null,
       },
-      true,
-    );
+      outputObjects,
+      outputManifest: candidateOutputManifest,
+      generationAudit: finalGenerationAudit,
+    });
     console.log(`${workerName} completed`, { jobId, revisionId: revision.id });
   } catch (error) {
+    // A lost COMMIT response is not evidence of rollback. Query the authoritative Job first.
+    if (await readCommittedRevision(jobId)) return;
     if (error instanceof ChartPointBudgetError) {
       const renderValidation = failedRenderValidation(error.code, error.message);
       await failRenderJob(jobId, lease, error.code, error.message, {
@@ -472,128 +355,6 @@ async function processRenderJobLocked(
       generationAudit: withValidationAudit(record.job.generationAudit, { renderValidation }),
     });
   }
-}
-
-async function ensureStaticHtmlOutput(input: {
-  job: typeof generationJobs.$inferSelect;
-  revision: typeof chartRevisions.$inferSelect;
-  spec: FlintSpec;
-  workspaceId: string;
-  svg?: string;
-  htmlKey?: string;
-  writeOutput: typeof putObject;
-}): Promise<{ revision: typeof chartRevisions.$inferSelect; htmlValidation: ValidationRecord; html: string | null }> {
-  const outputObjects = isRecord(input.revision.outputObjects) ? { ...input.revision.outputObjects } : {};
-  const svgKey = typeof outputObjects.svg === "string" ? outputObjects.svg : undefined;
-  const svg = input.svg ?? (svgKey ? (await getObject(svgKey)).toString("utf8") : "");
-  const htmlKey =
-    input.htmlKey ??
-    (typeof outputObjects.html === "string"
-      ? outputObjects.html
-      : renderOutputObjectKey({
-          workspaceId: input.workspaceId,
-          projectId: input.job.projectId,
-          assetId: input.job.dataAssetId,
-          filename: `${input.job.id}.html`,
-        }));
-  let html: string;
-  try {
-    html = createStaticSvgHtml({
-      svg,
-      revisionId: input.revision.id,
-      revision: input.revision.revision,
-      title: input.spec.chartSpec.title,
-      finding: findingForGenerationJob(
-        input.job,
-        input.spec,
-        readResultSummary(input.revision.resultSummary ?? input.job.resultSummary),
-      ),
-      snapshotId: input.revision.snapshotId,
-      metricDefinition: input.job.metricDefinitionSnapshot ?? input.revision.metricDefinitionSnapshot,
-      theme: input.spec.theme,
-      themeVersion: input.spec.themeVersion,
-    });
-  } catch (error) {
-    return {
-      revision: input.revision,
-      html: null,
-      htmlValidation: failedRenderValidation(
-        "RENDER_HTML_INVALID",
-        error instanceof Error ? error.message : "静态 HTML 生成失败",
-      ),
-    };
-  }
-  const htmlValidation = validateStaticSvgHtml(html);
-  if (htmlValidation.status !== "passed") return { revision: input.revision, htmlValidation, html: null };
-  await input.writeOutput({ key: htmlKey, body: html, contentType: "text/html; charset=utf-8" });
-  const nextOutputObjects = { ...outputObjects, html: htmlKey };
-  const [revision] = await db
-    .update(chartRevisions)
-    .set({ outputObjects: nextOutputObjects })
-    .where(eq(chartRevisions.id, input.revision.id))
-    .returning();
-  if (!revision) throw new Error("固定 Revision 不存在，无法保存 HTML 输出");
-  return { revision, htmlValidation, html };
-}
-
-async function manifestForRecoveredRevision(
-  revision: typeof chartRevisions.$inferSelect,
-  expectedHtml: string | null,
-  validation: ValidationRecord,
-  previousManifest: unknown,
-) {
-  const previous = readPreviousOutputManifest(previousManifest, revision.id);
-  const outputs = isRecord(revision.outputObjects) ? revision.outputObjects : {};
-  const manifestEntries = [];
-  for (const format of ["vegaLite", "svg", "png", "html"] as const) {
-    const key = outputs[format];
-    if (typeof key !== "string") throw new CandidateOutputMismatchError(format);
-    const stored = await getObject(key);
-    if (stored.length === 0 || (format === "html" && (!expectedHtml || !stored.equals(Buffer.from(expectedHtml)))))
-      throw new CandidateOutputMismatchError(format);
-    const digest = `sha256:${createHash("sha256").update(stored).digest("hex")}`;
-    if (previous && format !== "html") {
-      const expected = previous.find((entry) => entry.format === format);
-      if (!expected || expected.key !== key || expected.sha256 !== digest || expected.byteLength !== stored.length)
-        throw new CandidateOutputMismatchError(format);
-    }
-    manifestEntries.push({
-      format,
-      key,
-      sha256: digest,
-      byteLength: stored.length,
-      rendererVersion: RENDERER_VERSION,
-      validation: "readable",
-    });
-  }
-  return { revisionId: revision.id, recovery: true, validation, outputs: manifestEntries };
-}
-
-function readPreviousOutputManifest(
-  value: unknown,
-  revisionId: string,
-): Array<{
-  format: string;
-  key: string;
-  sha256: string;
-  byteLength: number;
-}> | null {
-  if (value === null || value === undefined) return null;
-  if (!isRecord(value) || value.revisionId !== revisionId || !Array.isArray(value.outputs))
-    throw new CandidateOutputMismatchError("manifest");
-  const entries = value.outputs;
-  if (
-    !entries.every(
-      (entry) =>
-        isRecord(entry) &&
-        typeof entry.format === "string" &&
-        typeof entry.key === "string" &&
-        typeof entry.sha256 === "string" &&
-        typeof entry.byteLength === "number",
-    )
-  )
-    throw new CandidateOutputMismatchError("manifest");
-  return entries;
 }
 
 function mergeRenderValidation(base: ValidationRecord, html: ValidationRecord): ValidationRecord {
@@ -635,63 +396,6 @@ function buildStaticHtmlCandidate(input: {
       ),
     };
   }
-}
-
-async function persistEvidenceBlock(input: {
-  job: typeof generationJobs.$inferSelect;
-  revision: typeof chartRevisions.$inferSelect;
-  spec: FlintSpec;
-  validation: ValidationReport;
-}): Promise<void> {
-  const warnings = input.validation.issues.filter((issue) => issue.severity === "warning");
-  const resultSummary = readResultSummary(input.revision.resultSummary ?? input.job.resultSummary);
-  const finding = findingForGenerationJob(input.job, input.spec, resultSummary);
-  const [existingForJob] = await db
-    .select({ id: evidenceBlocks.id })
-    .from(evidenceBlocks)
-    .where(eq(evidenceBlocks.generationJobId, input.job.id))
-    .limit(1);
-  const [existingForArtifact] = input.job.artifactId
-    ? await db
-        .select({ id: evidenceBlocks.id })
-        .from(evidenceBlocks)
-        .where(eq(evidenceBlocks.chartArtifactId, input.job.artifactId))
-        .orderBy(desc(evidenceBlocks.updatedAt))
-        .limit(1)
-    : [];
-  const evidenceId = existingForJob?.id ?? existingForArtifact?.id;
-  const values = {
-    projectId: input.job.projectId,
-    conversationId: input.job.conversationId,
-    generationJobId: input.job.id,
-    chartArtifactId: input.revision.artifactId,
-    chartRevisionId: input.revision.id,
-    snapshotId: input.revision.snapshotId,
-    title: input.spec.chartSpec.title,
-    finding,
-    resultSummary,
-    analysisBriefSnapshot: input.job.analysisBriefSnapshot ?? input.revision.analysisBriefSnapshot ?? {},
-    metricDefinitionSnapshot: input.job.metricDefinitionSnapshot ?? input.revision.metricDefinitionSnapshot ?? {},
-    qualityWarnings: warnings,
-    status: "draft" as const,
-    createdBy: input.job.createdBy,
-    updatedAt: new Date(),
-  };
-  if (evidenceId) {
-    await db.update(evidenceBlocks).set(values).where(eq(evidenceBlocks.id, evidenceId));
-    return;
-  }
-  await db.insert(evidenceBlocks).values(values);
-}
-
-function readResultSummary(value: unknown): ResultSummary | null {
-  const parsed = resultSummarySchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
-}
-
-async function appendAssistantMessage(conversationId: string, content: string): Promise<void> {
-  await db.insert(conversationMessages).values({ conversationId, role: "assistant", content });
-  await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, conversationId));
 }
 
 async function pollOnce(): Promise<void> {
@@ -759,11 +463,6 @@ function readPlanValidation(value: unknown, legacyValidation: ValidationReport):
   };
 }
 
-function readRenderValidation(value: unknown): ValidationRecord | undefined {
-  const parsed = validationRecordSchema.safeParse(value);
-  return parsed.success ? parsed.data : undefined;
-}
-
 function failedPlanValidation(code: string, message: string): ValidationRecord {
   return failedValidation(code, message, "plan-validator-v1");
 }
@@ -781,15 +480,6 @@ function failedValidation(code: string, message: string, validatorVersion: strin
   };
 }
 
-function legacyRenderValidation(): ValidationRecord {
-  return {
-    status: "passed",
-    errors: [],
-    validatorVersion: "legacy-render-revision-v1",
-    checkedAt: new Date().toISOString(),
-  };
-}
-
 function withValidationAudit(
   audit: unknown,
   validations: Partial<{ planValidation: ValidationRecord; renderValidation: ValidationRecord }>,
@@ -800,10 +490,6 @@ function withValidationAudit(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readTitle(spec: { chartSpec: { title: string } }): string {
-  return spec.chartSpec.title;
 }
 
 function memorySnapshotForRevision(value: unknown): Array<Record<string, unknown>> {

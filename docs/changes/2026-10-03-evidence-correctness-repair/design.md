@@ -89,6 +89,12 @@ Worker 获租约后，在短事务中按固定顺序锁 Job → Artifact；验�
 
 COMMIT 响应丢失先按 Job 查明事实。只有确认无成功 Revision/引用、无有效执行租约且超过保留窗口的孤儿对象，才能进入对账清理；状态未知时不删。对象存储不能与数据库形成同一事务，不用数据库回滚假装外部对象也回滚。
 
+### 2026-10-07 原子发布实施边界
+
+Render Worker 的新生成/编辑路径现由单一 `commitCompletedRevision(lease, candidate)` 事务提交：Job→Artifact 固定锁序，数据库时间核验租约和 fencing，核对冻结输入、候选身份、Plan/Render Validation 与四输出清单，再写 Revision、仅新增的 Evidence、单调 head、审计、助手回复和 Job `succeeded`；事务中任一写入失败则全部回滚。事务响应不明时先查询 Job 与 Revision，无法查询时保留租约待恢复，不把未知结果记作失败。原有“已有 Revision 且 Job 未成功时重写 HTML/Evidence”的历史恢复路径已移除；这类不一致状态仅报错，不修改既有 Revision。用户已明确允许本轮不迁就旧业务数据，因此不再以该路径兼容历史半成品。
+
+此实施只覆盖新生成/编辑的业务原子发布。逐次候选对象账本及保留窗口对账、真实 COMMIT 回执丢失与提交前接管故障注入、同步复制/回滚改持久 Job、审核入口固定绑定仍须按任务表继续，不能据此关闭 T6/T7/T8。
+
 ## D4：Evidence 固定绑定与审核（R5、R6）
 
 新规则：一个成功 Revision 恰有一个 Evidence 内容记录；finding/title/summary/Brief/Metric/质量警告/Job 绑定在创建后不改写。允许新增不同 Revision 的 Evidence，禁止按 artifactId 批量改旧 Evidence 指针或内容。

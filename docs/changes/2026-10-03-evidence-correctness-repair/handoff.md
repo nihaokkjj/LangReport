@@ -7,6 +7,8 @@
 
 ## 最新续做状态（优先于下方历史段落）
 
+2026-10-07 T6 先完成新生成/编辑的单事务业务发布：Render Worker 把候选四输出交给 `commitCompletedRevision`，事务按 Job→Artifact 锁序核对租约、身份、冻结输入、清单与双层校验，然后一次写 Revision、独立 Evidence、单调 head、审计、回复和 Job 成功。真实 Evidence 插入故障会全部回滚，真实 API 重试成功；原 Evidence 绑定保持不变。旧的半成品恢复写入路径已删除，异常旧 Job 只失败且不改既有 Revision。移除恢复路径后的默认隔离集成最终 API14/浏览器2/Worker2 自然退出 0。独立只读复核固定快照未发现本轮原子路径的确定性 P1/P2，未独立重跑测试。逐次候选账本、COMMIT 丢失故障注入、提交前接管、复制/回滚 Job 化尚待做，T6 未验收。
+
 2026-10-07 T6 正式验收未通过：固定 HEAD `5b100b3` 的默认隔离集成 API14/浏览器2/Worker2 均通过，但 TP09/TP12–TP14 的 COMMIT 未知结果、六个完整编辑/回滚、事务故障全回滚、提交前失租和候选对账未覆盖。独立只读审计确认业务完成步骤跨事务、旧 Evidence 可被改绑、恢复 HTML 指针先于旧对象校验更新，故不能把正常路径通过等同 T6 验收。判定及修复顺序见 acceptance 和 evidence/t6-acceptance-readonly；下一轮先实现带租约 fencing 的单事务业务提交与 insert-only Evidence，随后处理恢复/未知提交/候选对账并复验。任务保持 IMPLEMENTING。
 
 2026-10-07 T6 候选输出清单限定结果：0033 迁移保存 Job 候选清单，新渲染先写并读回四对象、核对字节/哈希后才创建 Revision；HTML 使用预留版本身份，输出键包含目标与执行尝试身份及内容哈希前缀。真实数据库/MinIO 失配注入证明失败时无新 Revision，API 重试可恢复；最终完整集成 API14/浏览器2/Worker2 通过。已有 Revision 恢复以新键重写 HTML，旧 PNG/SVG/Vega 与已有清单的键、哈希、字节数比较；篡改 PNG 被拒绝。独立只读复核最终固定快照无新 P1/P2，详见 test-report；复核未独立重跑集成。历史无清单的恢复仅能证明旧对象可读。T6 原子发布、业务写入 fencing、候选对账仍待做；恢复路径在核对旧对象前更新 HTML 引用的非原子窗口仍待修复。

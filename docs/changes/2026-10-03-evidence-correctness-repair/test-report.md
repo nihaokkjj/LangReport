@@ -9,6 +9,16 @@
 
 ## A 批实施验证（新增）
 
+### 2026-10-07 T6 单事务发布与固定 Evidence（限定结果）
+
+新生成/编辑路径移除“先提交 Revision/head，后写 Evidence、回复与 Job 成功”的分段发布，改为同一个受租约 fencing 约束的数据库事务。编辑 Job 的 Evidence 仅新增，不再复用同 Artifact 的旧行。真实 PostgreSQL 集成增加约束故障：候选四对象写完后，在 Evidence 插入时强制数据库报错，确认 Job 失败，但目标 Revision/Evidence/审计、head 推进和助手回复均未落地；移除故障后真实 API 重试复用同一预留 Revision 身份并成功。另断言视觉编辑后旧 Evidence 的 Job/Revision/finding 不变。完整隔离集成第一轮 API14/浏览器2/Worker2 自然退出 0；移除历史恢复路径后最终同命令再次自然退出 0：API14/浏览器2/Worker2。
+
+历史“已有 Revision、Job 未成功时重写 HTML/Evidence”路径已删除。该异常状态现在拒绝写入，回归断言既有 Revision、Evidence 与 HTML 对象字节不变。用户本轮允许放弃旧业务数据兼容；此变更不代表旧库自动修复。T6 的逐次候选对账、真实 COMMIT 回执丢失、提交前失租及复制/回滚 Job 化仍未验证，不能标为 T6 验收通过。
+
+[独立只读复核](./evidence/t6-atomic-independent.md)检查固定源码快照，未发现本轮原子发布路径的确定性 P1/P2；未独立重跑集成，不能代替上述主代理测试或 T6 整体验收。
+
+Render Worker 源码、Generation Worker 测试类型检查，受影响代码定向 ESLint、Prettier、docs:check 和 diff 检查通过。仓库级 boundaries/hygiene 首次在默认 Windows 沙箱因 Node 子进程 `spawn EPERM` 停于断言前；允许子进程重跑后，各自的测试 4/4 与 3/3 通过，但命令最终均失败：boundaries 报 Generation Worker 集成测试跨包导入 API 未声明依赖，`git show HEAD` 确认该导入为既有；hygiene 报 MUI 变更中两个已跟踪 `.log` 文件，`git ls-files` 确认在本轮前已存在。本轮未放宽检查器或删除其他任务证据，不把这两个仓库级门禁记为通过。
+
 ### 2026-10-07 T6 验收审计：未通过
 
 针对产品 HEAD `5b100b3`，运行默认 `node scripts/test-integration.mjs`。首次在 Windows 沙箱中被 Node 测试子进程 `spawn EPERM` 阻断，未进入有效断言；同命令在允许子进程的隔离 PostgreSQL/MinIO 环境中重跑，自然退出 0：API 14/14、浏览器桌面/移动 2/2、Worker 2/2。通过范围是现有测试集，不包含 TP09 的 COMMIT 回执丢失、TP12 六个完整编辑/回滚业务提交、TP13 Evidence/head/audit 故障全回滚与候选对账、TP14 提交前失租后的业务 fencing。

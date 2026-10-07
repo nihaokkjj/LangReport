@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash, randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   auditEvents,
   chartArtifacts,
   chartRevisions,
   claimGenerationJobLease,
   closeDatabase,
+  conversationMessages,
   conversations,
   dataAssets,
   dataSnapshots,
@@ -425,9 +426,106 @@ test("real generation and render workers persist plugin usage and historical sna
       .from(evidenceBlocks)
       .where(eq(evidenceBlocks.generationJobId, visualJobId));
     assert.equal(visualEvidence.finding, reviewedFinding);
+    assert.notEqual(visualEvidence.id, evidence.id);
+    assert.equal(visualEvidence.chartRevisionId, visualRevision.id);
+    const [originalEvidenceAfterVisualEdit] = await db
+      .select()
+      .from(evidenceBlocks)
+      .where(eq(evidenceBlocks.id, evidence.id));
+    assert.equal(originalEvidenceAfterVisualEdit.generationJobId, job.id);
+    assert.equal(originalEvidenceAfterVisualEdit.chartRevisionId, revision.id);
+    assert.equal(originalEvidenceAfterVisualEdit.finding, "入队后被修改的发现，不得影响已冻结任务");
     const visualHtml = await getObject((visualRevision.outputObjects as { html: string }).html);
     assert.ok(visualHtml.toString("utf8").includes(reviewedFinding));
     assert.equal(JSON.stringify(visualRevision).includes(privatePreference.statement), false);
+
+    // A database failure after Revision insertion must roll back every published business row.
+    const atomicApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
+    let atomicJobId: string;
+    try {
+      const queued = await atomicApi.inject({
+        method: "POST",
+        url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+        payload: {
+          operation: "edit",
+          baseRevisionId: visualRevision.id,
+          patch: { title: "事务回滚验证" },
+          idempotencyKey: `atomic-failure-${suffix}`,
+        },
+      });
+      assert.equal(queued.statusCode, 202, queued.body);
+      atomicJobId = queued.json().job.id;
+      await processGenerationJob(atomicJobId);
+      const messagesBefore = await db
+        .select({ id: conversationMessages.id })
+        .from(conversationMessages)
+        .where(eq(conversationMessages.conversationId, conversation.id));
+      assert.match(atomicJobId, /^[0-9a-f-]{36}$/);
+      await db.execute(
+        sql.raw(
+          `ALTER TABLE "evidence_blocks" ADD CONSTRAINT "t6_fail_evidence_insert" CHECK ("generation_job_id" <> '${atomicJobId}'::uuid)`,
+        ),
+      );
+      try {
+        await processRenderJob(atomicJobId);
+      } finally {
+        await db.execute(sql.raw('ALTER TABLE "evidence_blocks" DROP CONSTRAINT IF EXISTS "t6_fail_evidence_insert"'));
+      }
+      const [failedAtomicJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, atomicJobId));
+      assert.equal(failedAtomicJob.status, "failed");
+      assert.equal(failedAtomicJob.errorCode, "RENDER_FAILED");
+      assert.equal(
+        (await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, atomicJobId))).length,
+        0,
+      );
+      assert.equal(
+        (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, atomicJobId))).length,
+        0,
+      );
+      const [headAfterFailure] = await db
+        .select()
+        .from(chartArtifacts)
+        .where(eq(chartArtifacts.id, revision.artifactId));
+      assert.equal(headAfterFailure.headRevisionId, visualRevision.id);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(auditEvents)
+            .where(eq(auditEvents.entityId, failedAtomicJob.candidateRevisionId as string))
+        ).length,
+        0,
+      );
+      assert.equal(
+        (
+          await db
+            .select({ id: conversationMessages.id })
+            .from(conversationMessages)
+            .where(eq(conversationMessages.conversationId, conversation.id))
+        ).length,
+        messagesBefore.length,
+      );
+      const retried = await atomicApi.inject({
+        method: "POST",
+        url: `/api/v1/generation-jobs/${atomicJobId}/retry`,
+      });
+      assert.equal(retried.statusCode, 202, retried.body);
+      await processGenerationJob(atomicJobId);
+      await processRenderJob(atomicJobId);
+      const [committedAtomicJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, atomicJobId));
+      const [committedAtomicRevision] = await db
+        .select()
+        .from(chartRevisions)
+        .where(eq(chartRevisions.generationJobId, atomicJobId));
+      assert.equal(committedAtomicJob.status, "succeeded");
+      assert.equal(committedAtomicRevision.id, failedAtomicJob.candidateRevisionId);
+      assert.equal(
+        (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, atomicJobId))).length,
+        1,
+      );
+    } finally {
+      await atomicApi.close();
+    }
 
     // A real Worker failure before the first object write must retain the frozen finding through API retry.
     const retryFinding = "故障前已经确认的来源发现";
@@ -846,57 +944,29 @@ test("real generation and render workers persist plugin usage and historical sna
       "仅看华东",
     );
 
-    const preRecoveryHtmlKey = (renderedJob.outputs as { html: string }).html;
-    const preRecoveryHtmlBytes = await getObject(preRecoveryHtmlKey);
-    await db
-      .update(generationJobs)
-      .set({ status: "failed", errorCode: "RENDER_FAILED", errorMessage: "simulated post-revision failure" })
-      .where(eq(generationJobs.id, job.id));
+    // An inconsistent historical Job must not mutate an already published Revision.
+    const publishedHtmlKey = (renderedJob.outputs as { html: string }).html;
+    const publishedHtmlBytes = await getObject(publishedHtmlKey);
+    const [publishedEvidence] = await db
+      .select()
+      .from(evidenceBlocks)
+      .where(eq(evidenceBlocks.generationJobId, job.id));
     await db.update(generationJobs).set({ status: "rendering" }).where(eq(generationJobs.id, job.id));
     await processRenderJob(job.id);
-    const [recoveredJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id)).limit(1);
-    assert.equal(recoveredJob.status, "succeeded");
-    const recoveredHtmlKey = (recoveredJob.outputs as { html: string }).html;
-    assert.notEqual(recoveredHtmlKey, preRecoveryHtmlKey);
-    assert.deepEqual(await getObject(preRecoveryHtmlKey), preRecoveryHtmlBytes);
-    const recoveredManifest = recoveredJob.candidateOutputManifest as {
-      recovery: boolean;
-      outputs: Array<{ format: string; key: string }>;
-    };
-    assert.equal(recoveredManifest.recovery, true);
-    assert.equal(recoveredManifest.outputs.find((entry) => entry.format === "html")?.key, recoveredHtmlKey);
-    const recoveredPngKey = (recoveredJob.outputs as { png: string }).png;
-    const originalPngBytes = await getObject(recoveredPngKey);
-    await db.update(generationJobs).set({ status: "rendering" }).where(eq(generationJobs.id, job.id));
-    try {
-      await putObject({ key: recoveredPngKey, body: Buffer.from("corrupted-png"), contentType: "image/png" });
-      await processRenderJob(job.id);
-      const [corruptRecovery] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id));
-      assert.equal(corruptRecovery.status, "failed");
-      assert.equal(corruptRecovery.errorCode, "RENDER_FAILED");
-      assert.equal(
-        validationRecordSchema.parse(corruptRecovery.renderValidation).errors[0]?.code,
-        "RENDER_OUTPUT_MISMATCH",
-      );
-      assert.deepEqual(corruptRecovery.candidateOutputManifest, recoveredJob.candidateOutputManifest);
-    } finally {
-      await putObject({ key: recoveredPngKey, body: originalPngBytes, contentType: "image/png" });
-    }
-    assert.equal(
-      (
-        await db
-          .select({ id: chartRevisions.id })
-          .from(chartRevisions)
-          .where(eq(chartRevisions.generationJobId, job.id))
-      ).length,
-      1,
-    );
-    const [recoveredRevision] = await db
-      .select({ executionAssembly: chartRevisions.executionAssembly })
+    const [rejectedReplay] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id));
+    const [unchangedRevision] = await db
+      .select()
       .from(chartRevisions)
-      .where(eq(chartRevisions.generationJobId, job.id))
-      .limit(1);
-    assert.deepEqual(recoveredRevision.executionAssembly, executionAssembly);
+      .where(eq(chartRevisions.generationJobId, job.id));
+    const [unchangedEvidence] = await db
+      .select()
+      .from(evidenceBlocks)
+      .where(eq(evidenceBlocks.generationJobId, job.id));
+    assert.equal(rejectedReplay.status, "failed");
+    assert.equal(rejectedReplay.errorCode, "RENDER_FAILED");
+    assert.deepEqual(unchangedRevision.outputObjects, revision.outputObjects);
+    assert.deepEqual(unchangedEvidence, publishedEvidence);
+    assert.deepEqual(await getObject(publishedHtmlKey), publishedHtmlBytes);
 
     const [leaseJob] = await db
       .insert(generationJobs)
