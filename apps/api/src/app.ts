@@ -17,6 +17,7 @@ import {
 } from "./auth.js";
 import { createDatabaseAuthAccountStore, type AuthAccountStore } from "./user-account-store.js";
 import { ensureMemoryRevocationReady } from "@langreport/memory";
+import { registerIntakeCancellation } from "./intake-cancellation.js";
 
 export type { AuthProvider, AuthenticatedUser } from "./auth.js";
 
@@ -33,6 +34,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   const accountStore = options.accountStore ?? createDatabaseAuthAccountStore();
   const authProvider = options.authProvider ?? createJwtAuthProvider(environment, accountStore);
   const app = Fastify({
+    requestTimeout: 60000,
     logger: options.logger ?? true,
     requestIdHeader: "x-request-id",
     trustProxy: environment.TRUST_PROXY === "true",
@@ -40,6 +42,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
       customOptions: { useDefaults: false },
     },
   });
+  registerIntakeCancellation(app, async () => undefined);
 
   await app.register(cors, {
     origin: environment.WEB_ORIGIN ?? "http://localhost:3000",

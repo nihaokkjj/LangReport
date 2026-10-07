@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
+import { reserveLocalIntake } from "../../src/local-intake-admission.js";
+import { createLocalParser } from "../../src/local-parse.js";
 import { dataAssets, dataSnapshots } from "@langreport/db";
 import {
   createDataAssetIntake,
@@ -162,6 +165,8 @@ function createStorage(options: { failPutAt?: number; failDeletes?: boolean } = 
   const deletedKeys: string[] = [];
   let putCount = 0;
   const storage: NonNullable<IntakeDependencies["storage"]> = {
+    putObjectFile: async (input) =>
+      storage.putObject({ key: input.key, body: await readFile(input.path), contentType: input.contentType }),
     putObject: async (input) => {
       putCount += 1;
       if (putCount === options.failPutAt) throw new Error(`provider failed for ${input.key}`);
@@ -176,7 +181,9 @@ function createStorage(options: { failPutAt?: number; failDeletes?: boolean } = 
   return { storage, objects, deletedKeys };
 }
 
-function command(overrides: Partial<DataAssetIntakeCommand["source"]> = {}): DataAssetIntakeCommand {
+function command(
+  overrides: Partial<Extract<DataAssetIntakeCommand["source"], { bytes: Buffer }>> = {},
+): DataAssetIntakeCommand {
   return {
     projectId: "project-1",
     sourceConversationId: "00000000-0000-4000-8000-000000000001",
@@ -251,6 +258,91 @@ test("intake writes both objects and commits one ready snapshot", async () => {
     { position: 0, originalName: "month", name: "month" },
     { position: 1, originalName: "sales", name: "sales" },
   ]);
+});
+
+test("cleanup errors are observable without turning a committed snapshot into a failed response", async () => {
+  const fixture = createRepository();
+  const storage = createStorage();
+  const parser = createLocalParser();
+  const events: Array<Parameters<NonNullable<DataAssetIntakeCommand["observe"]>>[0]> = [];
+  try {
+    const intake = createDataAssetIntake({
+      repository: fixture.repository,
+      storage: storage.storage,
+      createId: fixedIds(),
+      parser: {
+        async parse(input) {
+          const result = await parser.parse(input);
+          return {
+            ...result,
+            async dispose() {
+              await result.dispose();
+              throw new Error("synthetic file cleanup failure");
+            },
+          };
+        },
+      },
+    });
+    const result = await intake.ingest({ ...command(), observe: (event) => events.push(event) });
+    assert.equal(result.status, "ready");
+    assert.equal(storage.deletedKeys.length, 0);
+    assert.deepEqual(
+      events.map((event) => event.stage),
+      ["parsed", "serialized", "source_stored", "normalized_stored", "published", "cleanup_failed", "finished"],
+    );
+    assert.equal(events.find((event) => event.stage === "cleanup_failed")?.code, "LOCAL_PARSE_CLEANUP_FAILED");
+    assert.doesNotMatch(JSON.stringify(events), /month|sales|provider|synthetic|sourcePath/);
+  } finally {
+    await parser.close();
+  }
+});
+
+test("multipart reservation excludes pasted intake before creating a processing asset", async () => {
+  const reservation = reserveLocalIntake();
+  const fixture = createRepository();
+  const storage = createStorage();
+  try {
+    await assert.rejects(
+      createDataAssetIntake({ repository: fixture.repository, storage: storage.storage }).ingest(command()),
+      { code: "DATA_PARSE_BUSY", statusCode: 503 },
+    );
+    assert.equal(fixture.assets.size, 0);
+    assert.equal(storage.objects.size, 0);
+  } finally {
+    reservation.release();
+  }
+});
+
+test("intake holds admission while object storage is slow", async () => {
+  const fixture = createRepository();
+  const storage = createStorage();
+  let release!: () => void;
+  let reached!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const entered = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  const put = storage.storage.putObjectFile;
+  storage.storage.putObjectFile = async (input) => {
+    reached();
+    await waiting;
+    await put(input);
+  };
+  const intake = createDataAssetIntake({
+    repository: fixture.repository,
+    storage: storage.storage,
+    createId: fixedIds(),
+  });
+  const first = intake.ingest(command());
+  await entered;
+  try {
+    await assert.rejects(intake.ingest(command()), { code: "DATA_PARSE_BUSY" });
+  } finally {
+    release();
+  }
+  await first;
 });
 
 test("intake updates one asset by appending a new snapshot and preserving v1", async () => {
@@ -377,7 +469,7 @@ test("normalized object failure compensates the source object and persists a typ
   assert.equal(storage.objects.size, 0);
 });
 
-test("snapshot persistence failure compensates both objects and never reaches ready", async () => {
+test("unknown snapshot commit outcome preserves objects and does not overwrite asset state", async () => {
   const fixture = createRepository({ persistError: new Error("database failed with provider key") });
   const storage = createStorage();
   const intake = createDataAssetIntake({
@@ -397,11 +489,34 @@ test("snapshot persistence failure compensates both objects and never reaches re
     },
   );
   const failed = [...fixture.assets.values()][0];
-  assert.equal(failed?.status, "failed");
-  assert.equal(failed?.errorCode, "SNAPSHOT_PERSIST_FAILED");
+  assert.equal(failed?.status, "processing");
+  assert.equal(failed?.errorCode, null);
   assert.equal(fixture.snapshots.size, 0);
-  assert.equal(storage.deletedKeys.length, 2);
-  assert.equal(storage.objects.size, 0);
+  assert.equal(storage.deletedKeys.length, 0);
+  assert.equal(storage.objects.size, 2);
+});
+
+test("lost response after committed snapshot preserves objects and directs the user to query before retry", async () => {
+  const fixture = createRepository();
+  const storage = createStorage();
+  const persist = fixture.repository.persistSnapshotAndReady;
+  fixture.repository.persistSnapshotAndReady = async (input) => {
+    await persist(input);
+    throw new Error("connection lost after commit");
+  };
+  await assert.rejects(
+    createDataAssetIntake({ repository: fixture.repository, storage: storage.storage, createId: fixedIds() }).ingest(
+      command(),
+    ),
+    {
+      code: "SNAPSHOT_PERSIST_FAILED",
+      message: "Data Snapshot 保存结果暂无法确认，请先查询资产及快照列表，再决定是否重试",
+    },
+  );
+  assert.equal([...fixture.assets.values()][0]?.status, "ready");
+  assert.equal(fixture.snapshots.size, 1);
+  assert.equal(storage.objects.size, 2);
+  assert.equal(storage.deletedKeys.length, 0);
 });
 
 test("cleanup failures are audited without replacing the original storage error", async () => {

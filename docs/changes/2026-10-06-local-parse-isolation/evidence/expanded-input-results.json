@@ -1,0 +1,20 @@
+{
+  "node": "v22.22.2",
+  "parentSurvived": true,
+  "maxRssKiB": 547400,
+  "results": [
+    {
+      "name": "compressed-excel-51mb-text",
+      "bytes": 1452487,
+      "status": "success",
+      "ms": 1246.1533000000002,
+      "outputBytes": 52061167
+    },
+    {
+      "name": "8mib-cell",
+      "bytes": 8388614,
+      "status": "DATA_PARSE_RESOURCE_LIMIT",
+      "ms": 593.1163000000001
+    }
+  ]
+}

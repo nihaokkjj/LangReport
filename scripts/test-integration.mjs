@@ -10,6 +10,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const runId = randomUUID().replaceAll("-", "");
 const environment = createIsolatedIntegrationEnvironment(process.env, runId);
+const intakeOnly = process.argv.includes("--data-intake");
 const failureFixturePath = resolve(tmpdir(), `langreport-chart-failure-${runId}.json`);
 environment.LANGREPORT_FAILURE_FIXTURE_PATH = failureFixturePath;
 const ledgerDirectory = resolve(environment.MEMORY_REVOCATION_LEDGER_DIR);
@@ -49,18 +50,27 @@ try {
       "tsx",
       "--test",
       "--test-concurrency=1",
-      "test/integration/database-user-accounts.integration.test.ts",
-      "test/integration/memory-management.integration.test.ts",
-      "test/integration/memory-revocation-recovery.integration.test.ts",
-      "test/integration/memory-revocation-startup.integration.test.ts",
-      "test/integration/message-generation.integration.test.ts",
-      "test/integration/plugins.integration.test.ts",
-      "test/integration/data-assets.integration.test.ts",
-      "test/integration/table-intake.integration.test.ts",
-      "test/integration/generation-job-status.integration.test.ts",
-      "test/integration/chart-point-failure.integration.test.ts",
+      ...(intakeOnly
+        ? [
+            "test/integration/data-assets.integration.test.ts",
+            "test/integration/local-intake-lifecycle.integration.test.ts",
+            "test/integration/local-intake-commit-loss.integration.test.ts",
+            "test/integration/local-intake-performance.integration.test.ts",
+          ]
+        : [
+            "test/integration/database-user-accounts.integration.test.ts",
+            "test/integration/memory-management.integration.test.ts",
+            "test/integration/memory-revocation-recovery.integration.test.ts",
+            "test/integration/memory-revocation-startup.integration.test.ts",
+            "test/integration/message-generation.integration.test.ts",
+            "test/integration/plugins.integration.test.ts",
+            "test/integration/data-assets.integration.test.ts",
+            "test/integration/table-intake.integration.test.ts",
+            "test/integration/generation-job-status.integration.test.ts",
+            "test/integration/chart-point-failure.integration.test.ts",
+          ]),
     ]);
-  if (status === 0)
+  if (status === 0 && !intakeOnly)
     status = run([
       "--filter",
       "@langreport/generation-worker",

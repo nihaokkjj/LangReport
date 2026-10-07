@@ -1345,7 +1345,7 @@ export const routeContracts: RouteContract[] = [
     "/api/v1/projects/:projectId/data-assets/upload",
     "uploadDataAsset",
     ["Data Assets"],
-    "上传数据文件；飞书接入模式异步创建快照",
+    "上传数据文件；本地隔离解析后同步返回201，飞书接入模式异步创建快照",
     {
       201: dto({ asset: assetDto }, ["asset"]),
       202: dto({ asset: assetDto, intakeJobId: uuid() }, ["asset", "intakeJobId"]),
@@ -1366,7 +1366,9 @@ export const routeContracts: RouteContract[] = [
         ),
         consumes: ["multipart/form-data"],
       }),
-      extraResponses: { 413: errorResponseSchema },
+      extraResponses: { 413: errorResponseSchema, 422: errorResponseSchema, 503: errorResponseSchema },
+      idempotency:
+        "本地单槽，无自动重试；DATA_PARSE_BUSY/超时返回503，资源超限返回422。提交结果不明时先查询资产状态再决定重试。",
     },
   ),
   contract(
@@ -1378,6 +1380,8 @@ export const routeContracts: RouteContract[] = [
     { 201: dto({ asset: assetDto }, ["asset"]) },
     {
       request: pathRequest("/api/v1/projects/:projectId/data-assets/paste", { body: zodJson(pasteDataRequestSchema) }),
+      extraResponses: { 422: errorResponseSchema, 503: errorResponseSchema },
+      idempotency: "本地隔离解析后同步返回201；DATA_PARSE_BUSY/超时返回503，资源超限返回422；不自动重试。",
     },
   ),
   contract(
@@ -1402,7 +1406,9 @@ export const routeContracts: RouteContract[] = [
         ),
         consumes: ["multipart/form-data"],
       }),
-      extraResponses: { 413: errorResponseSchema },
+      extraResponses: { 413: errorResponseSchema, 422: errorResponseSchema, 503: errorResponseSchema },
+      idempotency:
+        "本地隔离解析后同步返回201；DATA_PARSE_BUSY/超时返回503，资源超限返回422；失败不推进旧快照，提交结果不明时先查询。",
     },
   ),
   contract(
@@ -1416,6 +1422,8 @@ export const routeContracts: RouteContract[] = [
       request: pathRequest("/api/v1/projects/:projectId/data-assets/:assetId/snapshots/paste", {
         body: zodJson(pasteDataRequestSchema),
       }),
+      extraResponses: { 422: errorResponseSchema, 503: errorResponseSchema },
+      idempotency: "本地隔离解析后同步返回201；DATA_PARSE_BUSY/超时返回503，资源超限返回422；不自动重试。",
     },
   ),
   contract("GET", "/api/v1/data-assets/:assetId", "getDataAsset", ["Data Assets"], "查询一个数据资产及最新 Snapshot", {

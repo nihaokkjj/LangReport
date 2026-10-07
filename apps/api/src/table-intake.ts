@@ -1,5 +1,5 @@
 import { createWriteStream } from "node:fs";
-import { mkdtemp, readFile, rmdir, unlink } from "node:fs/promises";
+import { mkdtemp, rmdir, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { Transform } from "node:stream";
@@ -18,16 +18,25 @@ import {
   MAX_DATA_ASSET_BYTES,
   toPublicDataAsset,
   type DataAssetIntakeCommand,
+  parseFailure,
 } from "./data-assets.js";
+import { reserveLocalIntake } from "./local-intake-admission.js";
 
-type UploadContext = Pick<DataAssetIntakeCommand, "projectId" | "createdBy" | "requestId" | "target">;
+type UploadContext = Pick<
+  DataAssetIntakeCommand,
+  "projectId" | "createdBy" | "requestId" | "target" | "signal" | "observe"
+>;
 function field(part: MultipartFile, key: string): string {
   const value = part.fields[key];
   return value && !Array.isArray(value) && value.type === "field" ? String(value.value) : "";
 }
 
 /** Testable bounded stream sink. Cleanup is owned by the enclosing request. */
-export async function spoolUpload(part: Pick<MultipartFile, "file">, path: string): Promise<number> {
+export async function spoolUpload(
+  part: Pick<MultipartFile, "file">,
+  path: string,
+  signal?: AbortSignal,
+): Promise<number> {
   let size = 0;
   const limit = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
@@ -38,7 +47,7 @@ export async function spoolUpload(part: Pick<MultipartFile, "file">, path: strin
       );
     },
   });
-  await pipeline(part.file, limit, createWriteStream(path, { flags: "wx" }));
+  await pipeline(part.file, limit, createWriteStream(path, { flags: "wx" }), { signal });
   if (part.file.truncated) throw new DataAssetError("DATA_ASSET_TOO_LARGE", "文件不能超过 50 MB");
   if (!size) throw new DataAssetError("DATA_PARSE_FAILED", "上传文件为空");
   return size;
@@ -48,10 +57,23 @@ export async function ingestUploadedDataAsset(part: MultipartFile, context: Uplo
   const extension = extname(part.filename).toLowerCase();
   if (![".csv", ".xlsx", ".xls", ".json"].includes(extension))
     throw new DataAssetError("INVALID_INPUT", "仅支持 CSV、Excel 或 JSON 文件");
-  const directory = await mkdtemp(join(tmpdir(), "langreport-upload-"));
+  const isLocal = process.env.TABLE_INGESTION_PROVIDER !== "lark" || extension === ".json";
+  let reservation: ReturnType<typeof reserveLocalIntake> | undefined;
+  try {
+    if (isLocal) reservation = reserveLocalIntake();
+  } catch (error) {
+    throw parseFailure(error);
+  }
+  let directory: string;
+  try {
+    directory = await mkdtemp(join(tmpdir(), "langreport-upload-"));
+  } catch (error) {
+    reservation?.release();
+    throw error;
+  }
   const path = join(directory, `source${extension}`);
   try {
-    const sizeBytes = await spoolUpload(part, path);
+    const sizeBytes = await spoolUpload(part, path, context.signal);
     const sourceConversationId = field(part, "conversationId");
     const tableHint = field(part, "tableHint");
     if (tableHint.length > 2000) throw new DataAssetError("INVALID_INPUT", "表格说明不能超过 2000 字");
@@ -71,12 +93,14 @@ export async function ingestUploadedDataAsset(part: MultipartFile, context: Uplo
     const asset = await ingestDataAsset({
       ...context,
       sourceConversationId,
-      source: { name: part.filename, sourceType, mimeType: part.mimetype, bytes: await readFile(path) },
+      intakeReservation: reservation?.token,
+      source: { name: part.filename, sourceType, mimeType: part.mimetype, path, sizeBytes },
     });
     return { asset };
   } finally {
     await unlink(path).catch(() => undefined);
     await rmdir(directory).catch(() => undefined);
+    reservation?.release();
   }
 }
 

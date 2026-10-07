@@ -28,6 +28,33 @@ test("API Console 说明视觉编辑冻结发现与逻辑编辑重算", async ({
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
 
+test("API Console 说明本地解析繁忙及提交结果不明的处理", async ({ page }) => {
+  await page.route("**/api-console/openapi.json", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      json: {
+        openapi: "3.0.3",
+        info: { title: "LangReport", version: "test" },
+        paths: {
+          "/api/v1/projects/{projectId}/data-assets/paste": {
+            post: {
+              operationId: "pasteDataAsset",
+              tags: ["Data Assets"],
+              summary: "粘贴表格",
+              responses: { "201": { description: "创建成功" }, "503": { description: "解析繁忙" } },
+            },
+          },
+        },
+      },
+    }),
+  );
+  await page.goto("/api-console");
+  await page.getByRole("button", { name: /\/data-assets\/paste/ }).click();
+  await expect(page.getByText(/本地表格解析完成后同步返回 201/)).toBeVisible();
+  await expect(page.getByText(/请先查询资产及快照列表/)).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+});
+
 test("API Console 将业务 401 留在响应面板而不跳转登录", async ({ page }) => {
   await page.route("**/api-console/openapi.json", async (route) => {
     await route.fulfill({

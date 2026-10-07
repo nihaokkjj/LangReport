@@ -49,6 +49,15 @@ test("serves OpenAPI JSON and a standard Swagger UI page", async () => {
     assert.equal(passwordProperties.newPassword?.minLength, 6);
     assert.equal(passwordProperties.newPassword?.maxLength, 1024);
     assert.ok(document.paths["/api/v1/projects/{projectId}/data-assets/paste"]?.post);
+    for (const suffix of ["upload", "paste", "{assetId}/snapshots/upload", "{assetId}/snapshots/paste"]) {
+      const operation = document.paths[`/api/v1/projects/{projectId}/data-assets/${suffix}`]?.post as {
+        responses: Record<string, unknown>;
+      };
+      assert.ok(operation.responses["201"]);
+      assert.ok(operation.responses["422"]);
+      assert.ok(operation.responses["503"]);
+      assert.match(JSON.stringify(operation), /DATA_PARSE_BUSY/);
+    }
     assert.ok(document.paths["/api/v1/projects/{projectId}/metric-definitions"]?.post);
     assert.ok(document.paths["/api/v1/projects/{projectId}/analysis-brief"]?.post);
     assert.ok(document.paths["/api/v1/projects/{projectId}/analysis-brief"]?.patch);

@@ -1,0 +1,674 @@
+{
+  "baseline": {
+    "count": 65,
+    "p95Ms": 3.281400000000758,
+    "maxMs": 19.980099999999766
+  },
+  "parsing": {
+    "count": 66,
+    "p95Ms": 1.7422000000005937,
+    "maxMs": 4.222300000000359
+  },
+  "p95IncreaseMs": -1.5392000000001644,
+  "parseMs": 2040.6530999999995,
+  "parsedRows": 100000,
+  "errors": [],
+  "samples": [
+    {
+      "phase": "baseline",
+      "ms": 19.980099999999766,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.969000000000051,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 2.107199999999466,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 2.0262000000002445,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.7478999999993903,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.6734999999998763,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 2.1536000000005515,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 2.628899999999703,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 4.541900000000169,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 3.4508999999998196,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.191200000000208,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.2881999999999607,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 2.1630999999997584,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.9551000000001295,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.4863000000004831,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.2059999999992215,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.1770999999998821,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.442300000000614,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.3519999999998618,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 3.281400000000758,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 2.0913999999993393,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.3842999999997119,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 2.5974000000005617,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 2.7033000000001266,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.4203999999999724,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.0419000000001688,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.0874999999996362,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.2243000000007669,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.1378999999997177,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.1891000000005079,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 2.2770999999993364,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.2798000000002503,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.2943999999997686,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.1129000000000815,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.2251999999998588,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.568699999999808,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 2.474199999999655,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.5659999999998035,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.5570999999999913,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.232199999999466,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.304399999999987,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.2020000000002256,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.0677999999998065,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.115299999999479,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.345499999999447,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.2759000000005472,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.0974999999998545,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.222099999999955,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.287000000000262,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.115299999999479,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.5064000000002125,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 0.984599999999773,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.3600999999998749,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.3513000000002648,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.1114999999999782,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.095100000000457,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.1939999999995052,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.274199999999837,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.2143999999998414,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.2169000000003507,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.3510999999998603,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.4205000000001746,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.4750000000003638,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.0784999999996217,
+      "status": 200
+    },
+    {
+      "phase": "baseline",
+      "ms": 1.079899999999725,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.3951999999999316,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 0.9745000000002619,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.0844000000006417,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.2447000000001935,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.3204999999998108,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.29529999999977,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.410399999999754,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.3202999999994063,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.0774000000001251,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.1437999999998283,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.2010000000000218,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.3628000000007887,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.7422000000005937,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.3847999999998137,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.7183999999997468,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.7718999999997322,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.419499999999971,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.377599999999802,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.581199999999626,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.191000000000713,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.5410000000001673,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.6296999999995023,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.280800000000454,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.4692000000004555,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.5082000000002154,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.152900000000045,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.0849000000007436,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.5153000000000247,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.497099999999591,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.3722999999999956,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.3972999999996318,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.1698000000005777,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.357600000000275,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.7245999999995547,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.429599999999482,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.7064000000000306,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.7434999999995853,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.6784999999999854,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.4354000000002998,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.5379000000002634,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.127900000000409,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.4741000000003623,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.4732000000003609,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.4269999999996799,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.5375000000003638,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.5351000000000568,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.2700999999997293,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.514100000000326,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.5307999999995445,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.6712999999999738,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.5502000000005864,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.6305999999995038,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.4607999999998356,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 4.222300000000359,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.2525000000005093,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.2362000000002809,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.3431000000000495,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.305000000000291,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.5581999999994878,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.696100000000115,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.505500000000211,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.2028999999993175,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.337800000000243,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.4216999999998734,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.260099999999511,
+      "status": 200
+    },
+    {
+      "phase": "parsing",
+      "ms": 1.309900000000198,
+      "status": 200
+    }
+  ],
+  "note": "真实buildApp的/health；主线程等待真实隔离解析线程及结果文件；没有上传/数据库/对象存储路径，不代替全链路验收"
+}

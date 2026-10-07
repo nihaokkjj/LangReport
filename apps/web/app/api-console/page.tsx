@@ -2047,6 +2047,15 @@ export default function ApiConsolePage() {
                     </Button>
                   </div>
                 </div>
+                {["uploadDataAsset", "pasteDataAsset", "uploadDataAssetSnapshot", "pasteDataAssetSnapshot"].includes(
+                  selectedEntry?.operation.operationId ?? "",
+                ) && (
+                  <p>
+                    本地表格解析完成后同步返回 201。解析繁忙或超时返回 503，请稍后手动重试；资源超限返回
+                    422，请拆分文件或减少输入。
+                    若快照保存结果不明确，请先查询资产及快照列表，避免重复上传。飞书接入仍返回 202。
+                  </p>
+                )}
                 {selectedEntry?.operation.operationId === "createChartRevisionCommand" && (
                   <p className={styles.contractHint}>
                     编辑、复制与回滚继承来源版本的分析问题、指标口径与执行快照；仅复制公开项目记忆引用。纯视觉编辑冻结原发现，逻辑编辑重新计算。来源缺失返回

@@ -59,7 +59,12 @@ export async function getObject(key: string): Promise<Buffer> {
 }
 
 /** Stream original uploads; do not allocate a second whole-file Buffer in API/Worker. */
-export async function putObjectFile(input: { key: string; path: string; contentType: string }): Promise<void> {
+export async function putObjectFile(input: {
+  key: string;
+  path: string;
+  contentType: string;
+  signal?: AbortSignal;
+}): Promise<void> {
   assertIsolatedIntegrationStorage();
   const file = await stat(input.path);
   const body = createReadStream(input.path);
@@ -72,6 +77,7 @@ export async function putObjectFile(input: { key: string; path: string; contentT
         ContentLength: file.size,
         ContentType: input.contentType,
       }),
+      { abortSignal: input.signal },
     );
   } finally {
     body.destroy();

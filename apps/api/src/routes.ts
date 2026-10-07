@@ -1,3 +1,4 @@
+import { withIntakeCancellation } from "./intake-cancellation.js";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
@@ -584,14 +585,21 @@ export async function registerRoutes(
     async (request, reply) => {
       try {
         assertProjectId(request.params.projectId);
-        await assertChartAction(request.params.projectId, userIdFromRequest(request), "manage_data");
-        const part = await request.file();
-        if (!part) return sendHttpError(reply, 400, "请上传文件", "INVALID_INPUT");
-        const result = await ingestUploadedDataAsset(part, {
-          projectId: request.params.projectId,
-          createdBy: userIdFromRequest(request),
-          requestId: request.id,
+        const result = await withIntakeCancellation(request, reply, async (signal) => {
+          await assertChartAction(request.params.projectId, userIdFromRequest(request), "manage_data");
+          signal.throwIfAborted();
+          const part = await request.file();
+          signal.throwIfAborted();
+          if (!part) return null;
+          return ingestUploadedDataAsset(part, {
+            signal,
+            observe: (event) => request.log.info(event, "local data intake"),
+            projectId: request.params.projectId,
+            createdBy: userIdFromRequest(request),
+            requestId: request.id,
+          });
         });
+        if (!result) return sendHttpError(reply, 400, "请上传文件", "INVALID_INPUT");
         return reply.code("intakeJobId" in result ? 202 : 201).send(result);
       } catch (error) {
         return sendDataError(reply, error);
@@ -618,7 +626,9 @@ export async function registerRoutes(
             bytes: Buffer.from(body.content, "utf8"),
           },
         };
-        const asset = await ingestDataAsset(command);
+        const asset = await withIntakeCancellation(request, reply, (signal) =>
+          ingestDataAsset({ ...command, signal, observe: (event) => request.log.info(event, "local data intake") }),
+        );
         return reply.code(201).send({ asset });
       } catch (error) {
         return sendDataError(reply, error);
@@ -631,15 +641,22 @@ export async function registerRoutes(
     async (request, reply) => {
       try {
         assertProjectId(request.params.projectId);
-        await assertChartAction(request.params.projectId, userIdFromRequest(request), "manage_data");
-        const part = await request.file();
-        if (!part) return sendHttpError(reply, 400, "请上传文件", "INVALID_INPUT");
-        const result = await ingestUploadedDataAsset(part, {
-          projectId: request.params.projectId,
-          createdBy: userIdFromRequest(request),
-          requestId: request.id,
-          target: { assetId: request.params.assetId },
+        const result = await withIntakeCancellation(request, reply, async (signal) => {
+          await assertChartAction(request.params.projectId, userIdFromRequest(request), "manage_data");
+          signal.throwIfAborted();
+          const part = await request.file();
+          signal.throwIfAborted();
+          if (!part) return null;
+          return ingestUploadedDataAsset(part, {
+            signal,
+            observe: (event) => request.log.info(event, "local data intake"),
+            projectId: request.params.projectId,
+            createdBy: userIdFromRequest(request),
+            requestId: request.id,
+            target: { assetId: request.params.assetId },
+          });
         });
+        if (!result) return sendHttpError(reply, 400, "请上传文件", "INVALID_INPUT");
         return reply.code("intakeJobId" in result ? 202 : 201).send(result);
       } catch (error) {
         return sendDataError(reply, error);
@@ -654,19 +671,23 @@ export async function registerRoutes(
         assertProjectId(request.params.projectId);
         await assertChartAction(request.params.projectId, userIdFromRequest(request), "manage_data");
         const body = pasteDataRequestSchema.parse(request.body);
-        const asset = await ingestDataAsset({
-          projectId: request.params.projectId,
-          sourceConversationId: body.conversationId,
-          createdBy: userIdFromRequest(request),
-          requestId: request.id,
-          target: { assetId: request.params.assetId },
-          source: {
-            name: body.name,
-            sourceType: "pasted",
-            mimeType: "text/csv",
-            bytes: Buffer.from(body.content, "utf8"),
-          },
-        });
+        const asset = await withIntakeCancellation(request, reply, (signal) =>
+          ingestDataAsset({
+            signal,
+            observe: (event) => request.log.info(event, "local data intake"),
+            projectId: request.params.projectId,
+            sourceConversationId: body.conversationId,
+            createdBy: userIdFromRequest(request),
+            requestId: request.id,
+            target: { assetId: request.params.assetId },
+            source: {
+              name: body.name,
+              sourceType: "pasted",
+              mimeType: "text/csv",
+              bytes: Buffer.from(body.content, "utf8"),
+            },
+          }),
+        );
         return reply.code(201).send({ asset });
       } catch (error) {
         return sendDataError(reply, error);

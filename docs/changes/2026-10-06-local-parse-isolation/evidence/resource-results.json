@@ -1,0 +1,43 @@
+{
+  "node": "v22.22.2",
+  "parentSurvived": true,
+  "maxRssKiB": 573236,
+  "results": [
+    {
+      "name": "target",
+      "bytes": 4000070,
+      "status": "success",
+      "ms": 1821.8924
+    },
+    {
+      "name": "row-limit",
+      "bytes": 2000003,
+      "status": "success",
+      "ms": 1800.2284999999997
+    },
+    {
+      "name": "column-limit",
+      "bytes": 4890,
+      "status": "success",
+      "ms": 543.5580999999997
+    },
+    {
+      "name": "over-row-limit",
+      "bytes": 2000005,
+      "status": "DATA_PARSE_FAILED",
+      "ms": 960.2593999999999
+    },
+    {
+      "name": "over-column-limit",
+      "bytes": 1297,
+      "status": "DATA_PARSE_FAILED",
+      "ms": 495.6962999999996
+    },
+    {
+      "name": "heap-pressure",
+      "bytes": 40000890,
+      "status": "DATA_PARSE_RESOURCE_LIMIT",
+      "ms": 13138.905899999998
+    }
+  ]
+}
