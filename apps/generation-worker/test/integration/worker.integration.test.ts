@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash, randomUUID } from "node:crypto";
+import { once } from "node:events";
+import net from "node:net";
 import { eq, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import {
   auditEvents,
   chartArtifacts,
@@ -56,6 +60,7 @@ import { buildApp } from "../../../api/src/app.js";
 
 const { processGenerationJob } = await import("../../src/index.js");
 const { processRenderJob } = await import("../../../render-worker/src/index.js");
+const { commitCompletedRevision } = await import("../../../render-worker/src/publication.js");
 
 test("real generation and render workers persist plugin usage and historical snapshot", async () => {
   const suffix = randomUUID();
@@ -525,6 +530,106 @@ test("real generation and render workers persist plugin usage and historical sna
       );
     } finally {
       await atomicApi.close();
+    }
+
+    // TP09: PostgreSQL commits the publication transaction, then drops the COMMIT response.
+    // The Worker must query the authoritative Job and keep all four referenced objects.
+    const commitLossApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
+    let commitLossJobId: string;
+    try {
+      const queued = await commitLossApi.inject({
+        method: "POST",
+        url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+        payload: {
+          operation: "edit",
+          baseRevisionId: visualRevision.id,
+          patch: { title: "提交回执丢失验证" },
+          idempotencyKey: `commit-loss-${suffix}`,
+        },
+      });
+      assert.equal(queued.statusCode, 202, queued.body);
+      commitLossJobId = queued.json().job.id;
+      await processGenerationJob(commitLossJobId);
+      const [queuedCommitJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, commitLossJobId));
+      const messagesBefore = await db
+        .select({ id: conversationMessages.id })
+        .from(conversationMessages)
+        .where(eq(conversationMessages.conversationId, queuedCommitJob.conversationId));
+      const fault = await createLostCommitConnection();
+      let publishRejected = false;
+      try {
+        await processRenderJob(commitLossJobId, putObject, async (lease, candidate) => {
+          try {
+            return await commitCompletedRevision(lease, candidate, fault.database);
+          } catch (error) {
+            publishRejected = true;
+            throw error;
+          }
+        });
+        assert.equal(fault.didDropCommit(), true);
+        assert.equal(publishRejected, true);
+      } finally {
+        await fault.close();
+      }
+      const [committedJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, commitLossJobId));
+      const [committedRevision] = await db
+        .select()
+        .from(chartRevisions)
+        .where(eq(chartRevisions.generationJobId, commitLossJobId));
+      assert.equal(committedJob.status, "succeeded");
+      assert.equal(committedJob.errorCode, null);
+      assert.equal(committedRevision.id, committedJob.candidateRevisionId);
+      assert.equal(
+        (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, commitLossJobId))).length,
+        1,
+      );
+      assert.equal(
+        (await db.select().from(auditEvents).where(eq(auditEvents.entityId, committedRevision.id))).length,
+        1,
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(conversationMessages)
+            .where(eq(conversationMessages.conversationId, committedJob.conversationId))
+        ).length,
+        messagesBefore.length + 1,
+      );
+      const committedOutputs = committedRevision.outputObjects as Record<"vegaLite" | "svg" | "png" | "html", string>;
+      for (const key of [
+        committedOutputs.vegaLite,
+        committedOutputs.svg,
+        committedOutputs.png,
+        committedOutputs.html,
+      ]) {
+        objectKeys.push(key);
+        assert.ok((await getObject(key)).length > 0);
+      }
+      await processRenderJob(commitLossJobId);
+      assert.equal(
+        (await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, commitLossJobId))).length,
+        1,
+      );
+      assert.equal(
+        (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, commitLossJobId))).length,
+        1,
+      );
+      assert.equal(
+        (await db.select().from(auditEvents).where(eq(auditEvents.entityId, committedRevision.id))).length,
+        1,
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(conversationMessages)
+            .where(eq(conversationMessages.conversationId, committedJob.conversationId))
+        ).length,
+        messagesBefore.length + 1,
+      );
+    } finally {
+      await commitLossApi.close();
     }
 
     // A real Worker failure before the first object write must retain the frozen finding through API retry.
@@ -1238,6 +1343,80 @@ test("real generation and render workers persist plugin usage and historical sna
     await closeDatabase();
   }
 });
+
+async function createLostCommitConnection(): Promise<{
+  database: typeof db;
+  didDropCommit: () => boolean;
+  close: () => Promise<void>;
+}> {
+  assert.equal(process.env.LANGREPORT_INTEGRATION_TEST, "1");
+  const target = new URL(process.env.DATABASE_URL!);
+  assert.equal(target.hostname, "127.0.0.1");
+  assert.equal(target.port, "54330");
+  assert.ok(target.pathname.endsWith("_test"));
+  assert.match(process.env.DATABASE_SCHEMA!, /^langreport_test_[a-z0-9]+$/);
+  let dropped = false;
+  const sockets = new Set<net.Socket>();
+  const proxy = net.createServer((downstream) => {
+    const upstream = net.connect({ host: "127.0.0.1", port: 54330 });
+    for (const socket of [downstream, upstream]) {
+      sockets.add(socket);
+      socket.on("close", () => sockets.delete(socket));
+      socket.on("error", () => {
+        downstream.destroy();
+        upstream.destroy();
+      });
+    }
+    downstream.pipe(upstream);
+    let buffered = Buffer.alloc(0);
+    upstream.on("data", (chunk) => {
+      buffered = Buffer.concat([buffered, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
+      while (buffered.length >= 5) {
+        const length = buffered.readUInt32BE(1) + 1;
+        if (length < 5 || length > 16 * 1024 * 1024) {
+          downstream.destroy();
+          upstream.destroy();
+          return;
+        }
+        if (buffered.length < length) return;
+        const frame = buffered.subarray(0, length);
+        buffered = buffered.subarray(length);
+        // CommandComplete(COMMIT) is emitted after PostgreSQL has committed.
+        if (!dropped && frame[0] === 67 && frame.subarray(5).toString() === "COMMIT\0") {
+          dropped = true;
+          downstream.destroy();
+          upstream.destroy();
+          return;
+        }
+        downstream.write(frame);
+      }
+    });
+    downstream.on("close", () => upstream.destroy());
+    upstream.on("close", () => downstream.destroy());
+  });
+  proxy.listen(0, "127.0.0.1");
+  await once(proxy, "listening");
+  const address = proxy.address();
+  assert.ok(address && typeof address !== "string");
+  const proxyUrl = new URL(target);
+  proxyUrl.port = String(address.port);
+  const client = postgres(proxyUrl.toString(), {
+    max: 1,
+    prepare: false,
+    ssl: false,
+    connect_timeout: 3,
+    connection: { search_path: process.env.DATABASE_SCHEMA },
+  });
+  return {
+    database: drizzle({ client }) as typeof db,
+    didDropCommit: () => dropped,
+    close: async () => {
+      await client.end({ timeout: 1 });
+      for (const socket of sockets) socket.destroy();
+      await new Promise<void>((resolve) => proxy.close(() => resolve()));
+    },
+  };
+}
 
 function captureConsoleOutput(target: string[]): () => void {
   const originalLog = console.log;

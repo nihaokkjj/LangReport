@@ -57,7 +57,11 @@ class CandidateOutputMismatchError extends Error {
   }
 }
 
-export async function processRenderJob(jobId: string, writeOutput: typeof putObject = putObject): Promise<void> {
+export async function processRenderJob(
+  jobId: string,
+  writeOutput: typeof putObject = putObject,
+  publish: typeof commitCompletedRevision = commitCompletedRevision,
+): Promise<void> {
   await ensureMemoryRevocationReady();
   await withAdvisoryLock(`generation-render:${jobId}`, async () => {
     const lease = await claimGenerationJobLease({
@@ -70,7 +74,7 @@ export async function processRenderJob(jobId: string, writeOutput: typeof putObj
     if (!lease) return;
     const heartbeat = startGenerationJobLeaseHeartbeat(lease);
     try {
-      await processRenderJobLocked(jobId, lease, writeOutput);
+      await processRenderJobLocked(jobId, lease, writeOutput, publish);
     } catch (error) {
       if (error instanceof GenerationJobLeaseLostError || heartbeat.hasLostLease()) {
         console.warn(`${workerName} lease lost`, { jobId, fencingToken: lease.fencingToken });
@@ -97,6 +101,7 @@ async function processRenderJobLocked(
   jobId: string,
   lease: GenerationJobLease,
   writeOutput: typeof putObject,
+  publish: typeof commitCompletedRevision,
 ): Promise<void> {
   const [record] = await db
     .select({
@@ -297,7 +302,7 @@ async function processRenderJobLocked(
       rendererVersion: RENDERER_VERSION,
     };
     const finalGenerationAudit = withValidationAudit(record.job.generationAudit, { planValidation, renderValidation });
-    const revision = await commitCompletedRevision(lease, {
+    const revision = await publish(lease, {
       identity: reservedRevision,
       inputFingerprint: record.job.inputFingerprint,
       spec,

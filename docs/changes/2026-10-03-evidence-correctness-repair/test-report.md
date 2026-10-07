@@ -9,6 +9,14 @@
 
 ## A 批实施验证（新增）
 
+### 2026-10-07 T6 COMMIT 回执丢失（TP09 限定结果）
+
+在真实隔离 PostgreSQL/MinIO 的 Worker 集成中，新编辑 Job 经 API 入队、Generation Worker 处理后，由 Render Worker 完成四对象写入。仅发布事务走测试代理；代理在 PostgreSQL 发出 `CommandComplete(COMMIT)` 后断开连接，确保数据库已经提交而 Worker 没收到成功回执。Worker 随即通过独立直连查询 Job/Revision，避免把既成成功误记为失败。断言 Job `succeeded`、预留 Revision 身份一致、Evidence/审计各一条、所属 Conversation 恰一条新助手回复；四个被 Revision 引用的 MinIO 对象均可读，再次处理同 Job 不增加业务行或回复。
+
+首次完整集成 API14/浏览器2 通过，Worker 因测试按原 Conversation 而非编辑 Job 所属 Conversation 统计回复失败；改为按 Job 冻结的 `conversationId` 核对，并将对象检查限定于四个输出键后，完整 `node scripts/test-integration.mjs` 自然退出 0（API14/浏览器2/Worker2）。Render Worker 源码和 Generation Worker 测试类型检查通过。此证据覆盖新编辑的真实 COMMIT 回执丢失，不代表候选对象对账、复制/回滚 Job 化、TP12/TP14 或 T6 整体验收通过。
+
+固定快照[独立只读复核](./evidence/t6-commit-loss-independent.md)未发现本轮新增确定性 P1/P2，但指出测试只断言代理丢回执，未直接证明发布 Promise 走异常分支。已增加 `publishRejected` 断言，并在不改业务代码的情况下重跑完整隔离集成，仍自然退出 0（API14/浏览器2/Worker2）。独立角色没有重跑集成，也未复核新增断言。
+
 ### 2026-10-07 T6 单事务发布与固定 Evidence（限定结果）
 
 新生成/编辑路径移除“先提交 Revision/head，后写 Evidence、回复与 Job 成功”的分段发布，改为同一个受租约 fencing 约束的数据库事务。编辑 Job 的 Evidence 仅新增，不再复用同 Artifact 的旧行。真实 PostgreSQL 集成增加约束故障：候选四对象写完后，在 Evidence 插入时强制数据库报错，确认 Job 失败，但目标 Revision/Evidence/审计、head 推进和助手回复均未落地；移除故障后真实 API 重试复用同一预留 Revision 身份并成功。另断言视觉编辑后旧 Evidence 的 Job/Revision/finding 不变。完整隔离集成第一轮 API14/浏览器2/Worker2 自然退出 0；移除历史恢复路径后最终同命令再次自然退出 0：API14/浏览器2/Worker2。

@@ -52,8 +52,9 @@ type Revision = typeof chartRevisions.$inferSelect;
 export async function commitCompletedRevision(
   lease: GenerationJobLease,
   candidate: CompletedRevisionCandidate,
+  database: typeof db = db,
 ): Promise<Revision> {
-  return db.transaction(async (tx) => {
+  return database.transaction(async (tx) => {
     // Lock Job before Artifact: takeover and another commit cannot interleave with this transaction.
     const [job] = await tx
       .select()
