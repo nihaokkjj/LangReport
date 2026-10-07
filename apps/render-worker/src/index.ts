@@ -128,6 +128,13 @@ async function processRenderJobLocked(
         revision: existingRevision,
         spec,
         workspaceId: record.workspaceId,
+        htmlKey: renderOutputObjectKey({
+          workspaceId: record.workspaceId,
+          projectId: record.job.projectId,
+          assetId: record.job.dataAssetId,
+          filename: `${jobId}.${randomUUID()}.html`,
+        }),
+        writeOutput,
       });
       const renderValidation = mergeRenderValidation(baseRenderValidation, ensured.htmlValidation);
       if (renderValidation.status !== "passed") {
@@ -249,10 +256,13 @@ async function processRenderJobLocked(
       projectId: record.job.projectId,
       assetId: record.job.dataAssetId,
     };
-    const vegaLiteKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.vega-lite.json` });
-    const svgKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.svg` });
-    const pngKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.png` });
-    const htmlKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.html` });
+    // Each lease attempt writes private candidate keys. A late worker cannot overwrite
+    // another attempt's validated outputs for the same Job.
+    const candidateName = `${jobId}.${randomUUID()}`;
+    const vegaLiteKey = renderOutputObjectKey({ ...outputBase, filename: `${candidateName}.vega-lite.json` });
+    const svgKey = renderOutputObjectKey({ ...outputBase, filename: `${candidateName}.svg` });
+    const pngKey = renderOutputObjectKey({ ...outputBase, filename: `${candidateName}.png` });
+    const htmlKey = renderOutputObjectKey({ ...outputBase, filename: `${candidateName}.html` });
     await writeOutput({
       key: vegaLiteKey,
       body: JSON.stringify(rendered.vegaLiteSpec),
@@ -334,6 +344,7 @@ async function processRenderJobLocked(
       svg: rendered.svg,
       htmlKey,
       workspaceId: record.workspaceId,
+      writeOutput,
     });
     const renderValidation = mergeRenderValidation(baseRenderValidation, ensured.htmlValidation);
     if (renderValidation.status !== "passed") {
@@ -402,15 +413,16 @@ async function ensureStaticHtmlOutput(input: {
   workspaceId: string;
   svg?: string;
   htmlKey?: string;
+  writeOutput: typeof putObject;
 }): Promise<{ revision: typeof chartRevisions.$inferSelect; htmlValidation: ValidationRecord }> {
   const outputObjects = isRecord(input.revision.outputObjects) ? { ...input.revision.outputObjects } : {};
   const svgKey = typeof outputObjects.svg === "string" ? outputObjects.svg : undefined;
   const svg = input.svg ?? (svgKey ? (await getObject(svgKey)).toString("utf8") : "");
   const htmlKey =
-    typeof outputObjects.html === "string"
+    input.htmlKey ??
+    (typeof outputObjects.html === "string"
       ? outputObjects.html
-      : (input.htmlKey ??
-        renderOutputObjectKey({
+      : renderOutputObjectKey({
           workspaceId: input.workspaceId,
           projectId: input.job.projectId,
           assetId: input.job.dataAssetId,
@@ -444,7 +456,7 @@ async function ensureStaticHtmlOutput(input: {
   }
   const htmlValidation = validateStaticSvgHtml(html);
   if (htmlValidation.status !== "passed") return { revision: input.revision, htmlValidation };
-  await putObject({ key: htmlKey, body: html, contentType: "text/html; charset=utf-8" });
+  await input.writeOutput({ key: htmlKey, body: html, contentType: "text/html; charset=utf-8" });
   const nextOutputObjects = { ...outputObjects, html: htmlKey };
   const [revision] = await db
     .update(chartRevisions)

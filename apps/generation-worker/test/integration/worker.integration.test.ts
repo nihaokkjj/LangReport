@@ -411,6 +411,7 @@ test("real generation and render workers persist plugin usage and historical sna
 
     // A real Worker failure before the first object write must retain the frozen finding through API retry.
     const retryFinding = "故障前已经确认的来源发现";
+    let failedCandidateKey: string | undefined;
     await db.update(evidenceBlocks).set({ finding: retryFinding }).where(eq(evidenceBlocks.id, visualEvidence.id));
     const retryApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
     let retryJobId: string;
@@ -432,7 +433,12 @@ test("real generation and render workers persist plugin usage and historical sna
         .set({ finding: "入队后再次改写来源发现" })
         .where(eq(evidenceBlocks.id, visualEvidence.id));
       await processGenerationJob(retryJobId);
-      await processRenderJob(retryJobId, async () => {
+      await processRenderJob(retryJobId, async (output) => {
+        if (!failedCandidateKey) {
+          failedCandidateKey = output.key;
+          await putObject(output);
+          return;
+        }
         throw new Error("TRANSIENT_OBJECT_STORE_UNAVAILABLE");
       });
       const [failed] = await db.select().from(generationJobs).where(eq(generationJobs.id, retryJobId));
@@ -467,6 +473,9 @@ test("real generation and render workers persist plugin usage and historical sna
       .select()
       .from(evidenceBlocks)
       .where(eq(evidenceBlocks.generationJobId, retryJobId));
+    assert.ok(failedCandidateKey);
+    assert.notEqual((retriedRevision.outputObjects as { vegaLite: string }).vegaLite, failedCandidateKey);
+    assert.ok((await getObject(failedCandidateKey)).length > 0);
     assert.equal(retriedEvidence.finding, retryFinding);
     assert.equal(JSON.stringify(retriedRevision).includes(privatePreference.statement), false);
     const retriedHtml = await getObject((retriedRevision.outputObjects as { html: string }).html);
@@ -480,6 +489,79 @@ test("real generation and render workers persist plugin usage and historical sna
       ).length,
       1,
     );
+
+    // A retry after Revision insertion must publish HTML under a new key.
+    const postRevisionApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
+    let postRevisionJobId: string;
+    let failedHtmlKey: string | undefined;
+    try {
+      const queued = await postRevisionApi.inject({
+        method: "POST",
+        url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+        payload: {
+          operation: "edit",
+          baseRevisionId: retriedRevision.id,
+          patch: { title: "HTML 故障恢复" },
+          idempotencyKey: `html-retry-${suffix}`,
+        },
+      });
+      assert.equal(queued.statusCode, 202, queued.body);
+      postRevisionJobId = queued.json().job.id;
+      await processGenerationJob(postRevisionJobId);
+      await processRenderJob(postRevisionJobId, async (output) => {
+        if (output.contentType === "text/html; charset=utf-8") {
+          failedHtmlKey = output.key;
+          await putObject(output);
+          throw new Error("TRANSIENT_HTML_STORE_UNAVAILABLE");
+        }
+        await putObject(output);
+      });
+      const [failed] = await db.select().from(generationJobs).where(eq(generationJobs.id, postRevisionJobId));
+      assert.equal(failed.status, "failed");
+      assert.equal(failed.errorCode, "RENDER_FAILED");
+      const [partialRevision] = await db
+        .select()
+        .from(chartRevisions)
+        .where(eq(chartRevisions.generationJobId, postRevisionJobId));
+      assert.ok(partialRevision);
+      assert.equal((partialRevision.outputObjects as { html: string }).html, failedHtmlKey);
+      assert.ok(failedHtmlKey);
+      const failedHtmlBytes = await getObject(failedHtmlKey);
+      const retried = await postRevisionApi.inject({
+        method: "POST",
+        url: `/api/v1/generation-jobs/${postRevisionJobId}/retry`,
+      });
+      assert.equal(retried.statusCode, 202, retried.body);
+      assert.equal(retried.json().job.status, "rendering");
+      await processRenderJob(postRevisionJobId);
+      const [recoveredRevision] = await db
+        .select()
+        .from(chartRevisions)
+        .where(eq(chartRevisions.generationJobId, postRevisionJobId));
+      const [recoveredJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, postRevisionJobId));
+      assert.equal(recoveredJob.status, "succeeded");
+      assert.equal(recoveredRevision.id, partialRevision.id);
+      const [recoveredEvidence] = await db
+        .select()
+        .from(evidenceBlocks)
+        .where(eq(evidenceBlocks.generationJobId, postRevisionJobId));
+      assert.equal(recoveredEvidence.chartRevisionId, recoveredRevision.id);
+      const recoveredHtmlKey = (recoveredRevision.outputObjects as { html: string }).html;
+      assert.notEqual(recoveredHtmlKey, failedHtmlKey);
+      assert.deepEqual(await getObject(failedHtmlKey), failedHtmlBytes);
+      assert.ok((await getObject(recoveredHtmlKey)).toString("utf8").includes(retryFinding));
+      assert.equal(
+        (
+          await db
+            .select({ id: chartRevisions.id })
+            .from(chartRevisions)
+            .where(eq(chartRevisions.generationJobId, postRevisionJobId))
+        ).length,
+        1,
+      );
+    } finally {
+      await postRevisionApi.close();
+    }
 
     const editPlan = {
       version: "v1" as const,

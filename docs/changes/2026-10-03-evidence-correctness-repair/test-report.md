@@ -9,6 +9,12 @@
 
 ## A 批实施验证（新增）
 
+### 2026-10-07 T6 执行尝试隔离候选对象
+
+Render Worker 对新渲染使用独立随机执行标识，为 Vega-Lite、SVG、PNG、HTML 生成同组候选对象键；已有 Revision 的恢复只重写 HTML，改用新的候选 HTML 键。真实隔离集成先在写入候选 Vega-Lite 后使第二次写入失败，确认 Job 失败、无新 Revision；真实 API 重试后成功且新 Revision 未引用旧候选键。独立只读复核发现已有 Revision 的恢复分支仍覆写旧 HTML 键，随后修正并新增第二场景：HTML 对象写入成功后注入故障，保留已创建 Revision，真实 API 重试进入恢复分支；Revision ID 不变，最终 HTML 键不同，旧键内容保持不变。完整 `node scripts/test-integration.mjs` 再次自然退出 0：API 14/14、Generation Worker 2/2、真实预算失败浏览器桌面/移动 2/2。Render Worker 源码、Generation Worker 测试类型检查、两文件定向 ESLint、Prettier 与 `git diff --check` 通过。
+
+这是 T6 候选对象隔离的限定结果。[独立只读复核](./evidence/t6-attempt-independent.md)记录了旧 HTML 键覆写发现、修复与最终限定结论。失败候选的对账清理、目标 Revision 预留、内容哈希清单、事务内 Revision/Evidence/head/Job 一起完成以及迟到 Worker 的数据库写入 fencing 仍待实施；本用例没有模拟 A/B 同时持有不同租约，不代表 TP09/TP12–TP14 验收。
+
 ### 2026-10-07 T5 临时输出故障与 API 重试
 
 在隔离 PostgreSQL/MinIO 的真实编辑链路中，先经 Fastify API 创建视觉编辑 Job，入队后修改来源 Evidence 的 finding，再运行 Generation Worker。Render Worker 在首次写对象前注入一次暂时性写入异常，Job 持久化为 `failed/RENDER_FAILED`，错误信息可查，且没有产生 Revision。随后调用真实 `POST /generation-jobs/:jobId/retry`，同一 Job 回到 `queued`；两类 Worker 再次执行后，Job 成功且仅有一个新 Revision，Evidence 与 HTML 保留入队时冻结的 finding，私有偏好正文未进入 Revision。注入异常验证的是对象写入失败处理，未实际中断 MinIO 服务。
