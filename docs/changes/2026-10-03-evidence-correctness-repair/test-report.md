@@ -3,11 +3,17 @@
 - change-id：`CHG-2026-10-03-evidence-correctness-repair`
 - 状态：`IMPLEMENTING`，部分验证
 - 创建时间：2026-10-03
-- 更新时间：2026-10-03
+- 更新时间：2026-10-07
 - 业务测试状态：`PARTIAL`；下方保留原文档阶段结果，不代表当前未修改代码。
 - 执行角色：owner 自测；独立角色完成一次冻结快照的只读代码复核，未完成最终独立测试。
 
 ## A 批实施验证（新增）
+
+### 2026-10-07 T5 临时输出故障与 API 重试
+
+在隔离 PostgreSQL/MinIO 的真实编辑链路中，先经 Fastify API 创建视觉编辑 Job，入队后修改来源 Evidence 的 finding，再运行 Generation Worker。Render Worker 在首次写对象前注入一次暂时性写入异常，Job 持久化为 `failed/RENDER_FAILED`，错误信息可查，且没有产生 Revision。随后调用真实 `POST /generation-jobs/:jobId/retry`，同一 Job 回到 `queued`；两类 Worker 再次执行后，Job 成功且仅有一个新 Revision，Evidence 与 HTML 保留入队时冻结的 finding，私有偏好正文未进入 Revision。注入异常验证的是对象写入失败处理，未实际中断 MinIO 服务。
+
+首轮完整集成测试在基于更早 Revision 发起第二次编辑时得到 `409 REVISION_PROVENANCE_INCOMPLETE`：现有 Evidence 持久化会把该行的 `chartRevisionId` 改指新 Revision，旧 Revision 随即缺失 Evidence。这是 T7 固定绑定的待修缺陷，不因本轮重试用例通过而关闭。用例改为基于当前仍具完整 Evidence 的视觉编辑 Revision，覆盖 T5 重试路径；第二轮完整 `node scripts/test-integration.mjs` 自然退出 0，API 14/14、Generation Worker 2/2、真实预算失败浏览器桌面/移动 2/2。该结果不代表 T6 原子发布或 T7 历史 Evidence 不可变验收。
 
 ### 2026-10-07 T5 逻辑编辑 API 链路补验
 

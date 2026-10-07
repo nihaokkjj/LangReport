@@ -409,6 +409,78 @@ test("real generation and render workers persist plugin usage and historical sna
     assert.ok(visualHtml.toString("utf8").includes(reviewedFinding));
     assert.equal(JSON.stringify(visualRevision).includes(privatePreference.statement), false);
 
+    // A real Worker failure before the first object write must retain the frozen finding through API retry.
+    const retryFinding = "故障前已经确认的来源发现";
+    await db.update(evidenceBlocks).set({ finding: retryFinding }).where(eq(evidenceBlocks.id, visualEvidence.id));
+    const retryApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
+    let retryJobId: string;
+    try {
+      const queued = await retryApi.inject({
+        method: "POST",
+        url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+        payload: {
+          operation: "edit",
+          baseRevisionId: visualRevision.id,
+          patch: { title: "故障后重试标题" },
+          idempotencyKey: `visual-retry-${suffix}`,
+        },
+      });
+      assert.equal(queued.statusCode, 202, queued.body);
+      retryJobId = queued.json().job.id;
+      await db
+        .update(evidenceBlocks)
+        .set({ finding: "入队后再次改写来源发现" })
+        .where(eq(evidenceBlocks.id, visualEvidence.id));
+      await processGenerationJob(retryJobId);
+      await processRenderJob(retryJobId, async () => {
+        throw new Error("TRANSIENT_OBJECT_STORE_UNAVAILABLE");
+      });
+      const [failed] = await db.select().from(generationJobs).where(eq(generationJobs.id, retryJobId));
+      assert.equal(failed.status, "failed");
+      assert.equal(failed.errorCode, "RENDER_FAILED");
+      assert.match(failed.errorMessage ?? "", /TRANSIENT_OBJECT_STORE_UNAVAILABLE/);
+      assert.equal(
+        (
+          await db
+            .select({ id: chartRevisions.id })
+            .from(chartRevisions)
+            .where(eq(chartRevisions.generationJobId, retryJobId))
+        ).length,
+        0,
+      );
+      const retried = await retryApi.inject({ method: "POST", url: `/api/v1/generation-jobs/${retryJobId}/retry` });
+      assert.equal(retried.statusCode, 202, retried.body);
+      assert.equal(retried.json().job.id, retryJobId);
+      assert.equal(retried.json().job.status, "queued");
+      await processGenerationJob(retryJobId);
+      await processRenderJob(retryJobId);
+    } finally {
+      await retryApi.close();
+    }
+    const [retriedJob] = await db.select().from(generationJobs).where(eq(generationJobs.id, retryJobId));
+    assert.equal(retriedJob.status, "succeeded");
+    const [retriedRevision] = await db
+      .select()
+      .from(chartRevisions)
+      .where(eq(chartRevisions.generationJobId, retryJobId));
+    const [retriedEvidence] = await db
+      .select()
+      .from(evidenceBlocks)
+      .where(eq(evidenceBlocks.generationJobId, retryJobId));
+    assert.equal(retriedEvidence.finding, retryFinding);
+    assert.equal(JSON.stringify(retriedRevision).includes(privatePreference.statement), false);
+    const retriedHtml = await getObject((retriedRevision.outputObjects as { html: string }).html);
+    assert.ok(retriedHtml.toString("utf8").includes(retryFinding));
+    assert.equal(
+      (
+        await db
+          .select({ id: chartRevisions.id })
+          .from(chartRevisions)
+          .where(eq(chartRevisions.generationJobId, retryJobId))
+      ).length,
+      1,
+    );
+
     const editPlan = {
       version: "v1" as const,
       rationale: "只保留华东订单，按月份聚合后按销售额降序排列。",

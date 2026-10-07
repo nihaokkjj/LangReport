@@ -3,7 +3,7 @@
 - change-id：`CHG-2026-10-03-evidence-correctness-repair`
 - 状态：`IMPLEMENTING`
 - 创建时间：2026-10-03
-- 更新时间：2026-10-03
+- 更新时间：2026-10-07
 
 ## 执行前提
 
@@ -22,7 +22,7 @@
 | T2  | 统一渲染兼容性实验                  | T1        | flint-adapter、Web 测试宿主                               | 五轮浏览器与生产构建通过，门禁未通过         | 10,000 点上限已选；服务端/浏览器统一规范、守卫及真实预算失败链路通过；完整包体与其余视觉正确性仍待验收                                           |
 | T3  | 完整图表输入和统一渲染              | T2        | flint-adapter、Render Worker、Web                         | 统一运行时与真实预算失败链路通过，整体未验收 | 服务端 Vega SVG/PNG、浏览器固定 Revision Vega 预览和编辑预览已接入；真实 PostgreSQL→Worker→API→UI 预算失败链路通过，成功全流程未验收             |
 | T4  | 修正排序、周期索引与本地解析        | T1        | data-engine、generation、contracts                        | 实施及限定复验通过                           | 排序/索引/解析修复、v1/v2 冻结、完整粒度规划、合成 TP20 对照已实施；独立快照纯函数复验通过，非全链路验收                                         |
-| T5  | 建立冻结派生输入                    | T1        | chart、API、Generation Worker                             | 编辑链路通过，真实故障重试待补               | 标题与逻辑编辑均经API/两类Worker验证；同键冲突与缺来源拒绝通过；真实临时故障后的重试待补，T6/T7生命周期单列                                      |
+| T5  | 建立冻结派生输入                    | T1        | chart、API、Generation Worker                             | 实现与限定集成验证通过，整体验收待独立复核   | 标题与逻辑编辑经 API/两类 Worker 验证；同键冲突与缺来源拒绝通过；注入对象写入故障后经真实 API 重试成功，T6/T7 生命周期单列                       |
 | T6  | additive 模型与原子完成提交         | T5        | db、chart、storage、两类 Worker                           | 未开始                                       | 预留身份、候选输出、按 Job/Artifact 锁定、fencing、COMMIT 未知结果处理；TP09/TP12–TP14 通过                                                      |
 | T7  | Evidence 固定绑定与审核就绪门       | T6        | chart、domain、API                                        | 未开始                                       | TP10/TP11/TP15 通过；旧版本审核不混合内容，failed/缺输出不可批准，权限保持                                                                       |
 | T8  | copy/rollback 异步、合同与 Web 接通 | T3、T5–T7 | contracts/http、API、API Console、Web                     | 未开始                                       | TP07/TP08/TP22 通过；客户端兼容窗口明确，成功版本身份完整；刷新恢复既有 Generation Job watcher                                                   |

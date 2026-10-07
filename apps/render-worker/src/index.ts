@@ -55,7 +55,7 @@ const leaseDurationMs = Number(process.env.GENERATION_JOB_LEASE_MS ?? 30_000);
 const workerInstanceId = process.env.RENDER_WORKER_ID?.trim() || `${workerName}:${randomUUID()}`;
 let polling = false;
 
-export async function processRenderJob(jobId: string): Promise<void> {
+export async function processRenderJob(jobId: string, writeOutput: typeof putObject = putObject): Promise<void> {
   await ensureMemoryRevocationReady();
   await withAdvisoryLock(`generation-render:${jobId}`, async () => {
     const lease = await claimGenerationJobLease({
@@ -68,7 +68,7 @@ export async function processRenderJob(jobId: string): Promise<void> {
     if (!lease) return;
     const heartbeat = startGenerationJobLeaseHeartbeat(lease);
     try {
-      await processRenderJobLocked(jobId, lease);
+      await processRenderJobLocked(jobId, lease, writeOutput);
     } catch (error) {
       if (error instanceof GenerationJobLeaseLostError || heartbeat.hasLostLease()) {
         console.warn(`${workerName} lease lost`, { jobId, fencingToken: lease.fencingToken });
@@ -90,7 +90,11 @@ export async function processRenderJob(jobId: string): Promise<void> {
   });
 }
 
-async function processRenderJobLocked(jobId: string, lease: GenerationJobLease): Promise<void> {
+async function processRenderJobLocked(
+  jobId: string,
+  lease: GenerationJobLease,
+  writeOutput: typeof putObject,
+): Promise<void> {
   const [record] = await db
     .select({
       job: generationJobs,
@@ -249,9 +253,13 @@ async function processRenderJobLocked(jobId: string, lease: GenerationJobLease):
     const svgKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.svg` });
     const pngKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.png` });
     const htmlKey = renderOutputObjectKey({ ...outputBase, filename: `${jobId}.html` });
-    await putObject({ key: vegaLiteKey, body: JSON.stringify(rendered.vegaLiteSpec), contentType: "application/json" });
-    await putObject({ key: svgKey, body: rendered.svg, contentType: "image/svg+xml" });
-    await putObject({ key: pngKey, body: rendered.png, contentType: "image/png" });
+    await writeOutput({
+      key: vegaLiteKey,
+      body: JSON.stringify(rendered.vegaLiteSpec),
+      contentType: "application/json",
+    });
+    await writeOutput({ key: svgKey, body: rendered.svg, contentType: "image/svg+xml" });
+    await writeOutput({ key: pngKey, body: rendered.png, contentType: "image/png" });
 
     const outputObjects = {
       vegaLite: vegaLiteKey,

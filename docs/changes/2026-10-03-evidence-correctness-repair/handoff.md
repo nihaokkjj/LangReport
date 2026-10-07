@@ -3,9 +3,11 @@
 - change-id：`CHG-2026-10-03-evidence-correctness-repair`
 - 状态：`IMPLEMENTING`（A 批部分实施，未验收）
 - 创建时间：2026-10-03
-- 更新时间：2026-10-06
+- 更新时间：2026-10-07
 
 ## 最新续做状态（优先于下方历史段落）
+
+2026-10-07 T5 补充真实 Worker 输出写入异常与 API 重试：首次对象写入前注入暂时故障，Job 持久化 `failed/RENDER_FAILED` 且不产生 Revision；真实 retry 接口重排同一 Job，随后 Generation/Render Worker 成功生成唯一 Revision，Evidence/HTML 仍使用入队冻结 finding。完整隔离集成 API14/Worker2/预算失败浏览器2 均通过且自然退出。注入的是对象写入故障，未实际关闭 MinIO。首轮测试还复现旧 Revision 的 Evidence 被后继 Revision 改绑，导致该旧版本再次编辑返回 409；列为 T7 待修，不关闭 T6/T7。T5 实现及限定集成验证通过，整体任务仍 IMPLEMENTING；下一步推进 T6 原子发布，保留共享 G6 修改。
 
 2026-10-07 T5逻辑编辑测试已从直接构造Job改为真实API入队，并在隔离PostgreSQL/MinIO走通Generation Worker、Render Worker、新Revision/Evidence；同键复用、不同输入冲突、缺Brief拒绝且不入队均通过。完整默认集成API14+浏览器2+Worker2自然退出；Worker测试类型、格式、lint通过。真实临时故障后的重试尚未验证，T5不标全部完成。下方旧段落为当时状态。
 
