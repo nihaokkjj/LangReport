@@ -7,6 +7,9 @@
 
 ## 最新续做状态（优先于下方历史段落）
 
+2026-10-08 T7 技术验收通过，实现提交 `251cb4c`，TP10/TP11/TP15 的真实 API→隔离 PostgreSQL/MinIO 断言全部通过；最终完整集成自然退出0（API14/浏览器2/Worker2），离线集与API Console四屏宽20/20通过。审核按固定Revision核验完整来源、成功Job、两层校验与四输出长度/SHA-256；失败409/503不写业务状态。批准旧版本不回退head、不改其他Evidence，published变化独立审计。历史查询revisionId、Viewer过滤、并发批准、非法迁移、401/403/404与跨Project拒绝均通过。独立静态复核未见阻断，未独立重跑。既有routes lint、boundaries和hygiene保留，详见acceptance；不称全仓门禁通过。用户已授权本轮提交，不推送或部署。下一步T8，整体仍IMPLEMENTING；next-env.d.ts和runtime-experiment保留。
+
+
 2026-10-08 T6 技术验收通过：编辑、复制、回滚通过持久 Generation Job 和带租约 fencing 的单事务发布；六个同 Artifact 的三个编辑与三个回滚 Job 经真实 API、两类 Worker、PostgreSQL/MinIO 并发反序发布，编号唯一，head 指向最高成功编号，每 Job 恰一 Revision/Evidence/审计/回复。复制/回滚在第三个对象 PUT 失败后无业务半成品，真实 API retry 唯一发布；同键并发三操作不留孤立 Conversation；PUT 已写入但回执丢失、既有 COMMIT 回执丢失、候选对账和提交前失租均有对应测试。最终完整隔离集成 API14/真实浏览器2/Worker2 自然退出 0，API Console 四屏宽16/16、相关类型、定向格式/lint、docs 通过。独立只读复核未发现确定性 P1/P2，未独立重跑；其建议的复制/回滚审计/回复断言已补并复核。完整变更仍为 IMPLEMENTING，下一任务为 T7 Evidence 固定绑定与审核就绪门；T8 的工作台交互接通仍待做。自然租约等待/自动轮询未实测。原有 `apps/web/next-env.d.ts` 差异不纳入提交。下方“不通过”均为历史时点。
 
 2026-10-08 T6 六完整并发编辑 Job 限定结果：同一 Artifact 的六个真实 API 编辑 Job 经两类 Worker 并行处理，发布前屏障让五个较高编号竞争提交、最低编号最后完成；真实隔离 PostgreSQL/MinIO 中全部成功，编号唯一且不重用，head 保持最高成功编号，每 Job 恰一 Revision/Evidence/审计/回复，四对象可读，重复处理不增 Revision。完整隔离集成 API14/浏览器2/Worker2 自然退出 0。回滚仍同步绕过 Job，TP12 编辑/回滚混合场景未覆盖，T6 不标通过。

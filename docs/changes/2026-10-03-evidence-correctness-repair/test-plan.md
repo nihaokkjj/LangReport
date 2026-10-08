@@ -5,6 +5,10 @@
 - 创建时间：2026-10-03
 - 更新时间：2026-10-03
 
+## T7 实际测试落点（2026-10-08）
+
+`apps/generation-worker/test/integration/t7-review.ts` 由已有 worker.integration.test.ts 显式调用并由 scripts/test-integration.mjs 发现；使用两类 Worker 已发布的不同 finding 版本。TP10 在 submit/approve 各注入 Plan、Render、Job failed、PNG/HTML 缺失、同长度错哈希、真实 loopback ECONNREFUSED、缺 Brief 和错版本清单，核对拒绝及业务表不变。TP11 覆盖历史审核、并发批准唯一成功、head 保留、published 审计、内容不改和状态投影。TP15 覆盖 Editor/Reviewer/Viewer/跨用户/跨 Project、导出、非法迁移和 expectedStatus；最终补验含未认证 401 和缺 Evidence 空历史。OpenAPI 单元及 API Console 四屏宽说明同步验证。
+
 ## 数据与环境
 
 使用合成表格、独立用户/Workspace/Project、旧版数据库夹具和可暂停的渲染/存储适配器。数据库、S3 仅使用项目专用测试端点与随机 schema/bucket，继承 integration-environment 的保护，不加载现用 .env 或调用真实飞书/模型。离线用例不得访问外部服务。

@@ -7,6 +7,24 @@
 - 业务测试状态：`PARTIAL`；下方保留原文档阶段结果，不代表当前未修改代码。
 - 执行角色：owner 自测；独立角色完成 T6 最终候选的限定只读代码复核，未独立重跑集成测试。
 
+## 2026-10-08 T7 技术验收（通过；实现提交 `251cb4c`）
+
+T7 按 TP10、TP11、TP15 技术验收通过，整体仍为 IMPLEMENTING。审核固定目标 Revision：Job→Artifact→Revision 锁序下核验成功 Job、完整 Brief/Metric/Snapshot、唯一 Evidence、Plan/Render Validation 和四对象清单，读回校验长度与 SHA-256；拒绝发生在状态、Review 与成功审计写入前。批准旧版本只更新 published 指针并追加独立审计，较新 head 和其他版本内容保持不变；Evidence 状态从目标 Revision 投影。默认列表选 head/published，Viewer 仅 published Approved，revisionId 历史查询不借用其他版本证据。
+
+| 场景 | 结果与证据 |
+| --- | --- |
+| TP10 | submit/approve 各九类故障共18次拒绝：Plan、Render、Job failed、缺 PNG/HTML、同长度错哈希、真实 loopback ECONNREFUSED、缺 Brief、错版本清单；409/503 分类正确，恢复故障后全部业务记录与之前相同。旧无成功 Job 版本也拒绝。 |
+| TP11 | 真实两类 Worker 产出的 R1/R2 finding 不同；提交/批准 R1 保持 R2、其余 Evidence 及较新 head 不变。两次并发批准恰一200/一409，Review仅提交/批准各一，published指针恰一独立审计。历史查询及冗余状态故意失配后的投影通过；无 Evidence 历史返回空数组。 |
+| TP15 | Editor 可提交不可批准；Reviewer 可批准；Viewer 不读/导出/复制 Draft、可读/导出 Approved、不可审核；非成员404、未认证401、跨Project来源拒绝、非法迁移及expectedStatus冲突通过。 |
+
+最终 `node scripts/test-integration.mjs` 自然退出0（API14、真实预算失败浏览器2、Worker2），原始记录：[最终集成](./evidence/t7-integration-final.txt)。[离线回归](./evidence/t7-offline.txt)自然退出0（含API55）；[API Console](./evidence/t7-console.txt)四屏宽20/20。Chart/API/Contracts/Web源码、API/Web/Generation Worker测试类型，定向Prettier/ESLint、docs检查与diff检查通过。routes.ts仍有三项HEAD既有lint（未使用导入/两个any），[boundaries](./evidence/t7-boundaries.txt)仍为既有Worker集成跨API导入未声明依赖；T7新辅助测试通过传入API factory避免新增跨包导入。[hygiene](./evidence/t7-hygiene.txt)仍因既有UI两份跟踪.log失败，不放宽检查器、不删除历史证据，不能称全仓质量门禁通过。
+
+[独立只读复核](./evidence/t7-independent.md)检查固定770文件快照及关键哈希，未见确定性阻断缺陷；未独立运行集成或类型。快照位于 `C:\Users\sai_8\.codex\visualizations\2026\10\08\01a119ef-072e-7071-a33c-83d3bb4e4931\t7-review`，manifest记录代码身份；最终集成日志当时仍在写入，未作为静态代码哈希依据。
+
+过程证据保留：[沙箱spawn EPERM](./evidence/t7-integration-sandbox.txt)、[无序SQL比较误报](./evidence/t7-integration-attempt2.txt)、[排序修复后通过](./evidence/t7-integration-attempt3.txt)。最终补验曾被自动审批用量限制阻止执行，用户要求继续后恢复获批并通过；不是安全拒绝。存储不可达用注入reader发起真实loopback连接拒绝，不是停止整个MinIO；此结论只证明分类与业务不写入。审核后外部删除对象、历史分类迁移、完整TP25及生产未由本轮证明。没有改变评论阻塞语义。
+
+下一项为T8；本轮不扩展。保留原 `apps/web/next-env.d.ts` 修改不提交，agent-tasks/runtime-experiment未改动或纳入提交；不推送、不部署。
+
 ## A 批实施验证（新增）
 
 ### 2026-10-08 T6 最终验收：混合并发、派生 Job 与 PUT 回执丢失

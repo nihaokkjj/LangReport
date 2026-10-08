@@ -1,0 +1,214 @@
+Memory revocation ledger initialized or recovered.
+TAP version 13
+# Subtest: test\\integration\\chart-point-failure.integration.test.ts
+not ok 1 - test\\integration\\chart-point-failure.integration.test.ts
+  ---
+  duration_ms: 3.8462
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\apps\\api\\test\\integration\\chart-point-failure.integration.test.ts:1:1'
+  failureType: 'testCodeFailure'
+  error: 'spawn EPERM'
+  code: 'EPERM'
+  stack: |-
+    ChildProcess.spawn (node:internal/child_process:420:11)
+    spawn (node:child_process:787:9)
+    TestContext.<anonymous> (node:internal/test_runner/runner:377:19)
+    FileTest.runInAsyncScope (node:async_hooks:214:14)
+    FileTest.run (node:internal/test_runner/test:1047:25)
+    FileTest.start (node:internal/test_runner/test:944:17)
+    runTestFile (node:internal/test_runner/runner:456:32)
+    node:internal/test_runner/runner:727:25
+    node:internal/per_context/primordials:561:37
+    new Promise (<anonymous>)
+  ...
+# Subtest: test\\integration\\data-assets.integration.test.ts
+not ok 2 - test\\integration\\data-assets.integration.test.ts
+  ---
+  duration_ms: 0.9497
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\apps\\api\\test\\integration\\data-assets.integration.test.ts:1:1'
+  failureType: 'testCodeFailure'
+  error: 'spawn EPERM'
+  code: 'EPERM'
+  stack: |-
+    ChildProcess.spawn (node:internal/child_process:420:11)
+    spawn (node:child_process:787:9)
+    TestContext.<anonymous> (node:internal/test_runner/runner:377:19)
+    FileTest.runInAsyncScope (node:async_hooks:214:14)
+    FileTest.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    FileTest.postRun (node:internal/test_runner/test:1173:19)
+    FileTest.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: test\\integration\\database-user-accounts.integration.test.ts
+not ok 3 - test\\integration\\database-user-accounts.integration.test.ts
+  ---
+  duration_ms: 0.8929
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\apps\\api\\test\\integration\\database-user-accounts.integration.test.ts:1:1'
+  failureType: 'testCodeFailure'
+  error: 'spawn EPERM'
+  code: 'EPERM'
+  stack: |-
+    ChildProcess.spawn (node:internal/child_process:420:11)
+    spawn (node:child_process:787:9)
+    TestContext.<anonymous> (node:internal/test_runner/runner:377:19)
+    FileTest.runInAsyncScope (node:async_hooks:214:14)
+    FileTest.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    FileTest.postRun (node:internal/test_runner/test:1173:19)
+    FileTest.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: test\\integration\\generation-job-status.integration.test.ts
+not ok 4 - test\\integration\\generation-job-status.integration.test.ts
+  ---
+  duration_ms: 0.8095
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\apps\\api\\test\\integration\\generation-job-status.integration.test.ts:1:1'
+  failureType: 'testCodeFailure'
+  error: 'spawn EPERM'
+  code: 'EPERM'
+  stack: |-
+    ChildProcess.spawn (node:internal/child_process:420:11)
+    spawn (node:child_process:787:9)
+    TestContext.<anonymous> (node:internal/test_runner/runner:377:19)
+    FileTest.runInAsyncScope (node:async_hooks:214:14)
+    FileTest.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    FileTest.postRun (node:internal/test_runner/test:1173:19)
+    FileTest.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: test\\integration\\memory-management.integration.test.ts
+not ok 5 - test\\integration\\memory-management.integration.test.ts
+  ---
+  duration_ms: 0.8801
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\apps\\api\\test\\integration\\memory-management.integration.test.ts:1:1'
+  failureType: 'testCodeFailure'
+  error: 'spawn EPERM'
+  code: 'EPERM'
+  stack: |-
+    ChildProcess.spawn (node:internal/child_process:420:11)
+    spawn (node:child_process:787:9)
+    TestContext.<anonymous> (node:internal/test_runner/runner:377:19)
+    FileTest.runInAsyncScope (node:async_hooks:214:14)
+    FileTest.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    FileTest.postRun (node:internal/test_runner/test:1173:19)
+    FileTest.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: test\\integration\\memory-revocation-recovery.integration.test.ts
+not ok 6 - test\\integration\\memory-revocation-recovery.integration.test.ts
+  ---
+  duration_ms: 0.5113
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\apps\\api\\test\\integration\\memory-revocation-recovery.integration.test.ts:1:1'
+  failureType: 'testCodeFailure'
+  error: 'spawn EPERM'
+  code: 'EPERM'
+  stack: |-
+    ChildProcess.spawn (node:internal/child_process:420:11)
+    spawn (node:child_process:787:9)
+    TestContext.<anonymous> (node:internal/test_runner/runner:377:19)
+    FileTest.runInAsyncScope (node:async_hooks:214:14)
+    FileTest.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    FileTest.postRun (node:internal/test_runner/test:1173:19)
+    FileTest.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: test\\integration\\memory-revocation-startup.integration.test.ts
+not ok 7 - test\\integration\\memory-revocation-startup.integration.test.ts
+  ---
+  duration_ms: 0.4818
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\apps\\api\\test\\integration\\memory-revocation-startup.integration.test.ts:1:1'
+  failureType: 'testCodeFailure'
+  error: 'spawn EPERM'
+  code: 'EPERM'
+  stack: |-
+    ChildProcess.spawn (node:internal/child_process:420:11)
+    spawn (node:child_process:787:9)
+    TestContext.<anonymous> (node:internal/test_runner/runner:377:19)
+    FileTest.runInAsyncScope (node:async_hooks:214:14)
+    FileTest.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    FileTest.postRun (node:internal/test_runner/test:1173:19)
+    FileTest.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: test\\integration\\message-generation.integration.test.ts
+not ok 8 - test\\integration\\message-generation.integration.test.ts
+  ---
+  duration_ms: 1.0068
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\apps\\api\\test\\integration\\message-generation.integration.test.ts:1:1'
+  failureType: 'testCodeFailure'
+  error: 'spawn EPERM'
+  code: 'EPERM'
+  stack: |-
+    ChildProcess.spawn (node:internal/child_process:420:11)
+    spawn (node:child_process:787:9)
+    TestContext.<anonymous> (node:internal/test_runner/runner:377:19)
+    FileTest.runInAsyncScope (node:async_hooks:214:14)
+    FileTest.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    FileTest.postRun (node:internal/test_runner/test:1173:19)
+    FileTest.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: test\\integration\\plugins.integration.test.ts
+not ok 9 - test\\integration\\plugins.integration.test.ts
+  ---
+  duration_ms: 1.524
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\apps\\api\\test\\integration\\plugins.integration.test.ts:1:1'
+  failureType: 'testCodeFailure'
+  error: 'spawn EPERM'
+  code: 'EPERM'
+  stack: |-
+    ChildProcess.spawn (node:internal/child_process:420:11)
+    spawn (node:child_process:787:9)
+    TestContext.<anonymous> (node:internal/test_runner/runner:377:19)
+    FileTest.runInAsyncScope (node:async_hooks:214:14)
+    FileTest.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    FileTest.postRun (node:internal/test_runner/test:1173:19)
+    FileTest.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: test\\integration\\table-intake.integration.test.ts
+not ok 10 - test\\integration\\table-intake.integration.test.ts
+  ---
+  duration_ms: 1.1253
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\apps\\api\\test\\integration\\table-intake.integration.test.ts:1:1'
+  failureType: 'testCodeFailure'
+  error: 'spawn EPERM'
+  code: 'EPERM'
+  stack: |-
+    ChildProcess.spawn (node:internal/child_process:420:11)
+    spawn (node:child_process:787:9)
+    TestContext.<anonymous> (node:internal/test_runner/runner:377:19)
+    FileTest.runInAsyncScope (node:async_hooks:214:14)
+    FileTest.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    FileTest.postRun (node:internal/test_runner/test:1173:19)
+    FileTest.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 0
+# fail 10
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 33.3417
+undefined
+D:\front\newProject\LangReport\apps\api:
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command failed with exit code 1: tsx --test "--test-concurrency=1" test/integration/database-user-accounts.integration.test.ts test/integration/memory-management.integration.test.ts test/integration/memory-revocation-recovery.integration.test.ts test/integration/memory-revocation-startup.integration.test.ts test/integration/message-generation.integration.test.ts test/integration/plugins.integration.test.ts test/integration/data-assets.integration.test.ts test/integration/table-intake.integration.test.ts test/integration/generation-job-status.integration.test.ts test/integration/chart-point-failure.integration.test.ts

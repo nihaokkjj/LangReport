@@ -1,0 +1,2 @@
+check:boundaries failed:
+- apps/generation-worker/test/integration/worker.integration.test.ts 导入 ../../../api/src/app.js（@langreport/api），但 @langreport/generation-worker 未在 package.json 声明该 workspace 依赖

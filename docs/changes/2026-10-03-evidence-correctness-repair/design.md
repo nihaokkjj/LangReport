@@ -105,6 +105,8 @@ Render Worker 的新生成/编辑路径现由单一 `commitCompletedRevision(lea
 
 ## D4：Evidence 固定绑定与审核（R5、R6）
 
+2026-10-08 T7 实现：审核按 Job→Artifact→Revision 加锁，在事务内重新核验状态、来源、唯一 Evidence、成功 Job、两层校验和候选四输出清单；通过受控 reader 逐个读回长度与 SHA-256。仅明确 NoSuchKey 返回 409，其他存储故障返回 503 REVISION_OUTPUT_VERIFICATION_UNAVAILABLE。批准只更新 publishedRevisionId 并追加 chart_artifact.published_revision_changed 审计，保留 head；冗余 Evidence 状态只按目标 revisionId 更新。默认列表返回 head/published 的对应记录，Viewer 仅 published Approved；revisionId 查询固定历史版本，缺对应 Evidence 返回空数组。旧无完整 Job/清单记录拒绝新审核，历史分类仍归 T9。
+
 新规则：一个成功 Revision 恰有一个 Evidence 内容记录；finding/title/summary/Brief/Metric/质量警告/Job 绑定在创建后不改写。允许新增不同 Revision 的 Evidence，禁止按 artifactId 批量改旧 Evidence 指针或内容。
 
 审核状态以目标 Revision 为权威，Review 记录追加；Evidence DTO 从该 Revision 投影状态。迁移期如保留 evidenceBlocks.status 冗余列，只允许在同事务按 revisionId 更新唯一对应记录，不能作为另一套状态权威。列表按 Artifact 选择 head/published 对应证据，历史接口按 revisionId 取对应证据；不会让同一 Artifact 的所有历史证据挤进默认列表。
