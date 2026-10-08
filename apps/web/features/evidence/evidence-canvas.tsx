@@ -29,6 +29,9 @@ export type EvidenceCanvasProps = {
   chart: ReactNode;
   canEdit: boolean;
   onEdit: () => void;
+  onCopy?: () => void;
+  onRollback?: () => void;
+  isRevisionPending?: boolean;
   showTrace: boolean;
   onToggleTrace: () => void;
   trace: EvidenceTrace;
@@ -49,6 +52,9 @@ export function EvidenceCanvas({
   chart,
   canEdit,
   onEdit,
+  onCopy,
+  onRollback,
+  isRevisionPending,
   showTrace,
   onToggleTrace,
   trace,
@@ -100,9 +106,19 @@ export function EvidenceCanvas({
         </Alert>
       )}
       <div className="result-actions">
-        <Button variant="contained" type="button" onClick={onEdit} disabled={!canEdit}>
+        <Button variant="contained" type="button" onClick={onEdit} disabled={!canEdit || isRevisionPending}>
           编辑图表 <span>↗</span>
         </Button>
+        {onCopy && (
+          <Button variant="outlined" onClick={onCopy} disabled={isRevisionPending}>
+            复制为新图表
+          </Button>
+        )}
+        {onRollback && (
+          <Button variant="outlined" onClick={onRollback} disabled={isRevisionPending}>
+            从此版本创建草稿
+          </Button>
+        )}
         <Button variant="outlined" type="button" onClick={onToggleTrace}>
           {showTrace ? "收起依据" : "查看依据"}
         </Button>

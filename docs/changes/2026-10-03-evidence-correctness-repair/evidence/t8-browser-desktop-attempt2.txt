@@ -1,0 +1,60 @@
+[WebServer] (node:47828) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:21168) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:8832) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 2 tests using 1 worker
+
+(node:22236) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22236) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [chromium-desktop] › test\e2e\consulting-report.spec.ts:515:5 › T8 复制与历史回滚等待 Job，刷新恢复终态并保留固定版本 (7.9s)
+  x  2 [chromium-desktop] › test\e2e\consulting-report.spec.ts:659:5 › T8 旧 201 固定 Revision 兼容且切换项目丢弃迟到命令 (7.7s)
+[31mTesting stopped early after 1 maximum allowed failures.[39m
+
+
+  1) [chromium-desktop] › test\e2e\consulting-report.spec.ts:659:5 › T8 旧 201 固定 Revision 兼容且切换项目丢弃迟到命令
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: getByLabel('证据画布')
+    Expected: [32m0[39m
+    Received: [31m1[39m
+    Call log:
+    [2m  - expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for getByLabel('证据画布')[22m
+    [2m    9 × locator resolved to 1 element[22m
+    [2m      - unexpected value "1"[22m
+
+
+      712 |   release?.();
+      713 |   await expect(page).toHaveURL(/project=project-other/);
+    > 714 |   await expect(page.getByLabel("证据画布")).toHaveCount(0);
+          |                                         ^
+      715 |   await expect(page.getByText("新的草稿版本已保存。", { exact: true })).toHaveCount(0);
+      716 | });
+      717 |
+        at D:\front\newProject\LangReport\apps\web\test\e2e\consulting-report.spec.ts:714:41
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\consulting-report-T8-旧-201-固定-Revision-兼容且切换项目丢弃迟到命令-chromium-desktop\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\consulting-report-T8-旧-201-固定-Revision-兼容且切换项目丢弃迟到命令-chromium-desktop\trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace test-results\consulting-report-T8-旧-201-固定-Revision-兼容且切换项目丢弃迟到命令-chromium-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-desktop] › test\e2e\consulting-report.spec.ts:659:5 › T8 旧 201 固定 Revision 兼容且切换项目丢弃迟到命令
+  1 passed (21.5s)
+  1 error was not a part of any test, see above for details
+undefined
+D:\front\newProject\LangReport\apps\web:
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command failed with exit code 1: playwright test test/e2e/consulting-report.spec.ts --grep T8 --project chromium-desktop --max-failures 1

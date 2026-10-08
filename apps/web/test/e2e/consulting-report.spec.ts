@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { captureUiEvidence } from "./visual-evidence";
 
 const projectId = "project-sales";
@@ -17,6 +18,7 @@ const rows = [
 
 function createFixture(
   options: {
+    seeded?: boolean;
     intakeResult?: "succeeded" | "needs_clarification";
     chartRows?: typeof rows;
     generationFailure?: { code: string; message: string };
@@ -64,7 +66,7 @@ function createFixture(
     artifactId: "artifact-sales",
     revision: 1,
     status: revisionStatus,
-    parentRevisionId: null,
+    parentRevisionId: null as string | null,
     snapshotId: "snapshot-sales-v1",
     createdAt: now,
     changeReason: null,
@@ -153,7 +155,33 @@ function createFixture(
       revision: { id: revisionId, artifactId: "artifact-sales", revision: 1, status: revisionStatus },
     },
   });
+  if (options.seeded) {
+    const snapshot = createSnapshot(1, "sales-sample.csv", "pasted");
+    snapshots = [snapshot];
+    asset = {
+      id: assetId,
+      projectId,
+      sourceConversationId: conversationId,
+      name: "sales-sample.csv",
+      sourceType: "pasted",
+      status: "ready",
+      latestSnapshot: snapshot,
+    };
+    metric = { id: "metric-sales", status: "confirmed", businessDefinition: "销售额", fields: [], unit: "元" };
+    brief = {
+      id: "brief-sales",
+      conversationId,
+      status: "confirmed",
+      businessQuestion: "销售分析",
+      audience: "管理层",
+      timeRange: "2026",
+      timeGrain: "月",
+      outputFormat: "证据模块",
+    };
+    revisionStatus = "approved";
+  }
   return {
+    record: evidence,
     route: async (route: import("@playwright/test").Route) => {
       const request = route.request();
       const url = new URL(request.url());
@@ -228,6 +256,8 @@ function createFixture(
         return route.fulfill({
           json: { evidence: asset && brief && metric && !options.generationFailure ? [evidence()] : [] },
         });
+      if (path === `/api/v1/projects/${projectId}/chart-artifacts/artifact-sales` && request.method() === "GET")
+        return route.fulfill({ json: { artifact: { ...evidence().artifact, revisions: [revision()] } } });
       if (path === `/api/v1/projects/${projectId}/theme` && request.method() === "GET")
         return route.fulfill({ json: { theme: { preset: "economist" } } });
       if (path === "/api/v1/workspaces/workspace-sales/model-credential" && request.method() === "GET")
@@ -482,6 +512,257 @@ function createFixture(
 }
 
 test.describe.configure({ mode: "serial" });
+
+test("T8 复制与历史回滚等待 Job，刷新恢复终态并保留固定版本", async ({ page }) => {
+  const fixture = createFixture({ seeded: true });
+  const source = fixture.record();
+  const copied = structuredClone(source);
+  copied.artifact.id = "artifact-copy";
+  copied.artifact.headRevisionId = "revision-copy";
+  copied.revision = {
+    ...copied.revision,
+    id: "revision-copy",
+    artifactId: "artifact-copy",
+    status: "draft",
+    parentRevisionId: revisionId,
+  };
+  copied.block = {
+    ...copied.block,
+    id: "block-copy",
+    conversationId: "conversation-copy",
+    chartArtifactId: "artifact-copy",
+    chartRevisionId: "revision-copy",
+    status: "draft",
+  };
+  const rollback = structuredClone(copied);
+  rollback.revision = { ...rollback.revision, id: "revision-rollback", revision: 2, parentRevisionId: "revision-copy" };
+  rollback.block = {
+    ...rollback.block,
+    id: "block-rollback",
+    conversationId: "conversation-rollback",
+    chartRevisionId: "revision-rollback",
+  };
+  rollback.artifact.headRevisionId = rollback.revision.id;
+  let phase: "queued" | "failed" | "succeeded" = "queued";
+  let command: "copy" | "rollback" = "copy";
+  let submitted = false;
+  let holdStatus = false;
+  let releaseStatus: (() => void) | undefined;
+  const commands: Record<string, unknown>[] = [];
+  const record = () => (command === "copy" ? copied : rollback);
+  const job = () => ({
+    ...source.job,
+    id: `job-${command}`,
+    conversationId: record().block.conversationId,
+    operation: command,
+    status: phase,
+    statusVersion: phase === "queued" ? 1 : 2,
+    terminal: phase !== "queued",
+    errorCode: phase === "failed" ? "RENDER_FAILED" : null,
+    errorMessage: phase === "failed" ? "渲染失败" : null,
+    revision: null,
+  });
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+    if (path.includes("/chart-artifacts/") && path.endsWith("/revisions") && request.method() === "POST") {
+      const body = request.postDataJSON() as Record<string, unknown>;
+      commands.push(body);
+      command = body.operation as "copy" | "rollback";
+      submitted = true;
+      phase = "queued";
+      return route.fulfill({
+        status: command === "copy" ? 202 : 200,
+        json: { job: job(), reused: command === "rollback" },
+      });
+    }
+    if (path === `/api/v1/projects/${projectId}/conversations`)
+      return route.fulfill({
+        json: {
+          conversations: [conversationId, ...(submitted ? ["conversation-copy", "conversation-rollback"] : [])].map(
+            (id) => ({ id, projectId, title: id, createdAt: now, updatedAt: now }),
+          ),
+        },
+      });
+    if (path === `/api/v1/projects/${projectId}/evidence-blocks`) {
+      const id = url.searchParams.get("revisionId");
+      const records = [
+        source,
+        ...(submitted && (phase === "succeeded" || command === "rollback") ? [copied] : []),
+        ...(command === "rollback" && phase === "succeeded" ? [rollback] : []),
+      ];
+      return route.fulfill({
+        json: {
+          evidence: id
+            ? records.filter((item) => item.revision.id === id)
+            : records.filter(
+                (item) => item.revision.id !== "revision-copy" || command !== "rollback" || phase !== "succeeded",
+              ),
+        },
+      });
+    }
+    if (path === `/api/v1/projects/${projectId}/chart-artifacts/artifact-copy`)
+      return route.fulfill({
+        json: {
+          artifact: {
+            ...record().artifact,
+            revisions:
+              command === "rollback" && phase === "succeeded"
+                ? [rollback.revision, copied.revision]
+                : [copied.revision],
+          },
+        },
+      });
+    if (submitted && path.startsWith(`/api/v1/generation-jobs/job-${command}`)) {
+      if (path.endsWith("/retry")) {
+        phase = "queued";
+        return route.fulfill({ json: { job: job(), reused: false } });
+      }
+      if (path.endsWith("/status") && phase === "queued") {
+        if (holdStatus) {
+          holdStatus = false;
+          await new Promise<void>((resolve) => {
+            releaseStatus = resolve;
+          });
+          return route
+            .fulfill({ json: { job: job(), revision: job().status === "succeeded" ? record().revision : null } })
+            .catch(() => {});
+        }
+        return route.fulfill({ status: 204, headers: { "x-langreport-generation-job-long-poll": "disabled" } });
+      }
+      return route.fulfill({ json: { job: job(), revision: phase === "succeeded" ? record().revision : null } });
+    }
+    if (/\/conversations\/conversation-(copy|rollback)\/messages$/.test(path))
+      return route.fulfill({ json: { messages: [] } });
+    if (/\/chart-revisions\/revision-(copy|rollback)\/comments$/.test(path))
+      return route.fulfill({ json: { comments: [] } });
+    if (/\/chart-revisions\/revision-(copy|rollback)\/plugin-context$/.test(path))
+      return route.fulfill({ json: { pluginSnapshot: {} } });
+    return fixture.route(route);
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "复制为新图表", exact: true }).click();
+  await expect(page.getByText(/复制任务已排队/)).toBeVisible();
+  await expect(page.getByText("已复制为新的草稿图表。", { exact: true })).toHaveCount(0);
+  phase = "failed";
+  await expect(page.getByText(/渲染失败/).first()).toBeVisible();
+  await page.getByRole("button", { name: "再次尝试", exact: true }).click();
+  await expect(page.getByText(/已重新排队/)).toBeVisible();
+  holdStatus = true;
+  await expect.poll(() => Boolean(releaseStatus)).toBe(true);
+  await page
+    .getByRole("button", { name: /打开对话历史|显示对话历史/ })
+    .first()
+    .click();
+  await page.locator(".history-item").filter({ hasText: conversationId }).click();
+  phase = "succeeded";
+  releaseStatus?.();
+  await expect(page).toHaveURL(new RegExp(`conversation=${conversationId}`));
+  await expect(page.getByText("已复制为新的草稿图表。", { exact: true })).toHaveCount(0);
+  // Refresh another conversation while the old Job completes, then explicitly return.
+  await page.reload();
+  await expect(page).toHaveURL(new RegExp(`conversation=${conversationId}`));
+  await page
+    .getByRole("button", { name: /打开对话历史|显示对话历史/ })
+    .first()
+    .click();
+  await page.locator(".history-item").filter({ hasText: "conversation-copy" }).click();
+  if ((page.viewportSize()?.width ?? 0) <= 1024) await page.locator(".history-drawer-close").click();
+  await expect(page).toHaveURL(/revision=revision-copy/);
+  await expect(page.getByLabel("证据画布")).toBeVisible();
+  await page.getByRole("button", { name: "从此版本创建草稿", exact: true }).click();
+  await expect(page.getByText(/回滚任务已排队/)).toBeVisible();
+  phase = "succeeded";
+  await expect(page).toHaveURL(/revision=revision-rollback/);
+  await page.getByLabel("查看图表版本").click();
+  await page.getByRole("option", { name: /R1/ }).click();
+  await expect(page).toHaveURL(/revision=revision-copy/);
+  await page.reload();
+  await expect(page).toHaveURL(/revision=revision-copy/);
+  await expect(page.getByLabel("证据画布")).toBeVisible();
+  expect(commands[0].sourceRevisionId).toBe(revisionId);
+  expect(commands[1].targetRevisionId).toBe("revision-copy");
+  await expect(page.locator(".evidence-canvas .vega-host")).toHaveAttribute("data-rendered-points", "3");
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth))
+    .toBeLessThanOrEqual(1);
+  await page.screenshot({
+    path: resolve(
+      process.cwd(),
+      `../../docs/changes/2026-10-03-evidence-correctness-repair/evidence/t8-history-${page.viewportSize()?.width}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.locator(".evidence-canvas .result-actions").scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: resolve(
+      process.cwd(),
+      `../../docs/changes/2026-10-03-evidence-correctness-repair/evidence/t8-actions-${page.viewportSize()?.width}.png`,
+    ),
+    animations: "disabled",
+  });
+});
+
+test("T8 旧 201 固定 Revision 兼容且切换项目丢弃迟到命令", async ({ page }) => {
+  const fixture = createFixture({ seeded: true });
+  let release: (() => void) | undefined;
+  let delay = false;
+  let requestStarted = false;
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/v1/projects") {
+      return route.fulfill({
+        json: {
+          workspace: { id: "workspace-sales", role: "owner" },
+          projects: [
+            { id: projectId, name: "销售分析 Demo" },
+            { id: "project-other", name: "另一个项目" },
+          ],
+        },
+      });
+    }
+    if (path.includes("/chart-artifacts/") && path.endsWith("/revisions")) {
+      requestStarted = true;
+      if (delay)
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      return route.fulfill({ status: 201, json: { revision: fixture.record().revision } }).catch(() => {});
+    }
+    if (path.startsWith("/api/v1/projects/project-other/")) {
+      const payload = path.endsWith("conversations")
+        ? { conversations: [] }
+        : path.endsWith("data-assets")
+          ? { assets: [] }
+          : path.endsWith("evidence-blocks")
+            ? { evidence: [] }
+            : path.endsWith("memories")
+              ? { memory: { project: [], workspace: [], conflicts: [] } }
+              : path.endsWith("theme")
+                ? { theme: { preset: "economist" } }
+                : path.endsWith("analysis-brief")
+                  ? { brief: null }
+                  : { definition: null };
+      return route.fulfill({ json: payload });
+    }
+    return fixture.route(route);
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "复制为新图表", exact: true }).click();
+  await expect(page.getByText("新的草稿版本已保存。", { exact: true })).toBeVisible();
+  delay = true;
+  requestStarted = false;
+  await page.getByRole("button", { name: "复制为新图表", exact: true }).click();
+  await expect.poll(() => requestStarted).toBe(true);
+  await page.locator(".project-selector .selector-button").click();
+  await page.getByRole("menuitem").filter({ hasText: "另一个项目" }).click();
+  release?.();
+  await expect(page).toHaveURL(/project=project-other/);
+  await expect(page.locator(".evidence-canvas")).toHaveCount(0);
+  await expect(page.getByText("新的草稿版本已保存。", { exact: true })).toHaveCount(0);
+});
 
 test("飞书异步接入等待成功才显示快照，澄清问题可见", async ({ page }) => {
   for (const intakeResult of ["succeeded", "needs_clarification"] as const) {

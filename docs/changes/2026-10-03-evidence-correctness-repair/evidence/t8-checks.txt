@@ -1,0 +1,9 @@
+$ tsc --noEmit -p tsconfig.json
+$ tsc --noEmit -p tsconfig.test.json
+$ tsc --noEmit -p tsconfig.test.json
+$ tsc --noEmit -p tsconfig.json
+$ tsc --noEmit -p tsconfig.json
+$ tsc --noEmit -p tsconfig.test.json
+Targeted ESLint passed
+Checking formatting...
+All matched files use Prettier code style!

@@ -1,9 +1,19 @@
 # 文档交付与未来修复验收
 
 - change-id：`CHG-2026-10-03-evidence-correctness-repair`
-- 状态：整体 `IMPLEMENTING`；T6 技术验收通过
+- 状态：整体 `IMPLEMENTING`；T8 技术验收通过
 - 创建时间：2026-10-03
 - 更新时间：2026-10-08
+
+## 2026-10-08 T8 技术验收（通过）
+
+T8 按 TP07、TP08、TP22 通过。工作台复制/回滚由持久Job异步完成；兼容旧201固定Revision和新202/200 Job，排队不报成功。刷新恢复按用户/Project/Conversation隔离的Job ID，读取固定结果；历史选择不借用head Evidence。同Project切Conversation同步取消旧watcher，保留原Job ID供明确切回恢复。初次独立复核发现的P2已修复，并用持有旧status请求后切换的浏览器回归保护。
+
+Approved来源复制、新Artifact/R1/Evidence、旧版本回滚新编号Draft、parent/head/published、完整冻结来源和四输出真实导出通过；来源所有Revision/Evidence/四对象字节不变。实测发现的新HTML缺Artifact ID已修复：新候选包含同一预留身份的Artifact ID、Revision ID、编号，历史批准输出不改写。
+
+最终完整隔离集成自然退出0（API14/真实预算失败浏览器2/Worker2）；四屏宽T8加核心导出/编辑/Console共20/20，离线回归自然退出0（含API55/Web27/Adapter18），相关类型、定向ESLint/Prettier、docs和diff检查通过。[T8验收报告](./t8-test-report.md)记录全部结果、失败/修复及边界；[第二独立复核](./evidence/t8-independent.md)检查787文件固定快照，确认初次P2修复，无新增确定性P1/P2，但未独立重跑测试。全仓既有lint/boundaries/hygiene问题仍由T11处理，不称全仓门禁通过。T9未执行，整体未人工最终接受。
+
+本次按用户指令推送T7两个提交，核对origin/main为3c78c99；T8仅本地提交，不再次推送或部署。next-env.d.ts与runtime-experiment保留不纳入提交。下方为历史时点记录。
 
 ## 2026-10-08 T7 技术验收（通过；实现提交 `251cb4c`）
 

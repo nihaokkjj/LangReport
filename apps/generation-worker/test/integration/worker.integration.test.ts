@@ -43,7 +43,7 @@ import {
   validationRecordSchema,
 } from "@langreport/contracts";
 import { projectConversationToCanonicalTextContext } from "@langreport/generation";
-import { copyRevisionToArtifact, createDerivedRevision } from "@langreport/chart";
+import { copyRevisionToArtifact, createDerivedRevision, freezeDerivedProvenance } from "@langreport/chart";
 import { createUserPreferenceMemory, getMemoryContextForGeneration } from "@langreport/memory";
 import {
   installPlugin,
@@ -2031,6 +2031,139 @@ test("real generation and render workers persist plugin usage and historical sna
       },
       buildApp,
     );
+
+    // TP07/TP08: derive from approved R1 while a newer draft remains head.
+    const [approvedSource] = await db.select().from(chartRevisions).where(eq(chartRevisions.id, visualRevision.id));
+    assert.equal(approvedSource.status, "approved");
+    const sourceRevisions = await db
+      .select()
+      .from(chartRevisions)
+      .where(eq(chartRevisions.artifactId, approvedSource.artifactId));
+    const sourceEvidence = await db
+      .select()
+      .from(evidenceBlocks)
+      .where(eq(evidenceBlocks.chartArtifactId, approvedSource.artifactId));
+    const [sourceArtifact] = await db
+      .select()
+      .from(chartArtifacts)
+      .where(eq(chartArtifacts.id, approvedSource.artifactId));
+    assert.notEqual(sourceArtifact.headRevisionId, approvedSource.id);
+    assert.equal(sourceArtifact.publishedRevisionId, approvedSource.id);
+    const sourceKeys = ["svg", "png", "html", "vegaLite"].map(
+      (kind) => (approvedSource.outputObjects as Record<string, string>)[kind],
+    );
+    const sourceBytes = await Promise.all(sourceKeys.map(getObject));
+    const t8Api = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
+    try {
+      for (const operation of ["copy", "rollback"] as const) {
+        const payload = {
+          operation,
+          ...(operation === "copy" ? { sourceRevisionId: approvedSource.id } : { targetRevisionId: approvedSource.id }),
+          idempotencyKey: `t8-${operation}-${suffix}`,
+        };
+        const queued = await t8Api.inject({
+          method: "POST",
+          url: `/api/v1/chart-artifacts/${approvedSource.artifactId}/revisions`,
+          payload,
+        });
+        assert.equal(queued.statusCode, 202, queued.body);
+        const queuedId = queued.json<{ job: { id: string } }>().job.id;
+        const reused = await t8Api.inject({
+          method: "POST",
+          url: `/api/v1/chart-artifacts/${approvedSource.artifactId}/revisions`,
+          payload,
+        });
+        assert.equal(reused.statusCode, 200, reused.body);
+        assert.equal(reused.json<{ job: { id: string } }>().job.id, queuedId);
+        assert.equal(
+          (await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, queuedId))).length,
+          0,
+        );
+        await processGenerationJob(queuedId);
+        await processRenderJob(queuedId);
+        const [created] = await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, queuedId));
+        const [createdEvidence] = await db
+          .select()
+          .from(evidenceBlocks)
+          .where(eq(evidenceBlocks.generationJobId, queuedId));
+        assert.ok(created && createdEvidence);
+        assert.equal(created.status, "draft");
+        assert.equal(createdEvidence.chartRevisionId, created.id);
+        assert.equal(createdEvidence.chartArtifactId, created.artifactId);
+        assert.equal(created.parentRevisionId, approvedSource.id);
+        assert.equal(created.snapshotId, approvedSource.snapshotId);
+        assert.deepEqual(created.analysisBriefSnapshot, approvedSource.analysisBriefSnapshot);
+        assert.deepEqual(created.metricDefinitionSnapshot, approvedSource.metricDefinitionSnapshot);
+        assert.deepEqual(createdEvidence.analysisBriefSnapshot, approvedSource.analysisBriefSnapshot);
+        assert.deepEqual(createdEvidence.metricDefinitionSnapshot, approvedSource.metricDefinitionSnapshot);
+        const expectedSpec = structuredClone(approvedSource.flintSpec) as { chartSpec: { title: string } };
+        if (operation === "copy") expectedSpec.chartSpec.title += " 副本";
+        assert.deepEqual(created.flintSpec, expectedSpec);
+        assert.deepEqual(created.transformPlan, approvedSource.transformPlan);
+        assert.deepEqual(created.fieldLineage, approvedSource.fieldLineage);
+        assert.deepEqual(created.resultSummary, approvedSource.resultSummary);
+        assert.deepEqual(created.executionAssembly, approvedSource.executionAssembly);
+        assert.deepEqual(created.memorySnapshot, freezeDerivedProvenance(approvedSource).memoryContext);
+        assert.equal(
+          createdEvidence.finding,
+          sourceEvidence.find((item) => item.chartRevisionId === approvedSource.id)!.finding,
+        );
+        const outputs = created.outputObjects as Record<string, string>;
+        for (const kind of ["svg", "png", "html", "vegaLite"]) {
+          assert.ok(outputs[kind]);
+          assert.notEqual(outputs[kind], (approvedSource.outputObjects as Record<string, string>)[kind]);
+          const exported = await t8Api.inject({
+            method: "GET",
+            url: `/api/v1/chart-revisions/${created.id}/outputs/${kind}`,
+          });
+          assert.equal(exported.statusCode, 200, exported.body);
+          assert.ok((await getObject(outputs[kind])).length > 0);
+        }
+        const html = (await getObject(outputs.html)).toString("utf8");
+        assert.ok(html.includes(created.id));
+        assert.ok(html.includes(created.artifactId));
+        assert.ok(html.includes(`FIXED REVISION / R${created.revision}`));
+        const [target] = await db.select().from(chartArtifacts).where(eq(chartArtifacts.id, created.artifactId));
+        assert.equal(target.headRevisionId, created.id);
+        if (operation === "copy") {
+          assert.notEqual(created.artifactId, approvedSource.artifactId);
+          assert.equal(created.revision, 1);
+          assert.equal(target.publishedRevisionId, null);
+          assert.deepEqual(
+            (await db.select().from(chartArtifacts).where(eq(chartArtifacts.id, sourceArtifact.id)))[0],
+            sourceArtifact,
+          );
+        } else {
+          assert.equal(created.artifactId, approvedSource.artifactId);
+          assert.ok(created.revision > Math.max(...sourceRevisions.map((item) => item.revision)));
+          assert.equal(target.publishedRevisionId, approvedSource.id);
+        }
+        const after = await db
+          .select()
+          .from(chartRevisions)
+          .where(eq(chartRevisions.artifactId, approvedSource.artifactId));
+        for (const original of sourceRevisions)
+          assert.deepEqual(
+            after.find((item) => item.id === original.id),
+            original,
+          );
+        const blocks = await db
+          .select()
+          .from(evidenceBlocks)
+          .where(eq(evidenceBlocks.chartArtifactId, approvedSource.artifactId));
+        for (const original of sourceEvidence)
+          assert.deepEqual(
+            blocks.find((item) => item.id === original.id),
+            original,
+          );
+        assert.deepEqual(await Promise.all(sourceKeys.map(getObject)), sourceBytes);
+      }
+      console.log(
+        "T8 TP07/TP08 passed: approved copy and old-version rollback, immutable source, new identities and four exports",
+      );
+    } finally {
+      await t8Api.close();
+    }
 
     // An inconsistent historical Job must not mutate an already published Revision.
     const publishedHtmlKey = (renderedJob.outputs as { html: string }).html;

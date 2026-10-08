@@ -250,6 +250,7 @@ test("static HTML wraps trusted SVG and escapes evidence metadata without script
   const html = createStaticSvgHtml({
     svg: rendered.svg,
     revisionId: "revision-001",
+    artifactId: "artifact-001",
     revision: 3,
     title: "标题 <不执行>",
     finding: "发现 & 结论",
@@ -260,6 +261,9 @@ test("static HTML wraps trusted SVG and escapes evidence metadata without script
   });
 
   assert.match(html, /<!doctype html>/i);
+  assert.match(html, /ARTIFACT<\/span><span>artifact-001/);
+  assert.match(html, /REVISION<\/span><span>revision-001/);
+  assert.match(html, /FIXED REVISION \/ R3/);
   assert.match(html, /#fffefb/i);
   assert.match(html, /#f8f4f0/i);
   assert.match(html, /#201515/i);

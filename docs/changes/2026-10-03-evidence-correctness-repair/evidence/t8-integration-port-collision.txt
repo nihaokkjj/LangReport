@@ -1,0 +1,247 @@
+Memory revocation ledger initialized or recovered.
+TAP version 13
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2628\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2628\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2628\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2628\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# [2m[WebServer] [22m(node:26916) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+# [2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+# [2m[WebServer] [22m(node:35820) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+# [2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+# [2m[WebServer] [22m(node:9080) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+# [2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+# [2m[WebServer] [22m⨯ Failed to start server
+# [2m[WebServer] [22mError: listen EADDRINUSE: address already in use 127.0.0.1:3100
+# [2m[WebServer] [22m    at <unknown> (Error: listen EADDRINUSE: address already in use 127.0.0.1:3100) {
+# [2m[WebServer] [22m  code: [32m'EADDRINUSE'[39m,
+# [2m[WebServer] [22m  errno: [33m-4091[39m,
+# [2m[WebServer] [22m  syscall: [32m'listen'[39m,
+# [2m[WebServer] [22m  address: [32m'127.0.0.1'[39m,
+# [2m[WebServer] [22m  port: [33m3100[39m
+# [2m[WebServer] [22m}
+# Error: Process from config.webServer was not able to start. Exit code: 1
+# Subtest: 真实数据库中的 10,001 点经 Render Worker 与 API 保留预算失败
+not ok 1 - 真实数据库中的 10,001 点经 Render Worker 与 API 保留预算失败
+  ---
+  duration_ms: 4777.7374
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\apps\\api\\test\\integration\\chart-point-failure.integration.test.ts:55:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    真实数据库失败链路的浏览器验收失败
+
+    1 !== 0
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    verifyFailureInBrowser (D:\front\newProject\LangReport\apps\api\test\integration\chart-point-failure.integration.test.ts:52:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (D:\front\newProject\LangReport\apps\api\test\integration\chart-point-failure.integration.test.ts:208:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: data asset snapshot update appends immutable snapshots and isolates concurrent writes
+ok 2 - data asset snapshot update appends immutable snapshots and isolates concurrent writes
+  ---
+  duration_ms: 5778.0441
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# {
+#   severity_local: 'NOTICE',
+#   severity: 'NOTICE',
+#   code: '00000',
+#   message: 'trigger "fail_account_migration_6cdc6eb9cbd840a598cb24f186951521" for relation "members" does not exist, skipping',
+#   file: 'dropcmds.c',
+#   line: '528',
+#   routine: 'does_not_exist_skipping'
+# }
+# {
+#   severity_local: 'NOTICE',
+#   severity: 'NOTICE',
+#   code: '00000',
+#   message: 'function fail_account_migration_6cdc6eb9cbd840a598cb24f186951521_fn() does not exist, skipping',
+#   file: 'dropcmds.c',
+#   line: '528',
+#   routine: 'does_not_exist_skipping'
+# }
+# Subtest: database bootstrap is atomic, idempotent, and migrates legacy member IDs with a bounded JWT alias
+ok 3 - database bootstrap is atomic, idempotent, and migrates legacy member IDs with a bounded JWT alias
+  ---
+  duration_ms: 7924.916
+  type: 'test'
+  ...
+# Subtest: Generation Job status notifications wake concurrent waiters without heartbeat version churn
+ok 4 - Generation Job status notifications wake concurrent waiters without heartbeat version churn
+  ---
+  duration_ms: 548.9606
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2540\#/properties/preference/properties/value/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2540\#/properties/preference/properties/value/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1894\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1894\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1894\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1894\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2628\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2628\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2628\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2628\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2512\#/properties/preferences/items/properties/value/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2512\#/properties/preferences/items/properties/value/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2554\#/properties/preference/properties/value/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2554\#/properties/preference/properties/value/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2248\#/properties/memory/properties/project/items/properties/value/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2248\#/properties/memory/properties/project/items/properties/value/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2248\#/properties/memory/properties/workspace/items/properties/value/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2248\#/properties/memory/properties/workspace/items/properties/value/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2248\#/properties/memory/properties/conflicts/items/properties/records/items/properties/value/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2248\#/properties/memory/properties/conflicts/items/properties/records/items/properties/value/propertyNames" (strictTypes)
+# Subtest: memory APIs isolate personal preferences and expose Project versions, history, as-of, conflicts and deletion
+ok 5 - memory APIs isolate personal preferences and expose Project versions, history, as-of, conflicts and deletion
+  ---
+  duration_ms: 3223.5742
+  type: 'test'
+  ...
+# Subtest: isolated PostgreSQL backup restore replays revocations, blocks failures and supports retries
+ok 6 - isolated PostgreSQL backup restore replays revocations, blocks failures and supports retries
+  ---
+  duration_ms: 8657.3697
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: API health stays available while missing or corrupt revocation state blocks readiness and business routes
+ok 7 - API health stays available while missing or corrupt revocation state blocks readiness and business routes
+  ---
+  duration_ms: 1254.4358
+  type: 'test'
+  ...
+# Subtest: real API and Worker entrypoints fail closed before readiness and recover after ledger repair
+    # Subtest: api
+    ok 1 - api
+      ---
+      duration_ms: 8137.6316
+      type: 'test'
+      ...
+    # Subtest: generation
+    ok 2 - generation
+      ---
+      duration_ms: 8741.4963
+      type: 'test'
+      ...
+    # Subtest: render
+    ok 3 - render
+      ---
+      duration_ms: 9764.2207
+      type: 'test'
+      ...
+    1..3
+ok 8 - real API and Worker entrypoints fail closed before readiness and recover after ledger repair
+  ---
+  duration_ms: 26664.5964
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1547\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1547\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1547\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1547\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_1552\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_1552\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_1552\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_1552\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1441\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1441\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1441\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1441\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_1446\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_1446\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_1446\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_1446\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1486\#/oneOf/1/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1486\#/oneOf/1/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1486\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1486\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_1492\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_1492\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_1492\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_1492\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# Subtest: message-triggered generation is single-write, idempotent and explains missing prerequisites
+ok 9 - message-triggered generation is single-write, idempotent and explains missing prerequisites
+  ---
+  duration_ms: 3270.3835
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1894\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1894\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1894\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1894\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2052\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2052\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2052\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2052\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2628\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2628\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2628\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2628\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2017\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2017\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2017\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2017\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# Subtest: plugin API completes install, binding, theme, revoke, restore and audit flow
+ok 10 - plugin API completes install, binding, theme, revoke, restore and audit flow
+  ---
+  duration_ms: 4573.6606
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: streamed upload -> atomic claim -> CLI agent -> immutable snapshot; failures preserve the previous version
+ok 11 - streamed upload -> atomic claim -> CLI agent -> immutable snapshot; failures preserve the previous version
+  ---
+  duration_ms: 2027.2454
+  type: 'test'
+  ...
+1..11
+# tests 14
+# suites 0
+# pass 13
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 93381.9078
+undefined
+D:\front\newProject\LangReport\apps\api:
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command failed with exit code 1: tsx --test "--test-concurrency=1" test/integration/database-user-accounts.integration.test.ts test/integration/memory-management.integration.test.ts test/integration/memory-revocation-recovery.integration.test.ts test/integration/memory-revocation-startup.integration.test.ts test/integration/message-generation.integration.test.ts test/integration/plugins.integration.test.ts test/integration/data-assets.integration.test.ts test/integration/table-intake.integration.test.ts test/integration/generation-job-status.integration.test.ts test/integration/chart-point-failure.integration.test.ts

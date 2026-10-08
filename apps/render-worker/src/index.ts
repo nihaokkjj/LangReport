@@ -402,6 +402,7 @@ function buildStaticHtmlCandidate(input: {
     const html = createStaticSvgHtml({
       svg: input.svg,
       revisionId: input.reservedRevision.revisionId,
+      artifactId: input.reservedRevision.artifactId,
       revision: input.reservedRevision.revisionNumber,
       title: input.spec.chartSpec.title,
       finding: findingForGenerationJob(input.job, input.spec, input.resultSummary),

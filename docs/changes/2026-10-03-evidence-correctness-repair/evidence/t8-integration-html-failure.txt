@@ -1,0 +1,578 @@
+Memory revocation ledger initialized or recovered.
+TAP version 13
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2628\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2628\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2628\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2628\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# [2m[WebServer] [22m(node:60240) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+# [2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+# [2m[WebServer] [22m(node:15208) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+# [2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+# [2m[WebServer] [22m(node:60328) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+# [2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+# Running 2 tests using 1 worker
+# (node:53416) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:53416) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+#   ok 1 [chromium-desktop] › test\\e2e\\consulting-report.spec.ts:1035:5 › 真实数据库失败链路在界面提示聚合 (4.3s)
+# (node:15124) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:15124) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+#   ok 2 [chromium-mobile] › test\\e2e\\consulting-report.spec.ts:1035:5 › 真实数据库失败链路在界面提示聚合 (3.4s)
+#   2 passed (18.0s)
+# Subtest: 真实数据库中的 10,001 点经 Render Worker 与 API 保留预算失败
+ok 1 - 真实数据库中的 10,001 点经 Render Worker 与 API 保留预算失败
+  ---
+  duration_ms: 21393.4445
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: data asset snapshot update appends immutable snapshots and isolates concurrent writes
+ok 2 - data asset snapshot update appends immutable snapshots and isolates concurrent writes
+  ---
+  duration_ms: 4363.0001
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# {
+#   severity_local: 'NOTICE',
+#   severity: 'NOTICE',
+#   code: '00000',
+#   message: 'trigger "fail_account_migration_09d3465921894187bca3c8bfb7ad667b" for relation "members" does not exist, skipping',
+#   file: 'dropcmds.c',
+#   line: '528',
+#   routine: 'does_not_exist_skipping'
+# }
+# {
+#   severity_local: 'NOTICE',
+#   severity: 'NOTICE',
+#   code: '00000',
+#   message: 'function fail_account_migration_09d3465921894187bca3c8bfb7ad667b_fn() does not exist, skipping',
+#   file: 'dropcmds.c',
+#   line: '528',
+#   routine: 'does_not_exist_skipping'
+# }
+# Subtest: database bootstrap is atomic, idempotent, and migrates legacy member IDs with a bounded JWT alias
+ok 3 - database bootstrap is atomic, idempotent, and migrates legacy member IDs with a bounded JWT alias
+  ---
+  duration_ms: 8249.7475
+  type: 'test'
+  ...
+# Subtest: Generation Job status notifications wake concurrent waiters without heartbeat version churn
+ok 4 - Generation Job status notifications wake concurrent waiters without heartbeat version churn
+  ---
+  duration_ms: 686.3815
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2540\#/properties/preference/properties/value/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2540\#/properties/preference/properties/value/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1894\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1894\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1894\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1894\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2628\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2628\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2628\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2628\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2512\#/properties/preferences/items/properties/value/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2512\#/properties/preferences/items/properties/value/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2554\#/properties/preference/properties/value/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2554\#/properties/preference/properties/value/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2248\#/properties/memory/properties/project/items/properties/value/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2248\#/properties/memory/properties/project/items/properties/value/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2248\#/properties/memory/properties/workspace/items/properties/value/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2248\#/properties/memory/properties/workspace/items/properties/value/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2248\#/properties/memory/properties/conflicts/items/properties/records/items/properties/value/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2248\#/properties/memory/properties/conflicts/items/properties/records/items/properties/value/propertyNames" (strictTypes)
+# Subtest: memory APIs isolate personal preferences and expose Project versions, history, as-of, conflicts and deletion
+ok 5 - memory APIs isolate personal preferences and expose Project versions, history, as-of, conflicts and deletion
+  ---
+  duration_ms: 3807.4194
+  type: 'test'
+  ...
+# Subtest: isolated PostgreSQL backup restore replays revocations, blocks failures and supports retries
+ok 6 - isolated PostgreSQL backup restore replays revocations, blocks failures and supports retries
+  ---
+  duration_ms: 10617.4079
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: API health stays available while missing or corrupt revocation state blocks readiness and business routes
+ok 7 - API health stays available while missing or corrupt revocation state blocks readiness and business routes
+  ---
+  duration_ms: 1615.984
+  type: 'test'
+  ...
+# Subtest: real API and Worker entrypoints fail closed before readiness and recover after ledger repair
+    # Subtest: api
+    ok 1 - api
+      ---
+      duration_ms: 11250.1914
+      type: 'test'
+      ...
+    # Subtest: generation
+    ok 2 - generation
+      ---
+      duration_ms: 13775.8752
+      type: 'test'
+      ...
+    # Subtest: render
+    ok 3 - render
+      ---
+      duration_ms: 12306.5694
+      type: 'test'
+      ...
+    1..3
+ok 8 - real API and Worker entrypoints fail closed before readiness and recover after ledger repair
+  ---
+  duration_ms: 37352.51
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1547\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1547\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1547\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1547\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_1552\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_1552\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_1552\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_1552\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1441\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1441\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1441\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1441\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_1446\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_1446\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_1446\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_1446\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1486\#/oneOf/1/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1486\#/oneOf/1/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1486\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1486\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_1492\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_1492\#/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_1492\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_1492\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# Subtest: message-triggered generation is single-write, idempotent and explains missing prerequisites
+ok 9 - message-triggered generation is single-write, idempotent and explains missing prerequisites
+  ---
+  duration_ms: 4173.8139
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1894\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1894\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_1894\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_1894\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2052\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2052\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2052\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2052\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2628\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2628\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2628\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2628\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2017\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2017\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_2017\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_2017\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# Subtest: plugin API completes install, binding, theme, revoke, restore and audit flow
+ok 10 - plugin API completes install, binding, theme, revoke, restore and audit flow
+  ---
+  duration_ms: 5476.1189
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: streamed upload -> atomic claim -> CLI agent -> immutable snapshot; failures preserve the previous version
+ok 11 - streamed upload -> atomic claim -> CLI agent -> immutable snapshot; failures preserve the previous version
+  ---
+  duration_ms: 2876.6908
+  type: 'test'
+  ...
+1..11
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 129441.0711
+TAP version 13
+# Subtest: database admission gate orders preference deletion before and after model send admission
+ok 1 - database admission gate orders preference deletion before and after model send admission
+  ---
+  duration_ms: 1790.3114
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_264\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_264\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_264\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_264\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# render-worker completed {
+#   jobId: 'dc8ea017-98c5-4ddf-bb27-4c9686cd4012',
+#   revisionId: '93a2325b-e93a-42df-b16c-9a65c23111f4'
+# }
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_3122\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_3122\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_3122\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_3122\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_4910\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_4910\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_4910\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_4910\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# render-worker completed {
+#   jobId: '84795fbe-1c64-44eb-ba82-c6596f408bbf',
+#   revisionId: '15271d07-5bd6-413f-8ce2-db723c2ccbbb'
+# }
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_5980\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_5980\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_5980\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_5980\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_7768\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_7768\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_7768\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_7768\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# render-worker completed {
+#   jobId: 'fe056f43-bc7f-47fa-bc03-64762009657a',
+#   revisionId: '35a75483-472f-42fc-9098-c62db5d8ab47'
+# }
+# render-worker completed {
+#   jobId: '48c654f7-4c29-4e40-960a-5cae365aae54',
+#   revisionId: '4f82d4a1-d4b8-4e0d-b794-2ca3a87484e0'
+# }
+# render-worker completed {
+#   jobId: 'e71e58bd-6d55-4231-99ca-39f65fbe232c',
+#   revisionId: '58898bbb-6857-487a-8449-747d26e081c5'
+# }
+# render-worker completed {
+#   jobId: '62cdc69f-9b5b-4f64-abdb-d639caae3385',
+#   revisionId: '166c3bf0-e7c1-45c2-a523-d1048538d437'
+# }
+# render-worker completed {
+#   jobId: 'fb522b69-a499-41db-97ef-5fe934614f45',
+#   revisionId: '101f3433-0ecd-4843-add6-6dcb6e3e46be'
+# }
+# render-worker completed {
+#   jobId: '4944b500-dcbd-4671-9f73-51c87d085e77',
+#   revisionId: '4b61ee7c-247c-4655-bff4-02d8eefa5d97'
+# }
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_8838\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_8838\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_8838\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_8838\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_11696\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_11696\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_11696\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_11696\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# render-worker lease lost { jobId: '1fe28549-8e93-44f7-8e29-ef9b9eaa5d03', fencingToken: 2 }
+# render-worker completed {
+#   jobId: '1fe28549-8e93-44f7-8e29-ef9b9eaa5d03',
+#   revisionId: '4dbcdf99-28c8-4546-b6de-95fe20f57727'
+# }
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_14554\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_14554\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_14554\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_14554\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# render-worker completed {
+#   jobId: 'fa9cad86-ac64-4cdc-83cc-06c1fc112760',
+#   revisionId: '2fa1c530-fa61-48ae-b2fe-ac5f86a43c09'
+# }
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_17412\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_17412\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_17412\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_17412\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_19200\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_19200\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_19200\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_19200\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# render-worker completed {
+#   jobId: '196b09a5-9473-463f-808a-f3d2c6f29832',
+#   revisionId: '2d6fff6e-dd5e-4ceb-b25b-5d896998ea61'
+# }
+# render-worker candidate reconciliation failed {
+#   attemptId: 'cf5148e2-8e7f-4967-98cb-23f93cdbd6a1',
+#   error: Error: TRANSIENT_DELETE_FAILURE
+#       at remove (D:\\front\\newProject\\LangReport\\apps\\generation-worker\\test\\integration\\worker.integration.test.ts:1253:43)
+#       at reconcileOrphanRenderCandidates (D:\\front\\newProject\\LangReport\\apps\\render-worker\\src\\candidate-attempts.ts:219:56)
+#       at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+#       at async TestContext.<anonymous> (D:\\front\\newProject\\LangReport\\apps\\generation-worker\\test\\integration\\worker.integration.test.ts:1249:7)
+#       at async Test.run (node:internal/test_runner/test:1054:7)
+#       at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+# }
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_20270\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_20270\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_20270\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_20270\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_22058\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_22058\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_22058\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_22058\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# render-worker completed {
+#   jobId: 'b6308ea8-a4f1-45b4-88fd-230878f0cd34',
+#   revisionId: '16694dfc-8018-48ca-96d9-b9d4ea1136a3'
+# }
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_23128\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_23128\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_23128\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_23128\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_23093\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_23093\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_23093\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_23093\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# render-worker completed {
+#   jobId: '42d776e7-f912-4245-b06a-0ab954dfe25c',
+#   revisionId: 'b0b54e1c-26f8-485b-aedb-686458375fad'
+# }
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_25986\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_25986\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_25986\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_25986\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# render-worker completed {
+#   jobId: '37660707-5432-4cda-bfb5-662e4d9bfa59',
+#   revisionId: 'a59bccd5-da78-483f-a12b-d872fa0a4039'
+# }
+# render-worker completed {
+#   jobId: '86c7b29b-8726-4b5b-b25e-272b2ea1f947',
+#   revisionId: 'db1a964e-72b5-4484-9a3b-8d5dc7a0b17b'
+# }
+# render-worker completed {
+#   jobId: 'dc774a6d-0566-4b4d-a010-e3825f91091c',
+#   revisionId: 'aa4191ea-4188-4751-b64a-f75ba4674a44'
+# }
+# render-worker completed {
+#   jobId: 'ca0a28bd-1344-4c7e-8304-0e698ff44bcb',
+#   revisionId: '6c5253ec-3b3d-4ba5-a745-15753ffe9a33'
+# }
+# render-worker completed {
+#   jobId: '15edcd65-92f2-49ee-a274-993df9815ae9',
+#   revisionId: 'e63ec4a4-05e9-4759-a0ae-cd50efbad419'
+# }
+# render-worker completed {
+#   jobId: 'd39af8ef-2d30-4727-bdef-75537b8b09d2',
+#   revisionId: 'd899b795-fde7-4501-ad26-f2cb80802d56'
+# }
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_28844\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_28844\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_28844\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_28844\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_28809\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_28809\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_28809\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_28809\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# render-worker completed {
+#   jobId: 'da41df06-eac1-4156-a47c-4ac219e22e66',
+#   revisionId: 'e6ef8165-befd-419c-bafe-6c1fde2c71b4'
+# }
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_30632\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_30632\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_30632\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_30632\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# render-worker completed {
+#   jobId: 'dc4c5043-f5af-4f00-a646-c5da59a1bc3a',
+#   revisionId: '8edf1b93-48cc-44ff-b0ac-32cda92daac0'
+# }
+# render-worker completed {
+#   jobId: '6f8694dc-6d9f-4539-89bc-b925ef8b1955',
+#   revisionId: '64cf6d0e-f03b-4fca-b309-f7a75cbcae55'
+# }
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31746\#/properties/revision/properties/flintSpec/properties/data/properties/values/items/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31746\#/properties/revision/properties/flintSpec/properties/data/properties/values/items/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31746\#/properties/revision/properties/flintSpec/properties/semanticTypes/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31746\#/properties/revision/properties/flintSpec/properties/semanticTypes/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31746\#/properties/revision/properties/flintSpec/properties/chartSpec/properties/encodings/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31746\#/properties/revision/properties/flintSpec/properties/chartSpec/properties/encodings/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31746\#/properties/revision/properties/flintSpec/properties/themeConfig/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31746\#/properties/revision/properties/flintSpec/properties/themeConfig/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31746\#/properties/revision/properties/pluginSnapshot/properties/resolvedTheme/anyOf/0/properties/payload/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31746\#/properties/revision/properties/pluginSnapshot/properties/resolvedTheme/anyOf/0/properties/payload/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31746\#/properties/revision/properties/pluginSnapshot/properties/plugins/items/properties/capabilities/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31746\#/properties/revision/properties/pluginSnapshot/properties/plugins/items/properties/capabilities/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31746\#/properties/revision/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31746\#/properties/revision/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31746\#/properties/payload/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31746\#/properties/payload/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_31759\#/properties/payload/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_31759\#/properties/payload/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31746\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31746\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31776\#/properties/revision/properties/flintSpec/properties/data/properties/values/items/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31776\#/properties/revision/properties/flintSpec/properties/data/properties/values/items/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31776\#/properties/revision/properties/flintSpec/properties/semanticTypes/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31776\#/properties/revision/properties/flintSpec/properties/semanticTypes/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31776\#/properties/revision/properties/flintSpec/properties/chartSpec/properties/encodings/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31776\#/properties/revision/properties/flintSpec/properties/chartSpec/properties/encodings/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31776\#/properties/revision/properties/flintSpec/properties/themeConfig/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31776\#/properties/revision/properties/flintSpec/properties/themeConfig/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31776\#/properties/revision/properties/pluginSnapshot/properties/resolvedTheme/anyOf/0/properties/payload/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31776\#/properties/revision/properties/pluginSnapshot/properties/resolvedTheme/anyOf/0/properties/payload/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31776\#/properties/revision/properties/pluginSnapshot/properties/plugins/items/properties/capabilities/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31776\#/properties/revision/properties/pluginSnapshot/properties/plugins/items/properties/capabilities/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31776\#/properties/revision/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31776\#/properties/revision/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31776\#/properties/payload/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31776\#/properties/payload/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_31789\#/properties/payload/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_31789\#/properties/payload/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_31776\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_31776\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_33157\#/properties/evidence/items/properties/block/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_33157\#/properties/evidence/items/properties/block/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/flintSpec/properties/data/properties/values/items/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/flintSpec/properties/data/properties/values/items/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/flintSpec/properties/semanticTypes/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/flintSpec/properties/semanticTypes/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/flintSpec/properties/chartSpec/properties/encodings/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/flintSpec/properties/chartSpec/properties/encodings/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/flintSpec/properties/themeConfig/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/flintSpec/properties/themeConfig/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/pluginSnapshot/properties/resolvedTheme/anyOf/0/properties/payload/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/pluginSnapshot/properties/resolvedTheme/anyOf/0/properties/payload/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/pluginSnapshot/properties/plugins/items/properties/capabilities/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/pluginSnapshot/properties/plugins/items/properties/capabilities/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_33157\#/properties/evidence/items/properties/revision/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_33157\#/properties/evidence/items/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_33157\#/properties/evidence/items/properties/job/anyOf/0/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_33157\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_33157\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_33157\#/properties/payload/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_33157\#/properties/payload/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_33178\#/properties/payload/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_33178\#/properties/payload/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_33157\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_33157\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_33157\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_33157\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_33185\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_33185\#/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_merged_33185\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_merged_33185\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# T7 TP10/TP11/TP15 passed: 18 readiness failures, fixed historical review, concurrent approve and role/scope checks
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_34560\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_34560\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_34560\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_34560\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_34525\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_34525\#/properties/job/properties/resultSummary/anyOf/0/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: type "object" not allowed by context "string" at "__fjs_root_34525\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# strict mode: missing type "object" for keyword "fjs_type" at "__fjs_root_34525\#/properties/topGroups/items/properties/dimensions/propertyNames" (strictTypes)
+# render-worker completed {
+#   jobId: '65b4bc75-2626-4a08-82e5-6fe55af30575',
+#   revisionId: 'feece747-4e77-444f-af07-b20fa27838c3'
+# }
+# Subtest: real generation and render workers persist plugin usage and historical snapshot
+not ok 2 - real generation and render workers persist plugin usage and historical snapshot
+  ---
+  duration_ms: 58617.0771
+  type: 'test'
+  location: 'D:\\front\\newProject\\LangReport\\apps\\generation-worker\\test\\integration\\worker.integration.test.ts:71:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+
+      assert.ok(html.includes(created.artifactId))
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (D:\front\newProject\LangReport\apps\generation-worker\test\integration\worker.integration.test.ts:2124:16)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 64564.4158
+undefined
+D:\front\newProject\LangReport\apps\generation-worker:
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command failed with exit code 1: tsx --test test/integration/worker.integration.test.ts test/integration/memory-revocation.integration.test.ts

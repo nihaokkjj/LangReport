@@ -14,6 +14,7 @@ import { useProjectContext } from "../../hooks/use-project-context";
 import { useAuthActions } from "../../features/auth/use-auth-actions";
 import { useAuthSession } from "../../features/auth/use-auth-session";
 import { useGenerationJob } from "../../features/generation/use-generation-job";
+import { createRevisionCommand, pendingRevisionJobKey } from "../../features/evidence/revision-command";
 import type { GenerationJobStatusSnapshot } from "../generation-job-status-watcher";
 import { fetchProjectList, projectQueryKeys } from "../../features/project/project-queries";
 import { useProjectServerState } from "../../features/project/use-project-server-state";
@@ -485,17 +486,28 @@ export default function Home() {
   }
   async function retryGeneration() {
     if (!job || job.status !== "failed" || isRetrying) return;
+    const controller = new AbortController();
+    revisionCommandController.current?.abort();
+    revisionCommandController.current = controller;
     setIsRetrying(true);
     setError(null);
     try {
       const payload = await apiFetch<{ job: GenerationJob; reused: boolean }>(
         `/api/v1/generation-jobs/${job.id}/retry`,
-        { method: "POST", headers: jsonHeaders },
+        { method: "POST", headers: jsonHeaders, signal: controller.signal },
       );
+      if (controller.signal.aborted) return;
+      if (authUserId && projectId && ["copy", "rollback", "edit"].includes(payload.job.operation ?? "")) {
+        window.localStorage.setItem(
+          pendingRevisionJobKey(authUserId, projectId, payload.job.conversationId),
+          payload.job.id,
+        );
+        setRestoredJobId(payload.job.id);
+      }
       setJob({ ...payload.job, revision: job.revision });
       setNotice(payload.reused ? "生成任务已在处理中。" : "已重新排队，正在再次生成。");
     } catch (retryError) {
-      setError(formatApiError(retryError, "无法重试生成任务"));
+      if (!controller.signal.aborted) setError(formatApiError(retryError, "无法重试生成任务"));
     } finally {
       setIsRetrying(false);
     }
@@ -506,6 +518,7 @@ export default function Home() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [job, setJob] = useState<GenerationJob | null>(null);
+  const [restoredJobId, setRestoredJobId] = useState<string | null>(null);
   const [composer, setComposer] = useState("");
   const [projectForm, setProjectForm] = useState({
     name: "",
@@ -559,6 +572,14 @@ export default function Home() {
   const [isSavingBrief, setIsSavingBrief] = useState(false);
   const [isSavingMetric, setIsSavingMetric] = useState(false);
   const [isSavingEditor, setIsSavingEditor] = useState(false);
+  const [isCreatingRevision, setIsCreatingRevision] = useState(false);
+  const revisionCommandController = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      revisionCommandController.current?.abort();
+    },
+    [authUserId, projectId, conversationId],
+  );
   const [isSavingModelCredential, setIsSavingModelCredential] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -591,12 +612,54 @@ export default function Home() {
   const [hideActiveEvidence, setHideActiveEvidence] = useState(false);
   const activeEvidence = useMemo(() => {
     if (hideActiveEvidence) return null;
-    const scoped = evidence.filter((item) => item.block.conversationId === conversationId);
-    if (projectRoute.revisionId)
-      return scoped.find((item) => item.revision.id === projectRoute.revisionId) ?? scoped[0] ?? null;
+    const scoped = evidence.filter(
+      (item) => item.block.projectId === projectId && item.block.conversationId === conversationId,
+    );
+    if (projectRoute.revisionId) return scoped.find((item) => item.revision.id === projectRoute.revisionId) ?? null;
     return scoped[0] ?? null;
-  }, [evidence, conversationId, hideActiveEvidence, projectRoute.revisionId]);
+  }, [evidence, projectId, conversationId, hideActiveEvidence, projectRoute.revisionId]);
   const activeRevision = activeEvidence?.revision ?? null;
+  useEffect(() => {
+    if (!projectId || !conversationId || !projectRoute.revisionId || activeRevision) return;
+    const controller = new AbortController();
+    const id = projectRoute.revisionId;
+    void apiFetch<{ evidence: EvidenceRecord[] }>(
+      `/api/v1/projects/${projectId}/evidence-blocks?revisionId=${encodeURIComponent(id)}`,
+      { headers: devHeaders, signal: controller.signal },
+    )
+      .then((payload) => {
+        if (controller.signal.aborted) return;
+        const fixed = payload.evidence.find(
+          (item) => item.revision.id === id && item.block.conversationId === conversationId,
+        );
+        if (!fixed) throw new Error("该历史版本缺少固定 Evidence");
+        queryClient.setQueryData<EvidenceRecord[]>(evidenceQueryKeys.list(authUserId, projectId), (current = []) => [
+          fixed,
+          ...current.filter((item) => item.revision.id !== id),
+        ]);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setError(formatApiError(error, "无法恢复历史证据"));
+      });
+    return () => controller.abort();
+  }, [authUserId, projectId, conversationId, projectRoute.revisionId, activeRevision, queryClient]);
+  const [revisionHistory, setRevisionHistory] = useState<Revision[]>([]);
+  useEffect(() => {
+    setRevisionHistory([]);
+    if (!projectId || !activeEvidence?.artifact.id) return;
+    const controller = new AbortController();
+    void apiFetch<{ artifact: { revisions: Revision[] } }>(
+      `/api/v1/projects/${projectId}/chart-artifacts/${activeEvidence.artifact.id}`,
+      { headers: devHeaders, signal: controller.signal },
+    )
+      .then((payload) => {
+        if (!controller.signal.aborted) setRevisionHistory(payload.artifact.revisions);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setError(formatApiError(error, "无法读取版本历史"));
+      });
+    return () => controller.abort();
+  }, [projectId, activeEvidence?.artifact.id, activeRevision?.id, activeRevision?.status]);
   const activeSpec = activeEvidence?.revision.flintSpec ?? job?.flintSpec ?? null;
   const activeRows = rowsForEvidence(activeEvidence);
   const qualityWarnings = useMemo(
@@ -632,12 +695,19 @@ export default function Home() {
   });
   const pluginTraceState = usePluginTrace(activeRevision?.id ?? null);
   useEffect(() => {
-    if (!projectRoute.ready || !activeRevision?.id || projectRoute.revisionId === activeRevision.id) return;
+    if (!projectRoute.ready || !activeRevision?.id || projectRoute.revisionId) return;
     projectRoute.setRevisionId(activeRevision.id);
   }, [activeRevision?.id, projectRoute.ready, projectRoute.revisionId, projectRoute.setRevisionId]);
 
   const selectProject = useCallback(
     (nextProjectId: string | null) => {
+      revisionCommandController.current?.abort();
+      window.dispatchEvent(new Event("langreport:generation-abort"));
+      setNotice(null);
+      setError(null);
+      setIsCreatingRevision(false);
+      setIsSavingEditor(false);
+      setIsRetrying(false);
       setProjectId(nextProjectId);
       projectRoute.setContext({ projectId: nextProjectId, conversationId: null, revisionId: null });
     },
@@ -645,10 +715,21 @@ export default function Home() {
   );
   const selectConversation = useCallback(
     (nextConversationId: string | null) => {
+      if (conversationId !== nextConversationId) {
+        revisionCommandController.current?.abort();
+        window.dispatchEvent(new Event("langreport:generation-abort"));
+        setJob(null);
+        setRestoredJobId(null);
+        setNotice(null);
+        setError(null);
+        setIsCreatingRevision(false);
+        setIsSavingEditor(false);
+        setIsRetrying(false);
+      }
       setConversationId(nextConversationId);
       projectRoute.setConversationId(nextConversationId);
     },
-    [projectRoute.setConversationId],
+    [conversationId, projectRoute.setConversationId],
   );
   const loadProjects = useCallback(async () => {
     const payload = await queryClient.fetchQuery({
@@ -797,6 +878,27 @@ export default function Home() {
   useEffect(() => {
     if (projectServerState.error) setError(formatApiError(projectServerState.error, "无法读取项目数据"));
   }, [projectServerState.error]);
+  useEffect(() => {
+    if (!authUserId || !projectId || !conversationId) return;
+    const controller = new AbortController();
+    const key = pendingRevisionJobKey(authUserId, projectId, conversationId);
+    const saved = window.localStorage.getItem(key);
+    if (saved)
+      void apiFetch<{ job: GenerationJob; revision: GenerationJob["revision"] }>(
+        `/api/v1/generation-jobs/${encodeURIComponent(saved)}`,
+        { headers: devHeaders, signal: controller.signal },
+      )
+        .then((payload) => {
+          if (!controller.signal.aborted && payload.job.conversationId === conversationId) {
+            setRestoredJobId(payload.job.id);
+            setJob({ ...payload.job, revision: payload.revision });
+          }
+        })
+        .catch((error) => {
+          if (!controller.signal.aborted) setError(formatApiError(error, "无法恢复版本任务"));
+        });
+    return () => controller.abort();
+  }, [authUserId, projectId, conversationId]);
   const handleGenerationTerminal = useCallback(
     async (snapshot: GenerationJobStatusSnapshot, isCurrent: () => boolean, signal: AbortSignal) => {
       const payload = await apiFetch<{ job: GenerationJob; revision: GenerationJob["revision"] }>(
@@ -817,8 +919,33 @@ export default function Home() {
           queryClient.setQueryData(conversationQueryKeys.messages(authUserId, conversationId), messagePayload);
         }
         if (!isCurrent()) return;
+        if (payload.revision) {
+          const history = await apiFetch<{ evidence: EvidenceRecord[] }>(
+            `/api/v1/projects/${projectId}/evidence-blocks?revisionId=${payload.revision.id}`,
+            { headers: devHeaders, signal },
+          );
+          if (!isCurrent()) return;
+          if (!history.evidence.some((item) => item.revision.id === payload.revision?.id))
+            throw new Error("成功任务缺少固定 Revision 证据，请刷新后核对结果");
+          queryClient.setQueryData<EvidenceRecord[]>(evidenceQueryKeys.list(authUserId, projectId), (current = []) => [
+            ...history.evidence,
+            ...current.filter((item) => item.revision.id !== payload.revision?.id),
+          ]);
+          projectRoute.setContext({ conversationId: payload.job.conversationId, revisionId: payload.revision.id });
+          setConversationId(payload.job.conversationId);
+        }
         setJob({ ...payload.job, revision: payload.revision });
-        setNotice(payload.job.operation === "edit" ? "新的草稿版本已保存。" : "证据模块已生成。");
+        if (authUserId && conversationId)
+          window.localStorage.removeItem(pendingRevisionJobKey(authUserId, projectId, conversationId));
+        setNotice(
+          payload.job.operation === "copy"
+            ? "已复制为新的草稿图表。"
+            : payload.job.operation === "rollback"
+              ? "已从目标版本创建新的草稿。"
+              : payload.job.operation === "edit"
+                ? "新的草稿版本已保存。"
+                : "证据模块已生成。",
+        );
       } else if (payload.job.status === "needs_clarification" && conversationId) {
         const messagePayload = await fetchConversationMessages(conversationId, { signal });
         if (!isCurrent()) return;
@@ -828,8 +955,9 @@ export default function Home() {
       } else {
         setJob({ ...payload.job, revision: payload.revision });
       }
+      if (isCurrent()) setRestoredJobId(null);
     },
-    [authUserId, conversationId, loadConversations, loadEvidence, projectId, queryClient],
+    [authUserId, conversationId, loadConversations, loadEvidence, projectId, queryClient, projectRoute.setContext],
   );
   const generationRequest = useCallback((path: string, init: RequestInit) => apiRawRequest(path, init), []);
   const updateGenerationStatus = useCallback((snapshot: GenerationJobStatusSnapshot) => {
@@ -856,7 +984,7 @@ export default function Home() {
   }, []);
   const generationState = useGenerationJob({
     jobId: job?.id ?? null,
-    enabled: isJobActive,
+    enabled: isJobActive || Boolean(job && restoredJobId === job.id),
     afterVersion: job?.statusVersion,
     headers: devHeaders,
     request: generationRequest,
@@ -1229,7 +1357,11 @@ export default function Home() {
     setShowEditor(true);
   }
   async function saveEditor() {
-    if (!activeEvidence || !activeRevision || !editor.title.trim() || isSavingEditor) return;
+    if (!activeEvidence || !activeRevision || !projectId || !authUserId || !editor.title.trim() || isSavingEditor)
+      return;
+    const controller = new AbortController();
+    revisionCommandController.current?.abort();
+    revisionCommandController.current = controller;
     setIsSavingEditor(true);
     setError(null);
     try {
@@ -1252,31 +1384,59 @@ export default function Home() {
         .map((text) => text.trim())
         .filter(Boolean)
         .map((text) => ({ text }));
-      const payload = await apiFetch<{ job: GenerationJob }>(
-        `/api/v1/chart-artifacts/${activeEvidence.artifact.id}/revisions`,
+      const result = await createRevisionCommand<GenerationJob>(
+        activeEvidence.artifact.id,
         {
-          method: "POST",
-          headers: jsonHeaders,
-          body: JSON.stringify({
-            operation: "edit",
-            baseRevisionId: activeRevision.id,
-            patch: {
-              title: editor.title.trim(),
-              chartType: editor.chartType,
-              encodings,
-              transformPlan,
-              annotations,
-              showValues: editor.showValues,
-              showLegend: editor.showLegend,
-            },
-          }),
+          operation: "edit",
+          baseRevisionId: activeRevision.id,
+          idempotencyKey: crypto.randomUUID(),
+          patch: {
+            title: editor.title.trim(),
+            chartType: editor.chartType,
+            encodings,
+            transformPlan,
+            annotations,
+            showValues: editor.showValues,
+            showLegend: editor.showLegend,
+          },
         },
+        controller.signal,
       );
-      setJob({ ...payload.job, revision: null });
+      if (controller.signal.aborted) return;
+      if (result.kind === "job") {
+        window.localStorage.setItem(
+          pendingRevisionJobKey(authUserId, projectId, result.job.conversationId),
+          result.job.id,
+        );
+        await loadConversations(projectId, {
+          signal: controller.signal,
+          shouldApply: () => !controller.signal.aborted,
+        });
+        if (controller.signal.aborted) return;
+        setConversationId(result.job.conversationId);
+        projectRoute.setContext({ conversationId: result.job.conversationId, revisionId: null });
+        setRestoredJobId(result.job.id);
+        setJob({ ...result.job, revision: null });
+        setNotice("编辑任务已排队；Worker 将基于同一 Data Snapshot 生成新的 Draft Revision。");
+      } else {
+        const payload = await apiFetch<{ evidence: EvidenceRecord[] }>(
+          `/api/v1/projects/${projectId}/evidence-blocks?revisionId=${result.revision.id}`,
+          { headers: devHeaders, signal: controller.signal },
+        );
+        if (controller.signal.aborted) return;
+        const fixed = payload.evidence.find((item) => item.revision.id === result.revision.id);
+        if (!fixed) throw new Error("旧版接口已返回版本，但缺少对应证据，请刷新后核对结果");
+        queryClient.setQueryData<EvidenceRecord[]>(evidenceQueryKeys.list(authUserId, projectId), (current = []) => [
+          fixed,
+          ...current.filter((item) => item.revision.id !== fixed.revision.id),
+        ]);
+        setConversationId(fixed.block.conversationId);
+        projectRoute.setContext({ conversationId: fixed.block.conversationId, revisionId: fixed.revision.id });
+        setNotice("新的草稿版本已保存。");
+      }
       setShowEditor(false);
-      setNotice("编辑任务已排队；Worker 将基于同一 Data Snapshot 生成新的 Draft Revision。");
     } catch (editError) {
-      setError(formatApiError(editError, "无法创建新的版本"));
+      if (!controller.signal.aborted) setError(formatApiError(editError, "无法创建新的版本"));
     } finally {
       setIsSavingEditor(false);
     }
@@ -1304,6 +1464,89 @@ export default function Home() {
       setNotice(`版本 R${payload.revision.revision} 已更新为 ${revisionLabels[payload.revision.status]}`);
     } catch (transitionError) {
       setError(formatApiError(transitionError, "无法更新审核状态"));
+    }
+  }
+
+  async function deriveRevision(operation: "copy" | "rollback") {
+    if (!activeRevision || !activeEvidence || !projectId || !authUserId || isCreatingRevision || isJobActive) return;
+    const controller = new AbortController();
+    revisionCommandController.current?.abort();
+    revisionCommandController.current = controller;
+    setIsCreatingRevision(true);
+    setError(null);
+    try {
+      const result = await createRevisionCommand<GenerationJob>(
+        activeEvidence.artifact.id,
+        {
+          operation,
+          ...(operation === "copy" ? { sourceRevisionId: activeRevision.id } : { targetRevisionId: activeRevision.id }),
+          idempotencyKey: crypto.randomUUID(),
+        },
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      if (result.kind === "job") {
+        window.localStorage.setItem(
+          pendingRevisionJobKey(authUserId, projectId, result.job.conversationId),
+          result.job.id,
+        );
+        await loadConversations(projectId, {
+          signal: controller.signal,
+          shouldApply: () => !controller.signal.aborted,
+        });
+        if (controller.signal.aborted) return;
+        setConversationId(result.job.conversationId);
+        projectRoute.setContext({ conversationId: result.job.conversationId, revisionId: null });
+        setRestoredJobId(result.job.id);
+        setJob({ ...result.job, revision: null });
+        setNotice(
+          operation === "copy"
+            ? "复制任务已排队，完成后显示新的草稿图表。"
+            : "回滚任务已排队，完成后显示新的草稿版本。目标历史版本保持不变。",
+        );
+      } else {
+        const payload = await apiFetch<{ evidence: EvidenceRecord[] }>(
+          `/api/v1/projects/${projectId}/evidence-blocks?revisionId=${result.revision.id}`,
+          { headers: devHeaders, signal: controller.signal },
+        );
+        if (controller.signal.aborted) return;
+        const fixed = payload.evidence.find((item) => item.revision.id === result.revision.id);
+        if (!fixed) throw new Error("旧版接口已返回版本，但缺少对应证据，请刷新后核对结果");
+        queryClient.setQueryData<EvidenceRecord[]>(evidenceQueryKeys.list(authUserId, projectId), (current = []) => [
+          fixed,
+          ...current.filter((item) => item.revision.id !== fixed.revision.id),
+        ]);
+        setConversationId(fixed.block.conversationId);
+        projectRoute.setContext({ conversationId: fixed.block.conversationId, revisionId: fixed.revision.id });
+        setNotice("新的草稿版本已保存。");
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) setError(formatApiError(error, "无法创建派生版本"));
+    } finally {
+      if (revisionCommandController.current === controller) setIsCreatingRevision(false);
+    }
+  }
+  async function selectHistoricalRevision(id: string) {
+    if (!projectId || isJobActive) return;
+    const controller = new AbortController();
+    revisionCommandController.current?.abort();
+    revisionCommandController.current = controller;
+    try {
+      const payload = await apiFetch<{ evidence: EvidenceRecord[] }>(
+        `/api/v1/projects/${projectId}/evidence-blocks?revisionId=${id}`,
+        { headers: devHeaders, signal: controller.signal },
+      );
+      if (controller.signal.aborted) return;
+      const fixed = payload.evidence.find((item) => item.revision.id === id);
+      if (!fixed) throw new Error("该历史版本缺少固定 Evidence，不能用其他版本的结论代替");
+      queryClient.setQueryData<EvidenceRecord[]>(evidenceQueryKeys.list(authUserId, projectId), (current = []) => [
+        fixed,
+        ...current.filter((item) => item.revision.id !== id),
+      ]);
+      setConversationId(fixed.block.conversationId);
+      projectRoute.setContext({ conversationId: fixed.block.conversationId, revisionId: id });
+    } catch (error) {
+      if (!controller.signal.aborted) setError(formatApiError(error, "无法读取历史证据"));
     }
   }
 
@@ -1679,6 +1922,27 @@ export default function Home() {
               </div>
             )}
             {!isLoadingProject && activeEvidence && (
+              <TextField
+                select
+                label="查看图表版本"
+                value={activeRevision?.id ?? ""}
+                disabled={isJobActive || isCreatingRevision}
+                onChange={(event) => void selectHistoricalRevision(event.target.value)}
+              >
+                {[
+                  activeEvidence.revision,
+                  ...revisionHistory.filter(
+                    (revision) =>
+                      revision.artifactId === activeEvidence.artifact.id && revision.id !== activeEvidence.revision.id,
+                  ),
+                ].map((revision) => (
+                  <MenuItem key={revision.id} value={revision.id}>
+                    R{revision.revision} · {revisionLabels[revision.status]}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            {!isLoadingProject && activeEvidence && (
               <EvidenceCanvas
                 title={activeEvidence.block.title}
                 status={activeEvidence.revision.status}
@@ -1699,6 +1963,9 @@ export default function Home() {
                 }
                 canEdit={activeEvidence.revision.status !== "approved" && activeEvidence.revision.status !== "archived"}
                 onEdit={openEditor}
+                onCopy={() => void deriveRevision("copy")}
+                onRollback={() => void deriveRevision("rollback")}
+                isRevisionPending={isJobActive || isCreatingRevision}
                 showTrace={showTrace}
                 onToggleTrace={() => setShowTrace((open) => !open)}
                 trace={{

@@ -1,0 +1,35 @@
+[WebServer] (node:9088) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:20404) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:28076) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 8 tests using 1 worker
+
+(node:54756) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54756) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [chromium-desktop] › test\e2e\consulting-report.spec.ts:515:5 › T8 复制与历史回滚等待 Job，刷新恢复终态并保留固定版本 (8.7s)
+  ok 2 [chromium-desktop] › test\e2e\consulting-report.spec.ts:659:5 › T8 旧 201 固定 Revision 兼容且切换项目丢弃迟到命令 (2.6s)
+(node:41344) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41344) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 3 [chromium-tablet] › test\e2e\consulting-report.spec.ts:515:5 › T8 复制与历史回滚等待 Job，刷新恢复终态并保留固定版本 (7.8s)
+  ok 4 [chromium-tablet] › test\e2e\consulting-report.spec.ts:659:5 › T8 旧 201 固定 Revision 兼容且切换项目丢弃迟到命令 (2.9s)
+(node:43640) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:43640) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 5 [chromium-compact] › test\e2e\consulting-report.spec.ts:515:5 › T8 复制与历史回滚等待 Job，刷新恢复终态并保留固定版本 (8.3s)
+  ok 6 [chromium-compact] › test\e2e\consulting-report.spec.ts:659:5 › T8 旧 201 固定 Revision 兼容且切换项目丢弃迟到命令 (2.6s)
+(node:58424) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:58424) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 7 [chromium-mobile] › test\e2e\consulting-report.spec.ts:515:5 › T8 复制与历史回滚等待 Job，刷新恢复终态并保留固定版本 (9.0s)
+  ok 8 [chromium-mobile] › test\e2e\consulting-report.spec.ts:659:5 › T8 旧 201 固定 Revision 兼容且切换项目丢弃迟到命令 (2.8s)
+
+  8 passed (55.0s)

@@ -1,5 +1,9 @@
 # 文档与实施检查记录
 
+## 2026-10-08 T8 最新限定验收
+
+[T8验收报告](./t8-test-report.md)为本轮权威结果：TP07/TP08真实API/两类Worker/PostgreSQL/MinIO通过；TP22四屏宽含核心导出/编辑/API Console20/20，最终串行集成自然退出0（API14/预算失败浏览器2/Worker2），离线回归、相关类型、定向格式/lint、docs/diff检查通过。首次独立P2与HTML缺Artifact ID实测缺陷均已修复，失败证据保留，第二固定快照复核无新增确定性P1/P2；独立角色未重跑。T7已推送3c78c99，T8仅本地提交。整体仍IMPLEMENTING，T9及后续未被本轮验收替代。下方历史段落保留其原时点。
+
 - change-id：`CHG-2026-10-03-evidence-correctness-repair`
 - 状态：`IMPLEMENTING`，部分验证
 - 创建时间：2026-10-03

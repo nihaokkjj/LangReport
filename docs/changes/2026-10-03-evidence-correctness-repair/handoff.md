@@ -7,6 +7,8 @@
 
 ## 最新续做状态（优先于下方历史段落）
 
+2026-10-08 T7已按用户指令推送origin/main并核对3c78c99；随后T8技术验收通过。工作台copy/rollback/历史目标、旧201与新202/200兼容、scoped Job ID刷新恢复、固定Evidence结果、项目/对话切换同步取消已接通。TP07/TP08真实API→两类Worker→PostgreSQL/MinIO通过：Approved源不变、派生新身份/新编号/parent、head与published及四导出/HTML元数据一致；HTML缺Artifact身份的实测问题已修复且旧字节不变。TP22四屏宽加核心导出/编辑/Console20/20，离线回归及相关类型/定向格式lint通过；最终完整串行隔离集成自然退出0（API14/真实预算失败浏览器2/Worker2）。[完整T8记录](./t8-test-report.md)保留所有失败证据和验证范围。首次独立复核P2是同Project切Conversation仍观察旧Job，已同步abort/清状态并补持有旧status回归；第二787文件快照复核无新增确定性阻断，未独立重跑。下一项T9历史分类/迁移/回滚演练，未执行。整体IMPLEMENTING，T11全仓遗留与T12真实端到端仍未关闭。T8仅本地提交，不再次推送/部署；原next-env.d.ts与runtime-experiment保留。
+
 2026-10-08 T7 技术验收通过，实现提交 `251cb4c`，TP10/TP11/TP15 的真实 API→隔离 PostgreSQL/MinIO 断言全部通过；最终完整集成自然退出0（API14/浏览器2/Worker2），离线集与API Console四屏宽20/20通过。审核按固定Revision核验完整来源、成功Job、两层校验与四输出长度/SHA-256；失败409/503不写业务状态。批准旧版本不回退head、不改其他Evidence，published变化独立审计。历史查询revisionId、Viewer过滤、并发批准、非法迁移、401/403/404与跨Project拒绝均通过。独立静态复核未见阻断，未独立重跑。既有routes lint、boundaries和hygiene保留，详见acceptance；不称全仓门禁通过。用户已授权本轮提交，不推送或部署。下一步T8，整体仍IMPLEMENTING；next-env.d.ts和runtime-experiment保留。
 
 

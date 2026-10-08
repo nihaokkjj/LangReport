@@ -39,6 +39,7 @@ export type RenderedChart = {
 
 export type StaticSvgHtmlInput = {
   svg: string;
+  artifactId?: string;
   revisionId: string;
   revision: number;
   title: string;
@@ -190,6 +191,7 @@ export function createStaticSvgHtml(input: StaticSvgHtmlInput): string {
         <p>${escapeHtml(input.finding)}</p>
       </section>
       <div class="metadata" aria-label="证据来源">
+        ${input.artifactId ? `<div><span class="meta">ARTIFACT</span><span>${escapeHtml(input.artifactId)}</span></div>` : ""}
         <div><span class="meta">REVISION</span><span>${escapeHtml(input.revisionId)}</span></div>
         <div><span class="meta">SNAPSHOT</span><span>${escapeHtml(input.snapshotId)}</span></div>
         <div><span class="meta">METRIC</span><span>${escapeHtml(metric)}</span></div>

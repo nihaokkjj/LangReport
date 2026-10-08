@@ -1,0 +1,20 @@
+[WebServer] (node:60080) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:43076) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:14404) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 2 tests using 1 worker
+
+(node:7284) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:7284) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] [browser] MUI: You have provided an out-of-range value `revision-copy` for the select component.
+[WebServer] Consider providing a value that matches one of the available options or ''.
+[WebServer] The available values are `revision-sales-r1`.
+  ok 1 [chromium-desktop] › test\e2e\consulting-report.spec.ts:516:5 › T8 复制与历史回滚等待 Job，刷新恢复终态并保留固定版本 (14.0s)
+  ok 2 [chromium-desktop] › test\e2e\consulting-report.spec.ts:699:5 › T8 旧 201 固定 Revision 兼容且切换项目丢弃迟到命令 (2.8s)
+
+  2 passed (27.5s)

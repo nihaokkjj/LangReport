@@ -2059,7 +2059,10 @@ export default function ApiConsolePage() {
                     编辑、复制与回滚统一返回 Generation Job：新任务 202，幂等复用 200。请查询 Job 状态，成功后使用固定的
                     Revision ID。回滚创建新 Draft，复制创建新
                     Artifact；两者重新渲染四种输出并继承来源版本的分析问题、指标口径、执行快照、公开项目记忆引用及发现。来源缺失返回
-                    409 REVISION_PROVENANCE_INCOMPLETE。
+                    409 REVISION_PROVENANCE_INCOMPLETE。 Web 兼容窗口接受旧同步 201 Revision 响应；200/202 Job
+                    响应仅表示任务已接收。 页面刷新按用户、项目和对话恢复 Job，完成后查询固定 Revision
+                    Evidence；失败使用 Job 重试接口，切换项目取消旧请求。 新 HTML 输出包含预留的 Artifact ID、Revision
+                    ID 与编号；历史已批准输出保持原字节。
                   </p>
                 )}
                 {["submitChartRevision", "approveChartRevision"].includes(

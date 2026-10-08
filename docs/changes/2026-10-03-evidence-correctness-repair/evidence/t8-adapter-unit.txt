@@ -1,0 +1,119 @@
+$ tsx --test test/unit/index.test.ts
+TAP version 13
+# Subtest: compiled chart retains the complete 600-row input
+ok 1 - compiled chart retains the complete 600-row input
+  ---
+  duration_ms: 34.2535
+  type: 'test'
+  ...
+# Subtest: 10,000 drawing results are allowed and Flint receives an explicit no-truncation budget
+ok 2 - 10,000 drawing results are allowed and Flint receives an explicit no-truncation budget
+  ---
+  duration_ms: 463.0114
+  type: 'test'
+  ...
+# Subtest: 10,000-point Bar and Area exports retain the complete result
+ok 3 - 10,000-point Bar and Area exports retain the complete result
+  ---
+  duration_ms: 659.0367
+  type: 'test'
+  ...
+# Subtest: more than 10,000 drawing results fail with an explicit aggregation action
+ok 4 - more than 10,000 drawing results fail with an explicit aggregation action
+  ---
+  duration_ms: 1.5372
+  type: 'test'
+  ...
+# Subtest: Vega execution refuses external data and expression-bearing grammar
+ok 5 - Vega execution refuses external data and expression-bearing grammar
+  ---
+  duration_ms: 1.8262
+  type: 'test'
+  ...
+# Subtest: Area exports have a filled data mark
+ok 6 - Area exports have a filled data mark
+  ---
+  duration_ms: 17.3777
+  type: 'test'
+  ...
+# Subtest: multi-series charts keep grouped bars, unstacked areas and gaps at null values
+ok 7 - multi-series charts keep grouped bars, unstacked areas and gaps at null values
+  ---
+  duration_ms: 13.7168
+  type: 'test'
+  ...
+# Subtest: negative and positive bars have proportional heights and stay inside the canvas
+ok 8 - negative and positive bars have proportional heights and stay inside the canvas
+  ---
+  duration_ms: 37.033
+  type: 'test'
+  ...
+# Subtest: plugin theme config reaches Flint and deterministic SVG output
+ok 9 - plugin theme config reaches Flint and deterministic SVG output
+  ---
+  duration_ms: 30.5524
+  type: 'test'
+  ...
+# Subtest: default deterministic chart uses the warm workbench palette
+ok 10 - default deterministic chart uses the warm workbench palette
+  ---
+  duration_ms: 31.9186
+  type: 'test'
+  ...
+# Subtest: display annotations and value labels remain present in deterministic SVG exports
+ok 11 - display annotations and value labels remain present in deterministic SVG exports
+  ---
+  duration_ms: 42.0534
+  type: 'test'
+  ...
+# Subtest: render validation records concrete Vega-Lite, SVG, and PNG artifacts independently
+ok 12 - render validation records concrete Vega-Lite, SVG, and PNG artifacts independently
+  ---
+  duration_ms: 20.5384
+  type: 'test'
+  ...
+# Subtest: render validation rejects malformed SVG and PNG with a valid signature
+ok 13 - render validation rejects malformed SVG and PNG with a valid signature
+  ---
+  duration_ms: 20.0427
+  type: 'test'
+  ...
+# Subtest: static HTML wraps trusted SVG and escapes evidence metadata without scripts
+ok 14 - static HTML wraps trusted SVG and escapes evidence metadata without scripts
+  ---
+  duration_ms: 15.3443
+  type: 'test'
+  ...
+# Subtest: render validation explains every missing artifact before a Chart Revision can be drafted
+ok 15 - render validation explains every missing artifact before a Chart Revision can be drafted
+  ---
+  duration_ms: 0.2445
+  type: 'test'
+  ...
+# Subtest: default theme accepts adapter overrides without inventing a Flint preset
+ok 16 - default theme accepts adapter overrides without inventing a Flint preset
+  ---
+  duration_ms: 0.1658
+  type: 'test'
+  ...
+# Subtest: adapter payload validation rejects unknown fields and accepts the builtin fragments
+ok 17 - adapter payload validation rejects unknown fields and accepts the builtin fragments
+  ---
+  duration_ms: 5.5993
+  type: 'test'
+  ...
+# Subtest: platform renderer registry resolves only the built-in Vega-Lite adapter
+ok 18 - platform renderer registry resolves only the built-in Vega-Lite adapter
+  ---
+  duration_ms: 0.2108
+  type: 'test'
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3373.8589

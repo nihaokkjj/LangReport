@@ -1,0 +1,47 @@
+[WebServer] (node:19828) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:37208) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:58400) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 20 tests using 1 worker
+
+(node:30456) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30456) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [chromium-desktop] › test\e2e\api-console.spec.ts:61:5 › API Console 说明编辑、复制和回滚的异步 Job 合同 (1.4s)
+  ok 2 [chromium-desktop] › test\e2e\consulting-report.spec.ts:516:5 › T8 复制与历史回滚等待 Job，刷新恢复终态并保留固定版本 (9.9s)
+  ok 3 [chromium-desktop] › test\e2e\consulting-report.spec.ts:670:5 › T8 旧 201 固定 Revision 兼容且切换项目丢弃迟到命令 (2.9s)
+  ok 4 [chromium-desktop] › test\e2e\consulting-report.spec.ts:856:5 › 销售 CSV 到固定 Revision 导出的核心链路 (7.0s)
+  ok 5 [chromium-desktop] › test\e2e\consulting-report.spec.ts:1150:5 › 图表编辑器把逻辑和显示变化提交为可追溯 Patch (11.1s)
+(node:56212) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:56212) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 6 [chromium-tablet] › test\e2e\api-console.spec.ts:61:5 › API Console 说明编辑、复制和回滚的异步 Job 合同 (1.6s)
+  ok 7 [chromium-tablet] › test\e2e\consulting-report.spec.ts:516:5 › T8 复制与历史回滚等待 Job，刷新恢复终态并保留固定版本 (8.9s)
+  ok 8 [chromium-tablet] › test\e2e\consulting-report.spec.ts:670:5 › T8 旧 201 固定 Revision 兼容且切换项目丢弃迟到命令 (3.0s)
+  ok 9 [chromium-tablet] › test\e2e\consulting-report.spec.ts:856:5 › 销售 CSV 到固定 Revision 导出的核心链路 (9.1s)
+  ok 10 [chromium-tablet] › test\e2e\consulting-report.spec.ts:1150:5 › 图表编辑器把逻辑和显示变化提交为可追溯 Patch (11.6s)
+(node:59132) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:59132) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 11 [chromium-compact] › test\e2e\api-console.spec.ts:61:5 › API Console 说明编辑、复制和回滚的异步 Job 合同 (1.3s)
+  ok 12 [chromium-compact] › test\e2e\consulting-report.spec.ts:516:5 › T8 复制与历史回滚等待 Job，刷新恢复终态并保留固定版本 (9.4s)
+  ok 13 [chromium-compact] › test\e2e\consulting-report.spec.ts:670:5 › T8 旧 201 固定 Revision 兼容且切换项目丢弃迟到命令 (2.9s)
+  ok 14 [chromium-compact] › test\e2e\consulting-report.spec.ts:856:5 › 销售 CSV 到固定 Revision 导出的核心链路 (6.8s)
+  ok 15 [chromium-compact] › test\e2e\consulting-report.spec.ts:1150:5 › 图表编辑器把逻辑和显示变化提交为可追溯 Patch (11.0s)
+(node:52300) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:52300) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 16 [chromium-mobile] › test\e2e\api-console.spec.ts:61:5 › API Console 说明编辑、复制和回滚的异步 Job 合同 (1.4s)
+  ok 17 [chromium-mobile] › test\e2e\consulting-report.spec.ts:516:5 › T8 复制与历史回滚等待 Job，刷新恢复终态并保留固定版本 (7.5s)
+  ok 18 [chromium-mobile] › test\e2e\consulting-report.spec.ts:670:5 › T8 旧 201 固定 Revision 兼容且切换项目丢弃迟到命令 (2.7s)
+  ok 19 [chromium-mobile] › test\e2e\consulting-report.spec.ts:856:5 › 销售 CSV 到固定 Revision 导出的核心链路 (6.3s)
+  ok 20 [chromium-mobile] › test\e2e\consulting-report.spec.ts:1150:5 › 图表编辑器把逻辑和显示变化提交为可追溯 Patch (10.2s)
+
+  20 passed (2.3m)
