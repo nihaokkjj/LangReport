@@ -1,0 +1,125 @@
+$ tsx --test test/unit/index.test.ts
+TAP version 13
+# Subtest: high-cardinality profiles keep exact counts and the first five typed samples
+ok 1 - high-cardinality profiles keep exact counts and the first five typed samples
+  ---
+  duration_ms: 32.2891
+  type: 'test'
+  ...
+# Subtest: explicit calendar units match days across leap years without substituting another day
+ok 2 - explicit calendar units match days across leap years without substituting another day
+  ---
+  duration_ms: 9.0025
+  type: 'test'
+  ...
+# Subtest: JSON whitespace-colliding keys and XLSX positional headers preserve typed cells
+ok 3 - JSON whitespace-colliding keys and XLSX positional headers preserve typed cells
+  ---
+  duration_ms: 20.1377
+  type: 'test'
+  ...
+# Subtest: percent change respects orderBy while retaining the source row order
+ok 4 - percent change respects orderBy while retaining the source row order
+  ---
+  duration_ms: 0.6226
+  type: 'test'
+  ...
+# Subtest: ambiguous duplicate calendar periods require aggregation
+ok 5 - ambiguous duplicate calendar periods require aggregation
+  ---
+  duration_ms: 0.3182
+  type: 'test'
+  ...
+# Subtest: explicit legacy execution preserves the frozen v1 ordering semantics
+ok 6 - explicit legacy execution preserves the frozen v1 ordering semantics
+  ---
+  duration_ms: 0.6815
+  type: 'test'
+  ...
+# Subtest: calendar comparison handles partitions, missing periods and negative or zero bases
+ok 7 - calendar comparison handles partitions, missing periods and negative or zero bases
+  ---
+  duration_ms: 0.7785
+  type: 'test'
+  ...
+# Subtest: XLSX ISO dates and date-only inputs retain monthly offset semantics
+ok 8 - XLSX ISO dates and date-only inputs retain monthly offset semantics
+  ---
+  duration_ms: 0.6203
+  type: 'test'
+  ...
+# Subtest: parser metadata maps each duplicate header and records conservative inference
+ok 9 - parser metadata maps each duplicate header and records conservative inference
+  ---
+  duration_ms: 3.5574
+  type: 'test'
+  ...
+# Subtest: numeric aggregation never silently drops invalid mixed-column cells
+ok 10 - numeric aggregation never silently drops invalid mixed-column cells
+  ---
+  duration_ms: 1.8563
+  type: 'test'
+  ...
+# Subtest: duplicate and normalized headers preserve every positional cell
+ok 11 - duplicate and normalized headers preserve every positional cell
+  ---
+  duration_ms: 0.5149
+  type: 'test'
+  ...
+# Subtest: CSV rows wider than the header fail explicitly instead of losing cells
+ok 12 - CSV rows wider than the header fail explicitly instead of losing cells
+  ---
+  duration_ms: 0.587
+  type: 'test'
+  ...
+# Subtest: pasted identifiers and unsafe integers stay text while plain amounts stay numeric
+ok 13 - pasted identifiers and unsafe integers stay text while plain amounts stay numeric
+  ---
+  duration_ms: 0.3209
+  type: 'test'
+  ...
+# Subtest: mixed CSV columns preserve numeric-looking text without per-cell coercion
+ok 14 - mixed CSV columns preserve numeric-looking text without per-cell coercion
+  ---
+  duration_ms: 0.2037
+  type: 'test'
+  ...
+# Subtest: monthly YoY uses the prior calendar year across the year boundary
+ok 15 - monthly YoY uses the prior calendar year across the year boundary
+  ---
+  duration_ms: 0.845
+  type: 'test'
+  ...
+# Subtest: a missing month is not synthesized as a zero row
+ok 16 - a missing month is not synthesized as a zero row
+  ---
+  duration_ms: 0.2747
+  type: 'test'
+  ...
+# Subtest: a CSV Data Snapshot remains immutable while its fixed TransformPlan reproduces rows and field lineage
+ok 17 - a CSV Data Snapshot remains immutable while its fixed TransformPlan reproduces rows and field lineage
+  ---
+  duration_ms: 2.4594
+  type: 'test'
+  ...
+# Subtest: unsupported source types and missing TransformPlan fields fail with an actionable boundary error
+ok 18 - unsupported source types and missing TransformPlan fields fail with an actionable boundary error
+  ---
+  duration_ms: 0.7859
+  type: 'test'
+  ...
+# Subtest: result summary uses all transformed rows while preview remains bounded
+ok 19 - result summary uses all transformed rows while preview remains bounded
+  ---
+  duration_ms: 6.1739
+  type: 'test'
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 690.8708

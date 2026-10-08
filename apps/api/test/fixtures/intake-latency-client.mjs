@@ -4,6 +4,7 @@ import http from "node:http";
 let pending = 0;
 let finishing = false;
 const samples = [];
+const pendingByPath = new Map();
 function finish() {
   if (finishing && pending === 0) {
     parentPort.postMessage(samples);
@@ -13,6 +14,8 @@ function finish() {
 const timer = setInterval(() => {
   for (const path of ["/health", workerData.readPath]) {
     pending++;
+    pendingByPath.set(path, (pendingByPath.get(path) ?? 0) + 1);
+    const inFlightAtStart = pendingByPath.get(path);
     const started = performance.now();
     let settled = false;
     const done = (status, error) => {
@@ -21,11 +24,14 @@ const timer = setInterval(() => {
       samples.push({
         path,
         startedAt: performance.timeOrigin + started,
+        inFlightAtStart,
+        completedAt: performance.timeOrigin + performance.now(),
         ms: performance.now() - started,
         status,
         error,
       });
       pending--;
+      pendingByPath.set(path, pendingByPath.get(path) - 1);
       finish();
     };
     const req = http.get(

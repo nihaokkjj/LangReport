@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
+import { cpus, totalmem } from "node:os";
 import { Worker } from "node:worker_threads";
 import { once } from "node:events";
 import type { IncomingMessage } from "node:http";
@@ -176,7 +177,23 @@ test(
         });
       }
       const report = JSON.stringify(
-        { node: process.version, bytes: blob.size, rounds, serverSamples, databaseSamples },
+        {
+          node: process.version,
+          environment: {
+            platform: process.platform,
+            cpu: cpus()[0]?.model,
+            logicalCpus: cpus().length,
+            totalMemoryBytes: totalmem(),
+            clientIntervalMs: 20,
+            clientConnectionReuse: false,
+            databasePoolMax: 5,
+            rssSamplingIntervalMs: 10,
+          },
+          bytes: blob.size,
+          rounds,
+          serverSamples,
+          databaseSamples,
+        },
         null,
         2,
       );
@@ -186,13 +203,7 @@ test(
           import.meta.url,
         ),
         report,
-      );
-      await writeFile(
-        new URL(
-          "../../../../docs/changes/2026-10-06-local-parse-isolation/evidence/full-upload-results.json",
-          import.meta.url,
-        ),
-        report,
+        { flag: "wx" },
       );
       for (const round of rounds as Array<{
         round: number;

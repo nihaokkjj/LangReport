@@ -1,0 +1,26 @@
+[
+  {
+    "path": "apps/api/test/fixtures/intake-latency-client.mjs",
+    "sha256": "562B87012B63ECE4387A6284CC57D7CEEAA15C6ED3D5FDA6A98910D4CE765D68"
+  },
+  {
+    "path": "apps/api/test/integration/local-intake-performance.integration.test.ts",
+    "sha256": "D7D4764C57AC0A3597A37F9E43FFB258284690B79B51677B3DB09177A62CC2FE"
+  },
+  {
+    "path": "docs/changes/2026-10-03-evidence-correctness-repair/evidence/t10-analyze-intake.mjs",
+    "sha256": "F7414326E8248711823A901B08D37C8104DDCC1432BE2A89AD74499FB5C0B21F"
+  },
+  {
+    "path": "docs/changes/2026-10-03-evidence-correctness-repair/t10-test-report.md",
+    "sha256": "50D0378D9B98945AA9879621B9DC7DB0D2AEA00A227A2F41849AA2AB8B900D91"
+  },
+  {
+    "path": "docs/changes/2026-10-03-evidence-correctness-repair/evidence/t10-intake-summary.jsonl",
+    "sha256": "15A388DDBACC350D58B3E41CC6B20972EB8D4B0F1C2777A92977BBA66241CF81"
+  },
+  {
+    "path": "docs/changes/2026-10-06-local-parse-isolation/evidence/full-upload-1791459829377.json",
+    "sha256": "4F87A7053E8A4ACFD37135AF541354B15395403950850D7FD4D9A4B234F91CF9"
+  }
+]
