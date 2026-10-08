@@ -3,11 +3,17 @@
 - change-id：`CHG-2026-10-03-evidence-correctness-repair`
 - 状态：`IMPLEMENTING`，部分验证
 - 创建时间：2026-10-03
-- 更新时间：2026-10-07
+- 更新时间：2026-10-08
 - 业务测试状态：`PARTIAL`；下方保留原文档阶段结果，不代表当前未修改代码。
 - 执行角色：owner 自测；独立角色完成最终冻结快照的限定只读代码复核，未独立重跑集成测试。
 
 ## A 批实施验证（新增）
+
+### 2026-10-08 T6 写完四对象后独立进程崩溃（限定结果）
+
+`apps/generation-worker/test/integration/fixtures/render-crash-before-publication.ts` 作为独立 Node 进程运行生产 `processRenderJob`；四次 MinIO PUT、对象读回与候选清单事务完成后，测试发布回调通过 IPC 报告边界并立即以 86 退出，不执行 Worker 的 catch/finally。父进程断言 Job 为 `validating` 且保留原租约，候选账本为 `validated`、Job 清单引用同一尝试，四个候选键字节可读；目标 Revision、Evidence、审计和成功回复均不存在，Artifact head 不变。
+
+父进程逐项核对持久清单的四个键、长度、SHA-256 与实际 MinIO 字节。仅在隔离测试数据库中调过期租约截止时间，调用生产 `recoverExpiredGenerationJobLeases`，由另一 Render Worker 取得更高 fencing token 并重新写入四个新键；预留 Revision ID 保持一致。旧候选字节不变且未被新 Revision 引用，新 Job 为 `succeeded`，Artifact head 指向新 Revision，Revision/Evidence/审计/回复各一份，再处理同 Job 不重复。完整 `pnpm test:integration` 自然退出 0：API14/浏览器2/Worker2；Generation Worker 测试类型、定向 ESLint/Prettier 与差异检查通过。[独立只读复核](./evidence/t6-crash-independent.md)未见新增确定性 P1/P2，未独立重跑全量测试。测试是受控崩溃与接管，租约等待以测试库时钟推进替代真实等待；未覆盖 MinIO 已收字节但 PUT 回执丢失，也未覆盖 TP12 六个完整并发编辑/回滚。T6 不标通过。
 
 ### 2026-10-07 T6 TP13 六处真实故障矩阵（限定结果）
 

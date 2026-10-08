@@ -3,9 +3,11 @@
 - change-id：`CHG-2026-10-03-evidence-correctness-repair`
 - 状态：`IMPLEMENTING`（A 批部分实施，未验收）
 - 创建时间：2026-10-03
-- 更新时间：2026-10-07
+- 更新时间：2026-10-08
 
 ## 最新续做状态（优先于下方历史段落）
+
+2026-10-08 T6 独立进程发布前崩溃限定结果：真实隔离 API→Generation Worker 编辑 Job 后，子进程 Render Worker 写完、读回四个 MinIO 候选并保存 `validated` 清单，在发布回调入口经 IPC 标记后以 86 直接退出。父进程确认无目标 Revision/Evidence/审计/回复、head 不变、四对象可读且账本保留；隔离库推进租约截止并执行生产恢复后，新 Worker 以更高 fencing 和新键唯一发布，重跑同 Job 幂等。完整隔离集成 API14/浏览器2/Worker2 自然退出 0；定向类型、lint、格式通过。仍缺 TP12 六完整并发编辑/回滚及复制/回滚 Job 化；MinIO 已接收字节而 PUT 回执丢失未模拟，T6 未验收。
 
 2026-10-07 T6 TP13 六处故障矩阵限定结果：四种对象按第 1–4 次 PUT 注入失败，PostgreSQL 约束分别阻断目标 Artifact head 更新和新 Revision 审计插入；每例在真实隔离 PostgreSQL/MinIO 中验证无可见半成品，账本保存已写候选，API retry 复用预留 Revision 身份并唯一发布，再次处理同 Job 无重复 Revision/Evidence/审计/回复。补充底层 PostgreSQL `23514` 与约束名断言后的最终完整集成 API14/浏览器2/Worker2 自然退出 0；独立只读复核未见新增确定性 P1/P2，未独立重跑。独立子进程写后、提交前崩溃与 TP12 六完整并发编辑/回滚仍缺，复制/回滚尚未 Job 化，T6 不标通过。
 

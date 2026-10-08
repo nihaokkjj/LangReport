@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash, randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
 import { once } from "node:events";
 import net from "node:net";
+import { fileURLToPath } from "node:url";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
@@ -959,6 +961,174 @@ test("real generation and render workers persist plugin usage and historical sna
       );
     } finally {
       await takeoverApi.close();
+    }
+
+    // A separate Worker exits after all four objects and the manifest are durable,
+    // before the publication transaction starts. A new Worker must take over.
+    const crashApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
+    try {
+      const queued = await crashApi.inject({
+        method: "POST",
+        url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+        payload: {
+          operation: "edit",
+          baseRevisionId: visualRevision.id,
+          patch: { title: "写完对象后进程崩溃验证" },
+          idempotencyKey: `crash-before-publication-${suffix}`,
+        },
+      });
+      assert.equal(queued.statusCode, 202, queued.body);
+      const crashJobId = queued.json().job.id as string;
+      await processGenerationJob(crashJobId);
+      const [prepared] = await db.select().from(generationJobs).where(eq(generationJobs.id, crashJobId));
+      const [artifactBefore] = await db.select().from(chartArtifacts).where(eq(chartArtifacts.id, revision.artifactId));
+      const messagesBefore = await db
+        .select({ id: conversationMessages.id })
+        .from(conversationMessages)
+        .where(eq(conversationMessages.conversationId, prepared.conversationId));
+
+      const fixturePath = fileURLToPath(new URL("./fixtures/render-crash-before-publication.ts", import.meta.url));
+      const child = spawn(process.execPath, ["--import", "tsx", fixturePath, crashJobId], {
+        cwd: process.cwd(),
+        env: process.env,
+        stdio: ["ignore", "pipe", "pipe", "ipc"],
+      });
+      let marker: unknown;
+      let childStderr = "";
+      child.on("message", (message) => {
+        marker = message;
+      });
+      child.stderr?.on("data", (chunk: Buffer) => {
+        childStderr = (childStderr + chunk.toString()).slice(-8_192);
+      });
+      const timeout = setTimeout(() => child.kill(), 60_000);
+      let exitCode: number | null;
+      let exitSignal: NodeJS.Signals | null;
+      try {
+        [exitCode, exitSignal] = (await once(child, "exit")) as [number | null, NodeJS.Signals | null];
+      } finally {
+        clearTimeout(timeout);
+      }
+      assert.equal(exitSignal, null, childStderr);
+      assert.equal(exitCode, 86, childStderr);
+      assert.deepEqual(marker, { phase: "validated", jobId: crashJobId });
+
+      const [afterCrash] = await db.select().from(generationJobs).where(eq(generationJobs.id, crashJobId));
+      const [staleAttempt] = await db
+        .select()
+        .from(renderCandidateAttempts)
+        .where(eq(renderCandidateAttempts.generationJobId, crashJobId));
+      assert.equal(afterCrash.status, "validating");
+      assert.ok(afterCrash.leaseOwner);
+      assert.equal(staleAttempt.status, "validated");
+      const crashManifest = afterCrash.candidateOutputManifest as {
+        attemptId: string;
+        outputs: { key: string; sha256: string; byteLength: number }[];
+      };
+      assert.equal(crashManifest.attemptId, staleAttempt.id);
+      const staleKeys = Object.values(staleAttempt.outputKeys as Record<string, string>);
+      assert.equal(staleKeys.length, 4);
+      objectKeys.push(...staleKeys);
+      const staleBytes = await Promise.all(staleKeys.map(getObject));
+      assert.ok(staleBytes.every((body) => body.length > 0));
+      assert.deepEqual(crashManifest.outputs.map(({ key }) => key).sort(), [...staleKeys].sort());
+      for (const output of crashManifest.outputs) {
+        const body = staleBytes[staleKeys.indexOf(output.key)];
+        assert.equal(output.byteLength, body.length);
+        assert.equal(output.sha256, `sha256:${createHash("sha256").update(body).digest("hex")}`);
+      }
+      assert.equal(
+        (await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, crashJobId))).length,
+        0,
+      );
+      assert.equal(
+        (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, crashJobId))).length,
+        0,
+      );
+      assert.equal(
+        (await db.select().from(auditEvents).where(eq(auditEvents.entityId, afterCrash.candidateRevisionId!))).length,
+        0,
+      );
+      const [artifactAfterCrash] = await db
+        .select()
+        .from(chartArtifacts)
+        .where(eq(chartArtifacts.id, revision.artifactId));
+      assert.equal(artifactAfterCrash.headRevisionId, artifactBefore.headRevisionId);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(conversationMessages)
+            .where(eq(conversationMessages.conversationId, prepared.conversationId))
+        ).length,
+        messagesBefore.length,
+      );
+
+      // Advance only this isolated test lease; recovery still uses the production path.
+      await db
+        .update(generationJobs)
+        .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
+        .where(eq(generationJobs.id, crashJobId));
+      assert.ok((await recoverExpiredGenerationJobLeases()).includes(crashJobId));
+      await processRenderJob(crashJobId);
+      const [recovered] = await db.select().from(generationJobs).where(eq(generationJobs.id, crashJobId));
+      const [published] = await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, crashJobId));
+      assert.equal(recovered.status, "succeeded");
+      assert.ok(recovered.leaseFencingToken > afterCrash.leaseFencingToken);
+      assert.equal(published.id, afterCrash.candidateRevisionId);
+      const [artifactAfterRecovery] = await db
+        .select()
+        .from(chartArtifacts)
+        .where(eq(chartArtifacts.id, revision.artifactId));
+      assert.equal(artifactAfterRecovery.headRevisionId, published.id);
+      const publishedOutputs = published.outputObjects as Record<"vegaLite" | "svg" | "png" | "html", string>;
+      const freshKeys = [publishedOutputs.vegaLite, publishedOutputs.svg, publishedOutputs.png, publishedOutputs.html];
+      objectKeys.push(...freshKeys);
+      for (let index = 0; index < staleKeys.length; index += 1) {
+        assert.ok(!freshKeys.includes(staleKeys[index]));
+        assert.deepEqual(await getObject(staleKeys[index]), staleBytes[index]);
+      }
+      for (const key of freshKeys) assert.ok((await getObject(key)).length > 0);
+      assert.equal(
+        (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, crashJobId))).length,
+        1,
+      );
+      assert.equal((await db.select().from(auditEvents).where(eq(auditEvents.entityId, published.id))).length, 1);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(conversationMessages)
+            .where(eq(conversationMessages.conversationId, prepared.conversationId))
+        ).length,
+        messagesBefore.length + 1,
+      );
+      const attempts = await db
+        .select()
+        .from(renderCandidateAttempts)
+        .where(eq(renderCandidateAttempts.generationJobId, crashJobId));
+      assert.deepEqual(attempts.map((attempt) => attempt.status).sort(), ["published", "validated"].sort());
+      await processRenderJob(crashJobId);
+      assert.equal(
+        (await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, crashJobId))).length,
+        1,
+      );
+      assert.equal(
+        (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, crashJobId))).length,
+        1,
+      );
+      assert.equal((await db.select().from(auditEvents).where(eq(auditEvents.entityId, published.id))).length, 1);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(conversationMessages)
+            .where(eq(conversationMessages.conversationId, prepared.conversationId))
+        ).length,
+        messagesBefore.length + 1,
+      );
+    } finally {
+      await crashApi.close();
     }
 
     // A real Worker failure before the first object write must retain the frozen finding through API retry.
