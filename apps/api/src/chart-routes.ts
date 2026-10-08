@@ -48,7 +48,10 @@ import { assertProjectThemeReference, PluginServiceError } from "@langreport/plu
 
 const RENDERER_VERSION = "vega-lite-svg-v4";
 
-export async function registerChartRoutes(app: FastifyInstance): Promise<void> {
+export async function registerChartRoutes(
+  app: FastifyInstance,
+  readOutput: typeof getObject = getObject,
+): Promise<void> {
   app.get<{ Params: { projectId: string } }>("/api/v1/projects/:projectId/chart-artifacts", async (request, reply) => {
     try {
       return reply.send({ artifacts: await listArtifacts(request.params.projectId, userIdFromRequest(request)) });
@@ -377,20 +380,20 @@ export async function registerChartRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.post<{ Params: { revisionId: string } }>("/api/v1/chart-revisions/:revisionId/submit", async (request, reply) =>
-    transitionRoute(request, reply, "in_review"),
+    transitionRoute(request, reply, "in_review", readOutput),
   );
   app.post<{ Params: { revisionId: string } }>("/api/v1/chart-revisions/:revisionId/approve", async (request, reply) =>
-    transitionRoute(request, reply, "approved"),
+    transitionRoute(request, reply, "approved", readOutput),
   );
   app.post<{ Params: { revisionId: string } }>(
     "/api/v1/chart-revisions/:revisionId/request-changes",
-    async (request, reply) => transitionRoute(request, reply, "changes_requested"),
+    async (request, reply) => transitionRoute(request, reply, "changes_requested", readOutput),
   );
   app.post<{ Params: { revisionId: string } }>("/api/v1/chart-revisions/:revisionId/reopen", async (request, reply) =>
-    transitionRoute(request, reply, "draft"),
+    transitionRoute(request, reply, "draft", readOutput),
   );
   app.post<{ Params: { revisionId: string } }>("/api/v1/chart-revisions/:revisionId/archive", async (request, reply) =>
-    transitionRoute(request, reply, "archived"),
+    transitionRoute(request, reply, "archived", readOutput),
   );
 
   app.get<{ Params: { revisionId: string } }>(
@@ -539,6 +542,7 @@ async function transitionRoute(
   request: { params: { revisionId: string }; body: unknown; headers: Record<string, string | string[] | undefined> },
   reply: FastifyReply,
   nextStatus: "draft" | "in_review" | "approved" | "changes_requested" | "archived",
+  readOutput: typeof getObject,
 ) {
   try {
     const body = reviewNoteSchema.parse(request.body ?? {});
@@ -550,6 +554,7 @@ async function transitionRoute(
       actorId: userIdFromRequest(request),
       note: body.note,
       expectedStatus: body.expectedStatus,
+      readOutput,
     });
     return reply.send({ revision: next });
   } catch (error) {

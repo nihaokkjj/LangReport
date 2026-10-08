@@ -2062,6 +2062,22 @@ export default function ApiConsolePage() {
                     409 REVISION_PROVENANCE_INCOMPLETE。
                   </p>
                 )}
+                {["submitChartRevision", "approveChartRevision"].includes(
+                  selectedEntry?.operation.operationId ?? "",
+                ) && (
+                  <p className={styles.contractHint}>
+                    审核固定 Revision 前核验来源、成功 Job、Plan/Render Validation 与四种输出的长度和 SHA-256。
+                    不完整返回 409：REVISION_NOT_READY / REVISION_PROVENANCE_INCOMPLETE / REVISION_OUTPUT_UNAVAILABLE。
+                    存储暂不可核验返回 503 REVISION_OUTPUT_VERIFICATION_UNAVAILABLE，请稍后重试。 批准旧版本保留较新
+                    head，只更新目标审核状态及 published 指针并记录审计。
+                  </p>
+                )}
+                {selectedEntry?.operation.operationId === "listEvidenceBlocks" && (
+                  <p className={styles.contractHint}>
+                    默认查询 head/published 对应 Evidence；Viewer 仅可见 published Approved。 使用 revisionId
+                    查询固定历史版本，审核状态从该 Revision 投影；缺对应证据返回空数组。
+                  </p>
+                )}
                 {parameterLocations.map(
                   (location) =>
                     parametersByLocation[location].length > 0 && (

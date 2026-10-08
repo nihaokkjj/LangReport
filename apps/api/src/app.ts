@@ -26,6 +26,7 @@ export type AppOptions = {
   logger?: boolean;
   authProvider?: AuthProvider;
   accountStore?: AuthAccountStore;
+  reviewOutputReader?: (key: string) => Promise<Buffer>;
 };
 
 export async function buildApp(options: AppOptions = {}): Promise<FastifyInstance> {
@@ -81,7 +82,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
       return sendHttpError(reply, 503, "记忆撤销状态暂不可确认", "MEMORY_REVOCATION_UNAVAILABLE");
     }
   });
-  await registerRoutes(app, environment, accountStore);
+  await registerRoutes(app, environment, accountStore, options.reviewOutputReader);
 
   app.get("/openapi.json", async (_request, reply) => {
     if (!isInternalSurfaceAllowed(environment)) return sendHttpError(reply, 404, "资源不存在", "NOT_FOUND");

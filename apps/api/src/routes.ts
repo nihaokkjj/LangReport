@@ -1,6 +1,6 @@
 import { withIntakeCancellation } from "./intake-cancellation.js";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import {
   acceptMemoryCandidateRequestSchema,
@@ -39,6 +39,7 @@ import {
   analysisBriefs,
   auditEvents,
   chartRevisions,
+  chartArtifacts,
   conversationMessages,
   conversations,
   dataAssets,
@@ -173,6 +174,7 @@ export async function registerRoutes(
   app: FastifyInstance,
   environment: NodeJS.ProcessEnv,
   accountStore: AuthAccountStore,
+  reviewOutputReader?: typeof getObject,
 ): Promise<void> {
   const generationJobStatusObserver = createGenerationJobStatusObserver(app.log);
   const generationStatusLongPollEnabled = !["0", "false", "off"].includes(
@@ -180,7 +182,7 @@ export async function registerRoutes(
   );
   app.addHook("onClose", async () => generationJobStatusObserver.close());
   await registerAuthRoutes(app, environment, accountStore);
-  await registerChartRoutes(app);
+  await registerChartRoutes(app, reviewOutputReader);
 
   app.post("/api/v1/dev/bootstrap", async (request, reply) => {
     if (!isDevBootstrapAllowed(environment)) return sendHttpError(reply, 404, "资源不存在", "NOT_FOUND");
@@ -1138,62 +1140,87 @@ export async function registerRoutes(
     }
   });
 
-  app.get<{ Params: { projectId: string } }>("/api/v1/projects/:projectId/evidence-blocks", async (request, reply) => {
-    try {
-      assertProjectId(request.params.projectId);
-      const userId = userIdFromRequest(request);
-      await assertChartAction(request.params.projectId, userId, "view");
-      const blocks = await db
-        .select()
-        .from(evidenceBlocks)
-        .where(eq(evidenceBlocks.projectId, request.params.projectId))
-        .orderBy(desc(evidenceBlocks.updatedAt));
-      const evidence = await Promise.all(
-        blocks.map(async (block) => {
-          const record = await getRevision(block.chartRevisionId, userId, { projectId: request.params.projectId });
-          const [job] = await db
-            .select()
-            .from(generationJobs)
-            .where(eq(generationJobs.id, block.generationJobId))
-            .limit(1);
-          return {
-            block,
-            artifact: record.artifact,
-            revision: record.revision,
-            job: job
-              ? {
-                  id: job.id,
-                  status: job.status,
-                  prompt: job.prompt,
-                  snapshotId: job.snapshotId,
-                  intent: job.intent,
-                  transformPlan: job.transformPlan,
-                  fieldLineage: job.fieldLineage,
-                  flintSpec: job.flintSpec,
-                  pluginContext: job.pluginContext,
-                  pluginUsage: job.pluginUsage,
-                  validation: job.validation,
-                  planValidation: job.planValidation,
-                  renderValidation: job.renderValidation,
-                  previewData: job.previewData,
-                  resultSummary: job.resultSummary,
-                  clarificationProposal: job.clarificationProposal,
-                  generationAudit: job.generationAudit,
-                  parentGenerationJobId: job.parentGenerationJobId,
-                  generationDecision: job.generationDecision,
-                  repairCount: job.repairCount,
-                  errorCode: job.errorCode,
-                  errorMessage: job.errorMessage,
-                }
-              : null,
-          };
-        }),
-      );
-      return reply.send({ evidence });
-    } catch (error) {
-      return sendDataError(reply, error);
-    }
-  });
+  app.get<{ Params: { projectId: string }; Querystring: { revisionId?: string } }>(
+    "/api/v1/projects/:projectId/evidence-blocks",
+    async (request, reply) => {
+      try {
+        assertProjectId(request.params.projectId);
+        const userId = userIdFromRequest(request);
+        const access = await assertChartAction(request.params.projectId, userId, "view");
+        const revisionId = request.query.revisionId;
+        if (revisionId) {
+          assertProjectId(revisionId);
+          await getRevision(revisionId, userId, { projectId: request.params.projectId });
+        }
+        const blocks = await db
+          .select({ block: evidenceBlocks })
+          .from(evidenceBlocks)
+          .innerJoin(chartRevisions, eq(chartRevisions.id, evidenceBlocks.chartRevisionId))
+          .innerJoin(chartArtifacts, eq(chartArtifacts.id, evidenceBlocks.chartArtifactId))
+          .where(
+            and(
+              eq(evidenceBlocks.projectId, request.params.projectId),
+              eq(chartArtifacts.projectId, request.params.projectId),
+              eq(chartRevisions.artifactId, chartArtifacts.id),
+              access.effectiveRole === "viewer" ? eq(chartRevisions.status, "approved") : undefined,
+              revisionId
+                ? eq(chartRevisions.id, revisionId)
+                : access.effectiveRole === "viewer"
+                  ? eq(chartRevisions.id, chartArtifacts.publishedRevisionId)
+                  : or(
+                      eq(chartRevisions.id, chartArtifacts.headRevisionId),
+                      eq(chartRevisions.id, chartArtifacts.publishedRevisionId),
+                    ),
+            ),
+          )
+          .orderBy(desc(evidenceBlocks.updatedAt));
+        const evidence = await Promise.all(
+          blocks.map(async ({ block }) => {
+            const record = await getRevision(block.chartRevisionId, userId, { projectId: request.params.projectId });
+            const [job] = await db
+              .select()
+              .from(generationJobs)
+              .where(eq(generationJobs.id, block.generationJobId))
+              .limit(1);
+            return {
+              block: { ...block, status: record.revision.status },
+              artifact: record.artifact,
+              revision: record.revision,
+              job: job
+                ? {
+                    id: job.id,
+                    status: job.status,
+                    prompt: job.prompt,
+                    snapshotId: job.snapshotId,
+                    intent: job.intent,
+                    transformPlan: job.transformPlan,
+                    fieldLineage: job.fieldLineage,
+                    flintSpec: job.flintSpec,
+                    pluginContext: job.pluginContext,
+                    pluginUsage: job.pluginUsage,
+                    validation: job.validation,
+                    planValidation: job.planValidation,
+                    renderValidation: job.renderValidation,
+                    previewData: job.previewData,
+                    resultSummary: job.resultSummary,
+                    clarificationProposal: job.clarificationProposal,
+                    generationAudit: job.generationAudit,
+                    parentGenerationJobId: job.parentGenerationJobId,
+                    generationDecision: job.generationDecision,
+                    repairCount: job.repairCount,
+                    errorCode: job.errorCode,
+                    errorMessage: job.errorMessage,
+                  }
+                : null,
+            };
+          }),
+        );
+        return reply.send({ evidence });
+      } catch (error) {
+        return sendDataError(reply, error);
+      }
+    },
+  );
 
   type GenerationJobCreationOptions = {
     userId?: string;

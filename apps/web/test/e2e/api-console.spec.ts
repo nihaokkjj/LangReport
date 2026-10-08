@@ -1,6 +1,63 @@
 import { expect, test } from "@playwright/test";
 import { captureUiEvidence } from "./visual-evidence";
 
+test("API Console 说明固定历史证据与两个审核入口的就绪核验", async ({ page }) => {
+  await page.route("**/api-console/openapi.json", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      json: {
+        openapi: "3.0.3",
+        info: { title: "LangReport", version: "test" },
+        paths: {
+          "/api/v1/chart-revisions/{revisionId}/submit": {
+            post: {
+              operationId: "submitChartRevision",
+              tags: ["Reviews"],
+              summary: "提交审核",
+              responses: {
+                "200": { description: "成功" },
+                "409": { description: "不完整" },
+                "503": { description: "不可核验" },
+              },
+            },
+          },
+          "/api/v1/chart-revisions/{revisionId}/approve": {
+            post: {
+              operationId: "approveChartRevision",
+              tags: ["Reviews"],
+              summary: "批准版本",
+              responses: {
+                "200": { description: "成功" },
+                "409": { description: "不完整" },
+                "503": { description: "不可核验" },
+              },
+            },
+          },
+          "/api/v1/projects/{projectId}/evidence-blocks": {
+            get: {
+              operationId: "listEvidenceBlocks",
+              tags: ["Evidence"],
+              summary: "查询证据",
+              responses: { "200": { description: "成功" } },
+            },
+          },
+        },
+      },
+    }),
+  );
+  await page.goto("/api-console");
+  for (const path of ["submit", "approve"]) {
+    await page.getByRole("button", { name: new RegExp(`/chart-revisions/.*${path}`) }).click();
+    await expect(page.getByText(/审核固定 Revision 前核验来源/)).toBeVisible();
+    await expect(page.getByText(/503 REVISION_OUTPUT_VERIFICATION_UNAVAILABLE/)).toBeVisible();
+    await expect(page.getByText(/批准旧版本保留较新 head/)).toBeVisible();
+  }
+  await page.getByRole("button", { name: /\/evidence-blocks/ }).click();
+  await expect(page.getByText(/默认查询 head\/published 对应 Evidence/)).toBeVisible();
+  await expect(page.getByText(/使用 revisionId 查询固定历史版本/)).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+});
+
 test("API Console 说明编辑、复制和回滚的异步 Job 合同", async ({ page }) => {
   await page.route("**/api-console/openapi.json", (route) =>
     route.fulfill({

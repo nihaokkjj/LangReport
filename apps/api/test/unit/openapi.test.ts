@@ -61,6 +61,16 @@ test("serves OpenAPI JSON and a standard Swagger UI page", async () => {
     assert.ok(document.paths["/api/v1/projects/{projectId}/metric-definitions"]?.post);
     assert.ok(document.paths["/api/v1/projects/{projectId}/analysis-brief"]?.post);
     assert.ok(document.paths["/api/v1/projects/{projectId}/analysis-brief"]?.patch);
+    for (const action of ["submit", "approve"]) {
+      const operation = document.paths[`/api/v1/chart-revisions/{revisionId}/${action}`]?.post as {
+        responses: Record<string, unknown>;
+      };
+      assert.ok(operation.responses["409"]);
+      assert.ok(operation.responses["503"]);
+      assert.match(JSON.stringify(operation), /REVISION_NOT_READY/);
+      assert.match(JSON.stringify(operation), /REVISION_OUTPUT_VERIFICATION_UNAVAILABLE/);
+    }
+    assert.match(JSON.stringify(document.paths["/api/v1/projects/{projectId}/evidence-blocks"]?.get), /revisionId/);
     assert.ok(document.paths["/api/v1/projects/{projectId}/generation-jobs"]?.post);
     assert.ok(document.paths["/api/v1/workspaces/{workspaceId}/model-credential"]?.get);
     assert.ok(document.paths["/api/v1/workspaces/{workspaceId}/model-credential"]?.put);

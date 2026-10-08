@@ -61,6 +61,7 @@ import {
 } from "@langreport/storage";
 import type { ColumnProfile, DataRow } from "@langreport/data-engine";
 import { buildApp } from "../../../api/src/app.js";
+import { verifyT7Review } from "./t7-review.js";
 
 const { processGenerationJob } = await import("../../src/index.js");
 const { processRenderJob } = await import("../../../render-worker/src/index.js");
@@ -2019,6 +2020,17 @@ test("real generation and render workers persist plugin usage and historical sna
     } finally {
       await derivedApi.close();
     }
+
+    await verifyT7Review(
+      {
+        projectId: project.id,
+        workspaceId: workspace.id,
+        userId,
+        r1Id: visualRevision.id,
+        r2Id: derivedRevision.id,
+      },
+      buildApp,
+    );
 
     // An inconsistent historical Job must not mutate an already published Revision.
     const publishedHtmlKey = (renderedJob.outputs as { html: string }).html;

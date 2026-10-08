@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
   auditEvents,
@@ -8,6 +9,9 @@ import {
   chartReviews,
   chartShares,
   evidenceBlocks,
+  generationJobs,
+  dataSnapshots,
+  dataAssets,
   members,
   projectMembers,
   projectThemes,
@@ -21,6 +25,8 @@ import {
   pluginThemeRefSchema,
   projectThemeSchema,
   resultSummarySchema,
+  validationRecordSchema,
+  validationReportSchema,
   type ChartEditPatch,
   type ChartRevisionStatus,
   type FlintSpec,
@@ -640,6 +646,7 @@ export async function transitionChartRevision(input: {
   actorId: string;
   note?: string;
   expectedStatus?: ChartRevisionStatus;
+  readOutput: (key: string) => Promise<Buffer>;
 }) {
   const record = await getRevision(input.revisionId, input.actorId, { projectId: input.projectId });
   const action = actionForTransition(record.revision.status, input.nextStatus);
@@ -658,14 +665,36 @@ export async function transitionChartRevision(input: {
   if (input.nextStatus === "archived" && record.artifact.publishedRevisionId === record.revision.id) {
     throw new ChartServiceError("PUBLISHED_REVISION_REQUIRED", "当前已发布版本不能直接归档，请先发布替代版本");
   }
-  if (input.nextStatus === "approved" && !isValidReport(record.revision.validation)) {
-    throw new ChartServiceError("VALIDATION_FAILED", "未通过校验的图表不能批准");
-  }
-
   return db.transaction(async (tx) => {
-    const [locked] = await tx.select().from(chartRevisions).where(eq(chartRevisions.id, input.revisionId)).limit(1);
-    if (!locked || locked.status !== record.revision.status) {
+    // Match publication's Job -> Artifact lock order; serialize approvals and head publication.
+    const [job] = record.revision.generationJobId
+      ? await tx
+          .select()
+          .from(generationJobs)
+          .where(eq(generationJobs.id, record.revision.generationJobId))
+          .for("update")
+          .limit(1)
+      : [];
+    const [artifact] = await tx
+      .select()
+      .from(chartArtifacts)
+      .where(eq(chartArtifacts.id, record.artifact.id))
+      .for("update")
+      .limit(1);
+    const [locked] = await tx
+      .select()
+      .from(chartRevisions)
+      .where(eq(chartRevisions.id, input.revisionId))
+      .for("update")
+      .limit(1);
+    if (!artifact || !locked || locked.status !== record.revision.status) {
       throw new ChartServiceError("REVISION_CONFLICT", "图表版本状态已变化，请刷新后重试", 409);
+    }
+    if (input.nextStatus === "archived" && artifact.publishedRevisionId === locked.id) {
+      throw new ChartServiceError("PUBLISHED_REVISION_REQUIRED", "当前已发布版本不能直接归档，请先发布替代版本");
+    }
+    if (input.nextStatus === "in_review" || input.nextStatus === "approved") {
+      await assertReviewReady(tx, locked, artifact, job, input.readOutput);
     }
     const [revision] = await tx
       .update(chartRevisions)
@@ -675,7 +704,15 @@ export async function transitionChartRevision(input: {
     const artifactPatch: Record<string, unknown> = { updatedAt: new Date() };
     if (input.nextStatus === "approved") {
       artifactPatch.publishedRevisionId = revision.id;
-      artifactPatch.headRevisionId = revision.id;
+      await writeAudit(tx, {
+        workspaceId: record.workspaceId,
+        projectId: input.projectId,
+        actorId: input.actorId,
+        action: "chart_artifact.published_revision_changed",
+        entityType: "chart_artifact",
+        entityId: artifact.id,
+        metadata: { from: artifact.publishedRevisionId, to: revision.id },
+      });
     }
     await tx
       .update(chartArtifacts)
@@ -685,11 +722,10 @@ export async function transitionChartRevision(input: {
       await tx
         .update(evidenceBlocks)
         .set({
-          chartRevisionId: revision.id,
           status: input.nextStatus,
           updatedAt: new Date(),
         })
-        .where(eq(evidenceBlocks.chartArtifactId, record.artifact.id));
+        .where(eq(evidenceBlocks.chartRevisionId, revision.id));
     }
     if (action === "submit_review" || action === "approve" || action === "request_changes") {
       await tx.insert(chartReviews).values({
@@ -711,6 +747,114 @@ export async function transitionChartRevision(input: {
     });
     return revision;
   });
+}
+
+async function assertReviewReady(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  revision: typeof chartRevisions.$inferSelect,
+  artifact: typeof chartArtifacts.$inferSelect,
+  job: typeof generationJobs.$inferSelect | undefined,
+  readOutput: (key: string) => Promise<Buffer>,
+) {
+  freezeDerivedProvenance(revision);
+  const [snapshot] = await tx
+    .select({ projectId: dataAssets.projectId })
+    .from(dataSnapshots)
+    .innerJoin(dataAssets, eq(dataAssets.id, dataSnapshots.assetId))
+    .where(eq(dataSnapshots.id, revision.snapshotId))
+    .limit(1);
+  if (snapshot?.projectId !== artifact.projectId) {
+    throw new ChartServiceError("REVISION_PROVENANCE_INCOMPLETE", "版本数据来源与 Project 不一致", 409);
+  }
+  const passed = (value: unknown) => {
+    const parsed = validationRecordSchema.safeParse(value);
+    return parsed.success && parsed.data.status === "passed";
+  };
+  const validation = validationReportSchema.safeParse(revision.validation);
+  if (
+    !job ||
+    job.projectId !== artifact.projectId ||
+    job.snapshotId !== revision.snapshotId ||
+    job.status !== "succeeded" ||
+    job.candidateRevisionId !== revision.id ||
+    job.candidateArtifactId !== artifact.id ||
+    job.candidateRevisionNumber !== revision.revision ||
+    !validation.success ||
+    !validation.data.valid ||
+    validation.data.issues.some((issue) => issue.severity === "error") ||
+    !passed(job.planValidation) ||
+    !passed(job.renderValidation)
+  ) {
+    throw new ChartServiceError("REVISION_NOT_READY", "版本缺少成功 Job 或通过的 Plan/Render Validation", 409);
+  }
+  const blocks = await tx.select().from(evidenceBlocks).where(eq(evidenceBlocks.chartRevisionId, revision.id));
+  const block = blocks[0];
+  if (
+    blocks.length !== 1 ||
+    block.projectId !== artifact.projectId ||
+    block.chartArtifactId !== artifact.id ||
+    block.generationJobId !== job.id ||
+    block.snapshotId !== revision.snapshotId ||
+    !isDeepStrictEqual(job.analysisBriefSnapshot, revision.analysisBriefSnapshot) ||
+    !isDeepStrictEqual(job.metricDefinitionSnapshot, revision.metricDefinitionSnapshot) ||
+    !nonempty(block.finding) ||
+    !isDeepStrictEqual(block.analysisBriefSnapshot, revision.analysisBriefSnapshot) ||
+    !isDeepStrictEqual(block.metricDefinitionSnapshot, revision.metricDefinitionSnapshot) ||
+    !isDeepStrictEqual(block.resultSummary, revision.resultSummary) ||
+    !isDeepStrictEqual(job.resultSummary, revision.resultSummary)
+  ) {
+    throw new ChartServiceError("REVISION_PROVENANCE_INCOMPLETE", "版本缺少唯一且来源一致的 Evidence", 409);
+  }
+  const manifest = record(job.candidateOutputManifest);
+  const outputs = record(revision.outputObjects);
+  const completed = record(job.outputs);
+  if (
+    !manifest ||
+    manifest.revisionId !== revision.id ||
+    !Array.isArray(manifest.outputs) ||
+    manifest.outputs.length !== 4 ||
+    !outputs ||
+    !completed ||
+    !passed(manifest.validation) ||
+    !isDeepStrictEqual(manifest.validation, job.renderValidation)
+  ) {
+    throw new ChartServiceError("REVISION_NOT_READY", "版本缺少完整且一致的输出清单", 409);
+  }
+  for (const format of ["vegaLite", "svg", "png", "html"] as const) {
+    const entries = manifest.outputs.map(record).filter((entry) => entry?.format === format);
+    const entry = entries[0];
+    if (
+      entries.length !== 1 ||
+      !entry ||
+      !nonempty(outputs[format]) ||
+      entry.key !== outputs[format] ||
+      completed[format] !== entry.key ||
+      entry.validation !== "passed" ||
+      typeof entry.sha256 !== "string" ||
+      !/^sha256:[0-9a-f]{64}$/.test(entry.sha256) ||
+      !Number.isInteger(entry.byteLength) ||
+      Number(entry.byteLength) <= 0
+    ) {
+      throw new ChartServiceError("REVISION_NOT_READY", "版本输出引用或清单不完整", 409);
+    }
+    let bytes: Buffer;
+    try {
+      bytes = await readOutput(entry.key as string);
+    } catch (error) {
+      // Only a definite missing key means incomplete output. Infrastructure errors remain retryable.
+      const details = record(error);
+      if (details?.name === "NoSuchKey" || details?.code === "NoSuchKey") {
+        throw new ChartServiceError("REVISION_OUTPUT_UNAVAILABLE", "版本输出文件缺失，请重新生成", 409);
+      }
+      throw new ChartServiceError("REVISION_OUTPUT_VERIFICATION_UNAVAILABLE", "存储暂不可核验，请稍后重试审核", 503);
+    }
+    if (
+      bytes.length !== entry.byteLength ||
+      `sha256:${createHash("sha256").update(bytes).digest("hex")}` !== entry.sha256
+    ) {
+      throw new ChartServiceError("REVISION_OUTPUT_UNAVAILABLE", "版本输出长度或哈希不匹配，请重新生成", 409);
+    }
+  }
 }
 
 export async function archiveArtifact(input: { projectId: string; artifactId: string; userId: string }) {
@@ -1021,12 +1165,6 @@ function actionForTransition(
   if (next === "changes_requested") return "request_changes";
   if (next === "draft" && current === "changes_requested") return "create_revision";
   return "create_revision";
-}
-
-function isValidReport(value: unknown): value is ValidationReport {
-  return (
-    typeof value === "object" && value !== null && "valid" in value && (value as { valid?: unknown }).valid === true
-  );
 }
 
 function toComparable(revision: typeof chartRevisions.$inferSelect): RevisionComparable {

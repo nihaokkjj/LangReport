@@ -719,7 +719,7 @@ const evidenceDto = dto(
     analysisBriefSnapshot: anyJson,
     metricDefinitionSnapshot: anyJson,
     qualityWarnings: array(anyJson),
-    status: { type: "string", enum: ["draft", "in_review", "approved", "changes_requested"] },
+    status: { type: "string", enum: ["draft", "in_review", "approved", "changes_requested", "archived"] },
     createdBy: string(),
     createdAt: dateTime(),
     updatedAt: dateTime(),
@@ -1549,6 +1549,13 @@ export const routeContracts: RouteContract[] = [
     ["Evidence"],
     "查询 Project Evidence Block",
     { 200: dto({ evidence: array(evidenceRecordDto) }, ["evidence"]) },
+    {
+      request: pathRequest("/api/v1/projects/:projectId/evidence-blocks", {
+        querystring: query({ revisionId: uuid() }),
+      }),
+      successDescription:
+        "默认仅返回各 Artifact 的 head/published 对应 Evidence；Viewer 仅可见 published Approved。可用 revisionId 查询固定历史版本证据，状态从目标 Revision 投影；无对应 Evidence 返回空数组，不借用其他版本内容。",
+    },
   ),
   contract(
     "POST",
@@ -1928,7 +1935,12 @@ export const routeContracts: RouteContract[] = [
     ["Reviews"],
     "提交 Chart Revision 审核",
     { 200: dto({ revision: revisionDto }, ["revision"]) },
-    { request: pathRequest("/api/v1/chart-revisions/:revisionId/submit", { body: zodJson(reviewNoteSchema) }) },
+    {
+      request: pathRequest("/api/v1/chart-revisions/:revisionId/submit", { body: zodJson(reviewNoteSchema) }),
+      extraResponses: { 503: errorResponseSchema },
+      successDescription:
+        "提交固定 Revision：来源完整、Job succeeded、Plan/Render Validation passed，四输出读回核对长度与 SHA-256。409 REVISION_NOT_READY / REVISION_PROVENANCE_INCOMPLETE / REVISION_OUTPUT_UNAVAILABLE；存储暂不可核验返回 503 REVISION_OUTPUT_VERIFICATION_UNAVAILABLE，不写审核或成功审计。",
+    },
   ),
   contract(
     "POST",
@@ -1937,7 +1949,12 @@ export const routeContracts: RouteContract[] = [
     ["Reviews"],
     "批准 Chart Revision",
     { 200: dto({ revision: revisionDto }, ["revision"]) },
-    { request: pathRequest("/api/v1/chart-revisions/:revisionId/approve", { body: zodJson(reviewNoteSchema) }) },
+    {
+      request: pathRequest("/api/v1/chart-revisions/:revisionId/approve", { body: zodJson(reviewNoteSchema) }),
+      extraResponses: { 503: errorResponseSchema },
+      successDescription:
+        "批准固定 Revision：重复执行来源、成功 Job、Plan/Render Validation 和四输出长度/SHA-256 核验。409 REVISION_NOT_READY / REVISION_PROVENANCE_INCOMPLETE / REVISION_OUTPUT_UNAVAILABLE；存储暂不可核验返回 503 REVISION_OUTPUT_VERIFICATION_UNAVAILABLE。仅改变目标审核状态和 published 指针并追加审计，保留较新 head 与其他 Evidence 内容。",
+    },
   ),
   contract(
     "POST",
