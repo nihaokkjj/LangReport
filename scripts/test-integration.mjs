@@ -73,11 +73,19 @@ try {
   if (status === 0 && !intakeOnly)
     status = run([
       "--filter",
-      "@langreport/generation-worker",
+      "@langreport/api",
       "exec",
       "tsx",
       "--test",
       "test/integration/worker.integration.test.ts",
+    ]);
+  if (status === 0 && !intakeOnly)
+    status = run([
+      "--filter",
+      "@langreport/generation-worker",
+      "exec",
+      "tsx",
+      "--test",
       "test/integration/memory-revocation.integration.test.ts",
     ]);
 } finally {

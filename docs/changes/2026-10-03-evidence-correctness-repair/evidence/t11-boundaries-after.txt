@@ -1,0 +1,36 @@
+$ node --test scripts/check-boundaries.test.mjs && node scripts/check-boundaries.mjs
+TAP version 13
+# Subtest: allows the current harness, contracts, and domain dependency shape
+ok 1 - allows the current harness, contracts, and domain dependency shape
+  ---
+  duration_ms: 6.9259
+  type: 'test'
+  ...
+# Subtest: rejects a harness dependency on an application package
+ok 2 - rejects a harness dependency on an application package
+  ---
+  duration_ms: 1.2521
+  type: 'test'
+  ...
+# Subtest: rejects an undeclared cross-package source import
+ok 3 - rejects an undeclared cross-package source import
+  ---
+  duration_ms: 0.7448
+  type: 'test'
+  ...
+# Subtest: allows an integration test to invoke the other worker entrypoint
+ok 4 - allows an integration test to invoke the other worker entrypoint
+  ---
+  duration_ms: 0.1512
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 116.7178
+check:boundaries passed.

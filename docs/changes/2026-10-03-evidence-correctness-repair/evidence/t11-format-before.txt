@@ -1,0 +1,13 @@
+$ node scripts/check-changed.mjs format
+warning: in the working copy of 'apps/api/src/routes.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/web/next-env.d.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-09-29-mui-web-ui/acceptance.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-09-29-mui-web-ui/handoff.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-09-29-mui-web-ui/test-report.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-10-03-evidence-correctness-repair/handoff.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-10-03-evidence-correctness-repair/task.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/test-integration.mjs', LF will be replaced by CRLF the next time Git touches it
+Formatting 9 changed file(s).
+[format] docs/changes/2026-10-03-evidence-correctness-repair/evidence/t11-evidence-migration.json
+1 file(s) need formatting. Run Prettier on the changed files before submitting.
+[ELIFECYCLE] Command failed with exit code 1.

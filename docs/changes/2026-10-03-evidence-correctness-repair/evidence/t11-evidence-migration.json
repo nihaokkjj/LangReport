@@ -1,0 +1,14 @@
+[
+  {
+    "old": "docs/changes/2026-09-29-mui-web-ui/evidence/capture.log",
+    "new": "docs/changes/2026-09-29-mui-web-ui/evidence/capture.txt",
+    "sha256": "9C942869244D4BA096BDAB3443964A53F5C25B2EBE4EE8A5499FBA8D9FC80F53",
+    "bytePreserved": true
+  },
+  {
+    "old": "docs/changes/2026-09-29-mui-web-ui/evidence/e2e-final.log",
+    "new": "docs/changes/2026-09-29-mui-web-ui/evidence/e2e-final.txt",
+    "sha256": "7EA22D7D696D1600C0DD8FC6324C375DDF55453BED657532101B739E96263C8D",
+    "bytePreserved": true
+  }
+]

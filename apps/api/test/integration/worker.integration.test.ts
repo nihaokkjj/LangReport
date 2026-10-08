@@ -60,11 +60,11 @@ import {
   snapshotSourceObjectKey,
 } from "@langreport/storage";
 import type { ColumnProfile, DataRow } from "@langreport/data-engine";
-import { buildApp } from "../../../api/src/app.js";
+import { buildApp } from "../../src/app.js";
 import { verifyT7Review } from "./t7-review.js";
 import { verifyT9Lifecycle } from "./t9-lifecycle.js";
 
-const { processGenerationJob } = await import("../../src/index.js");
+const { processGenerationJob } = await import("../../../generation-worker/src/index.js");
 const { processRenderJob } = await import("../../../render-worker/src/index.js");
 const { commitCompletedRevision } = await import("../../../render-worker/src/publication.js");
 const { reconcileOrphanRenderCandidates } = await import("../../../render-worker/src/candidate-attempts.js");

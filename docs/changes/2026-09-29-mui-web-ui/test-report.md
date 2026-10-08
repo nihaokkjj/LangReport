@@ -18,7 +18,7 @@
 | `pnpm-lock.yaml`                       | `DE5BAF646FA1DA4A86771E32F10B359A44617EC8D1FCC5F8A489114257C751C9` |
 | `apps/web/test/e2e/plugins.spec.ts`    | `0072EEA7E05C96DC92A127B87CE4E77A5B30067986520E7C17C75649C6824D9F` |
 | `apps/web/test/e2e/visual-evidence.ts` | `41FB1CC6856371E7BEB52BAFFDACDC63857ED52E1CB95B64D2F19A85EB3BCA6E` |
-| `evidence/e2e-final.log`               | `53A203F3EAA496080BBFBC82BC49F768DB8431F90E6297CCCA063A48982C23C9` |
+| `evidence/e2e-final.txt`               | `53A203F3EAA496080BBFBC82BC49F768DB8431F90E6297CCCA063A48982C23C9` |
 
 `pnpm --filter @langreport/web list @mui/material @mui/material-nextjs @mui/icons-material next react --depth 0`：MUI 三包均 `9.4.0`，Next `16.3.3`，React `19.2.8`。`layout.tsx` 使用 `@mui/material-nextjs/v16-appRouter` 的 `AppRouterCacheProvider`，开启 `enableCssLayer`，再包 `UiProvider` 和现有 `QueryProvider`。Theme 映射了暖色主色 `#ff4f00`、咖啡色文字 `#201515`、44px Button/IconButton 和 48px OutlinedInput。
 
@@ -31,10 +31,10 @@
 | `pnpm docs:check`                              | exit 0；输出 `docs:check passed.`                                                                                                                                                                                                                                     |
 | `git diff --check`                             | exit 0；无空白错误                                                                                                                                                                                                                                                    |
 | 静态控件扫描                                   | `rg` 扫描 Web TSX，只命中 4 个原生 `<input>`，均为文件选择入口（Data Asset 2、插件 1、API Console 1）；未命中原生 button、select、textarea、旧 dialog 或 `window.confirm`                                                                                             |
-| Playwright 配置与日志抽查                      | 1440×900、1024×900、760×900、390×844 四项目存在；[e2e-final.log](./evidence/e2e-final.log) 原始列表为 64 个测试，`60 passed / 4 skipped`，无失败。4 个 skip 均为需真实 HTTPS 后端的 `auth-live` 用例                                                                  |
+| Playwright 配置与日志抽查                      | 1440×900、1024×900、760×900、390×844 四项目存在；[e2e-final.txt](./evidence/e2e-final.txt) 原始列表为 64 个测试，`60 passed / 4 skipped`，无失败。4 个 skip 均为需真实 HTTPS 后端的 `auth-live` 用例                                                                  |
 | 截图抽查                                       | [evidence](./evidence/) 下六类页面各四张 PNG，共 24 张；查看登录、账号、记忆、插件、API Console 与工作台的桌面/390px 截图，页面主体可读、未见整页横向裁切。截图来自开发服务器，有 Next 开发标记；只覆盖所拍状态，不代表所有 hover/focus/disabled/error 状态已人工通过 |
 
-主实施 Agent 报告 Web unit `24 passed` 和生产 `build` 通过；这两项未在本独立角色重复执行，按实施方结果记录。`docs:check` 已独立运行通过；最终 E2E 的 `60 passed / 4 skipped` 已通过原始日志独立核对。历史 [capture.log](./evidence/capture.log) 是 17:42 的失败回放：登录页截图前误断言空表单的按钮应启用，四视口因此失败；登录截图写入时间为 19:06–19:08，与最终 E2E 阶段一致，该历史失败不应被误当作最终结果，也不应删除其记录。
+主实施 Agent 报告 Web unit `24 passed` 和生产 `build` 通过；这两项未在本独立角色重复执行，按实施方结果记录。`docs:check` 已独立运行通过；最终 E2E 的 `60 passed / 4 skipped` 已通过原始日志独立核对。历史 [capture.txt](./evidence/capture.txt) 是 17:42 的失败回放：登录页截图前误断言空表单的按钮应启用，四视口因此失败；登录截图写入时间为 19:06–19:08，与最终 E2E 阶段一致，该历史失败不应被误当作最终结果，也不应删除其记录。
 
 ## 风险项复核
 

@@ -1,0 +1,62 @@
+$ pnpm -r build
+Scope: 18 of 19 workspace projects
+apps/web build$ next build
+packages/contracts build$ tsc --noEmit -p tsconfig.json
+packages/db build$ tsc --noEmit -p tsconfig.json
+packages/harness build$ tsc --noEmit -p tsconfig.json
+packages/harness build: Done
+packages/storage build$ tsc --noEmit -p tsconfig.json
+packages/db build: Done
+packages/storage build: Done
+packages/contracts build: Done
+apps/web build: ▲ Next.js 16.3.3 (Turbopack)
+apps/web build: ◇ injected env (25) from ..\..\.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+apps/web build: ✓ Running next.config.ts took 131ms
+apps/web build:   Creating an optimized production build ...
+apps/web build: ◇ injected env (0) from ..\..\.env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+apps/web build: ✓ Compiled successfully in 3.3s
+apps/web build:   Running TypeScript ...
+apps/web build:   Finished TypeScript in 1114ms ...
+apps/web build:   Collecting page data using 9 workers ...
+apps/web build:   Generating static pages using 9 workers (0/8) ...
+apps/web build:   Generating static pages using 9 workers (2/8)
+apps/web build:   Generating static pages using 9 workers (4/8)
+apps/web build:   Generating static pages using 9 workers (6/8)
+apps/web build: ✓ Generating static pages using 9 workers (8/8) in 859ms
+apps/web build:   Finalizing page optimization ...
+apps/web build: Route (app)
+apps/web build: ┌ ○ /
+apps/web build: ├ ○ /_not-found
+apps/web build: ├ ○ /account
+apps/web build: ├ ○ /account/memory
+apps/web build: ├ ○ /api-console
+apps/web build: ├ ○ /login
+apps/web build: └ ○ /plugins
+apps/web build: ○  (Static)  prerendered as static content
+apps/web build: Done
+packages/domain build$ tsc --noEmit -p tsconfig.json
+packages/model-gateway build$ tsc --noEmit -p tsconfig.json
+packages/flint-adapter build$ tsc --noEmit -p tsconfig.json
+packages/data-engine build$ tsc --noEmit -p tsconfig.json
+packages/data-engine build: Done
+packages/domain build: Done
+packages/flint-adapter build: Done
+packages/model-gateway build: Done
+packages/chart build$ tsc --noEmit -p tsconfig.json
+packages/lark-data build$ tsc --noEmit -p tsconfig.json
+packages/plugin-sdk build$ tsc --noEmit -p tsconfig.json
+packages/plugin-sdk build: Done
+packages/lark-data build: Done
+packages/chart build: Done
+packages/generation build$ tsc --noEmit -p tsconfig.json
+packages/memory build$ tsc --noEmit -p tsconfig.json
+packages/plugins build$ tsc --noEmit -p tsconfig.json
+packages/generation build: Done
+packages/plugins build: Done
+packages/memory build: Done
+apps/generation-worker build$ tsc --noEmit -p tsconfig.json
+apps/render-worker build$ tsc --noEmit -p tsconfig.json
+apps/render-worker build: Done
+apps/generation-worker build: Done
+apps/api build$ tsc --noEmit -p tsconfig.json
+apps/api build: Done

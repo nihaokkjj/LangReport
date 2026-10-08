@@ -1,0 +1,14 @@
+[
+  {
+    "path": "apps/web/test/e2e/login.spec.ts",
+    "sha256": "CF930675798229B8E19DCC431E4042B01A43814FAF2E7FFB2B68F74FCFA014D5"
+  },
+  {
+    "path": "docs/changes/2026-10-03-evidence-correctness-repair/evidence/t11-e2e.txt",
+    "sha256": "D8878B50E5474AE293FB42BBB21693DB8A01B9730D99E643183C5FAF0FCB343B"
+  },
+  {
+    "path": "docs/changes/2026-10-03-evidence-correctness-repair/evidence/t11-logout-repaired.txt",
+    "sha256": "7116AD36C88460C52F2886E96E5BCD9F295BD052C6F0645E1E1F7598BF84E83E"
+  }
+]

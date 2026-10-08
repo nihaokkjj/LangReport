@@ -1,0 +1,46 @@
+$ node --test scripts/check-hygiene.test.mjs && node scripts/check-hygiene.mjs
+TAP version 13
+# Subtest: allows examples and intentional migration files
+ok 1 - allows examples and intentional migration files
+  ---
+  duration_ms: 1.4132
+  type: 'test'
+  ...
+# Subtest: rejects sensitive and generated paths
+ok 2 - rejects sensitive and generated paths
+  ---
+  duration_ms: 0.1698
+  type: 'test'
+  ...
+# Subtest: rejects a migration journal mismatch and duplicate number
+ok 3 - rejects a migration journal mismatch and duplicate number
+  ---
+  duration_ms: 0.955
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 94.811
+warning: in the working copy of 'apps/api/src/routes.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/web/next-env.d.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-09-29-mui-web-ui/acceptance.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-09-29-mui-web-ui/handoff.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-09-29-mui-web-ui/test-report.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-10-03-evidence-correctness-repair/handoff.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-10-03-evidence-correctness-repair/task.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/test-integration.mjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/api/src/routes.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/web/next-env.d.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-09-29-mui-web-ui/acceptance.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-09-29-mui-web-ui/handoff.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-09-29-mui-web-ui/test-report.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-10-03-evidence-correctness-repair/handoff.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-10-03-evidence-correctness-repair/task.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/test-integration.mjs', LF will be replaced by CRLF the next time Git touches it
+check:hygiene passed.

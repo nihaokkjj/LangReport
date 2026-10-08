@@ -77,6 +77,8 @@ Generation Job 状态同步由 `statusVersion/statusChangedAt` 表示用户可�
 
 ## 当前实现事实与已知缺口
 
+- API 的生成前置条件由 `apps/api/src/generation-preconditions.ts` 负责 Snapshot/Metric/Brief 就绪查询与缺失原因，路由继续负责认证/授权和 Job 编排。API→两类 Worker 的联合生命周期测试归 `apps/api/test/integration`，Worker 自身撤销测试仍归 Generation Worker；根集成运行器统一管理隔离资源并显式发现两类测试。
+
 - 已实现的数据上传/解析、字段画像、Generation Cycle 的确定性 seam、Flint 编译以及 Vega-Lite JSON、PNG、SVG、静态 HTML 输出边界。
 - 现有生产配置、Workspace 私有化和插件页面等工作树修改属于本次治理初始化前已经存在的用户修改，本次不覆盖、不重构。
 - HTML 首版由 Render Worker 从已验证 SVG 生成自包含静态包装页；输出对象绑定固定 Revision，用户文本经过转义且不加载外部资源。

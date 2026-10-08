@@ -11,6 +11,8 @@
 
 ## 数据与环境
 
+2026-10-08 T11 路径维护：T7/T9 helper、worker.integration.test.ts 与 render-crash-before-publication.ts 现位于 apps/api/test/integration（夹具在其 fixtures）。原已执行时点路径和冻结清单保持历史事实；scripts/test-integration.mjs 已显式接入新归属，API原集14项、联合Worker集1项、Worker撤销集1项均真实复验通过。TP24的本轮过程与限制见 [T11报告](./t11-test-report.md)。
+
 使用合成表格、独立用户/Workspace/Project、旧版数据库夹具和可暂停的渲染/存储适配器。数据库、S3 仅使用项目专用测试端点与随机 schema/bucket，继承 integration-environment 的保护，不加载现用 .env 或调用真实飞书/模型。离线用例不得访问外部服务。
 
 旧 Approved 夹具记录内容、SVG/PNG/HTML/Vega-Lite 哈希。六个并发写入使用同步屏障制造竞争，不靠 sleep 猜时间；租约用可控时钟/实际数据库截止时间校验；COMMIT 返回丢失、上传失败、Worker 崩溃分别注入。

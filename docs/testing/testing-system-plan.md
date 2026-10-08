@@ -35,7 +35,7 @@ Proof: Markdown 差异检查、链接目标检查、工作树范围检查
 | --- | --- | --- |
 | 离线单元/组件测试 | 数据解析与 TransformPlan、Generation Cycle、生成上下文、领域状态与权限、contracts、Flint 渲染、Model Gateway、内置插件和 memory | [Data Engine 测试](../../packages/data-engine/test/unit/index.test.ts)、[Generation 测试](../../packages/generation/test/unit/index.test.ts)、[Domain 测试](../../packages/domain/test/unit/index.test.ts)、[Flint Adapter 测试](../../packages/flint-adapter/test/unit/index.test.ts)、[Model Gateway 测试](../../packages/model-gateway/test/unit/index.test.ts) |
 | API 组件测试 | 认证、HTTP 合同、错误映射、Data Asset、OpenAPI；通过 Fastify `app.inject` 运行 | [apps/api/test/unit/auth.test.ts](../../apps/api/test/unit/auth.test.ts)、[apps/api/test/unit/http-contracts.test.ts](../../apps/api/test/unit/http-contracts.test.ts)、[apps/api/test/unit/data-assets.test.ts](../../apps/api/test/unit/data-assets.test.ts) |
-| 集成测试 | 消息触发 Generation Job 的前置条件与幂等；插件安装、Binding、Theme、撤销/恢复与审计；Generation Worker 的数据库工作流 | [message-generation.integration.test.ts](../../apps/api/test/integration/message-generation.integration.test.ts)、[plugins.integration.test.ts](../../apps/api/test/integration/plugins.integration.test.ts)、[worker.integration.test.ts](../../apps/generation-worker/test/integration/worker.integration.test.ts) |
+| 集成测试 | 消息触发 Generation Job 的前置条件与幂等；插件安装、Binding、Theme、撤销/恢复与审计；Generation Worker 的数据库工作流 | [message-generation.integration.test.ts](../../apps/api/test/integration/message-generation.integration.test.ts)、[plugins.integration.test.ts](../../apps/api/test/integration/plugins.integration.test.ts)、[worker.integration.test.ts](../../apps/api/test/integration/worker.integration.test.ts) |
 | 浏览器 E2E | Playwright Chromium 单 spec，桌面与 390px 移动视口；API 边界由测试内确定性路由夹具响应 | [apps/web/test/e2e/consulting-report.spec.ts](../../apps/web/test/e2e/consulting-report.spec.ts)、[apps/web/playwright.config.ts](../../apps/web/playwright.config.ts) |
 | 远端部署检查 | 有需要真实部署地址和认证信息的 API smoke/E2E 脚本，但没有浏览器行为、独立 canary 授权或调用费用门槛 | [phase5-production-smoke.mjs](../../scripts/phase5-production-smoke.mjs)、[phase5-production-e2e.mjs](../../scripts/phase5-production-e2e.mjs) |
 
@@ -258,3 +258,5 @@ Playwright 首期只保留一个 spec，覆盖：
 | T6 | `pnpm test:canary` | 经 Environment 授权后，一个真实 Job/最多一次供应商请求通过并留下脱敏审计 |
 
 每个阶段结束时同时检查 `git diff --check` 和 `git status --short`，确认只包含本阶段范围。由于本计划明确不引入 lint，各阶段均不报告 lint 通过；若未来需要 lint，必须另立工具链决策和迁移阶段。
+
+2026-10-08 路径维护：API→两类 Worker 联合测试移至 apps/api/test/integration，以上当前链接已更新；历史执行结果与原文件标签不改。

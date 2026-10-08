@@ -198,7 +198,8 @@ test("浏览器登出清理 Cookie、选择状态并中止 Generation watcher", 
     .poll(() => page.evaluate((id) => window.localStorage.getItem(`langreport-conversation-${id}`), projectId))
     .toBe(conversationId);
 
-  await page.getByRole("button", { name: "退出" }).click();
+  await page.getByRole("button", { name: "账号", exact: true }).click();
+  await page.getByRole("menuitem", { name: "退出登录", exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByText("LangReport", { exact: true })).toBeVisible();
   expect(logoutCookieHeader).toContain(`langreport_session=${sessionCookie}`);

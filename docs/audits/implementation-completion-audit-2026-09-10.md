@@ -1,7 +1,7 @@
 # LangReport 实现完成度审计
 
-> 审计日期：2026-09-10  
-> 审计范围：当前工作树中的第一阶段“咨询项目报告”闭环，以及已经接入仓库的模型网关、插件、接口调试和部署能力。  
+> 审计日期：2026-09-10
+> 审计范围：当前工作树中的第一阶段“咨询项目报告”闭环，以及已经接入仓库的模型网关、插件、接口调试和部署能力。
 > 审计目标：区分真实实现、确定性 Demo、仅通过离线测试的模块和仍未完成的产品能力，并检查结果是否使用当前 Project 的实际数据。
 
 ## 结论先行
@@ -154,7 +154,7 @@
 
 验证限制：
 
-- [apps/generation-worker/test/integration/worker.integration.test.ts](../../apps/generation-worker/test/integration/worker.integration.test.ts) 本轮结果为 **1 skipped**，不是通过。
+- [apps/generation-worker/test/integration/worker.integration.test.ts](../../apps/api/test/integration/worker.integration.test.ts) 本轮结果为 **1 skipped**，不是通过。
 - Docker 本轮无法连接，无法确认真实 PostgreSQL、对象存储和两个 Worker 的联合运行。
 
 ### 6. Deterministic Generation：当前最明确的 Demo 部分
@@ -477,3 +477,5 @@ Demo 信号：
 - API Contract 全绿和生产部署验收。
 
 **最终状态：工程 MVP / Alpha，核心数据链路已脱离纯 Demo，但产品闭环和生产验收尚未完成。**
+
+2026-10-08 路径维护：API→两类 Worker 联合测试移至 apps/api/test/integration，以上当前链接已更新；历史执行结果与原文件标签不改。
