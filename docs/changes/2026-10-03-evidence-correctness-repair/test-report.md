@@ -9,6 +9,12 @@
 
 ## A 批实施验证（新增）
 
+### 2026-10-08 T6 六个完整并发编辑 Job（TP12 限定结果）
+
+六个同一 Artifact、同一固定源 Revision 的编辑请求经真实 API 同时入队，再并发调用 Generation Worker 与 Render Worker。发布回调设置同步屏障：六个 Worker 均完成候选四对象、读回与清单写入后，五个较高预留编号同时提交；最低编号等待其余五个提交完成才发布。屏障等待设 60 秒超时；卡在渲染或存储操作而未到达屏障的 Worker 不由该超时取消。测试断言六个编号均大于此前最高已发布编号且不重复，最低编号确实最后完成，所有 Job 为 `succeeded`；每 Job 仅有一条目标 Revision、Evidence、审计和新增助手回复，四个引用对象可读，来源 Snapshot/Brief/Metric 快照与固定源一致；Artifact head 指向最高成功编号，全部 Revision 编号唯一。同 Job 再处理后 Revision/Evidence/审计/回复仍各一份。
+
+完整 `pnpm test:integration` 在隔离 PostgreSQL/MinIO 自然退出 0：API14/浏览器2/Worker2；Generation Worker 测试类型检查通过。[独立只读复核](./evidence/t6-six-edit-independent.md)未发现新增确定性 P1/P2，未独立重跑全量测试。该结果只证明六个完整编辑 Job 的并发与反序完成，不证明回滚路径：API 的 rollback 仍同步调用 Chart 服务，没有持久 Job、候选对象与完成事务。TP12 混合编辑/回滚和 T6 整体验收仍未通过。
+
 ### 2026-10-08 T6 写完四对象后独立进程崩溃（限定结果）
 
 `apps/generation-worker/test/integration/fixtures/render-crash-before-publication.ts` 作为独立 Node 进程运行生产 `processRenderJob`；四次 MinIO PUT、对象读回与候选清单事务完成后，测试发布回调通过 IPC 报告边界并立即以 86 退出，不执行 Worker 的 catch/finally。父进程断言 Job 为 `validating` 且保留原租约，候选账本为 `validated`、Job 清单引用同一尝试，四个候选键字节可读；目标 Revision、Evidence、审计和成功回复均不存在，Artifact head 不变。

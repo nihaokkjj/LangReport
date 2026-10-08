@@ -1619,6 +1619,167 @@ test("real generation and render workers persist plugin usage and historical sna
       "仅看华东",
     );
 
+    // Six full edits share one Artifact and begin publication behind a barrier.
+    // Publish five in contention, then let the lowest reserved number finish last.
+    const concurrentApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
+    try {
+      const revisionsBefore = await db
+        .select({ revision: chartRevisions.revision })
+        .from(chartRevisions)
+        .where(eq(chartRevisions.artifactId, revision.artifactId));
+      const highestBefore = Math.max(...revisionsBefore.map((item) => item.revision));
+      const queued = await Promise.all(
+        Array.from({ length: 6 }, (_, index) =>
+          concurrentApi.inject({
+            method: "POST",
+            url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+            payload: {
+              operation: "edit",
+              baseRevisionId: visualRevision.id,
+              patch: { title: `并发编辑 ${index + 1}` },
+              idempotencyKey: `concurrent-edit-${suffix}-${index}`,
+            },
+          }),
+        ),
+      );
+      for (const response of queued) assert.equal(response.statusCode, 202, response.body);
+      const concurrentJobIds = queued.map((response) => response.json().job.id as string);
+      assert.equal(new Set(concurrentJobIds).size, 6);
+      await Promise.all(concurrentJobIds.map((jobId) => processGenerationJob(jobId)));
+      const prepared = await Promise.all(
+        concurrentJobIds.map(async (jobId) => {
+          const [job] = await db.select().from(generationJobs).where(eq(generationJobs.id, jobId));
+          assert.equal(job.status, "rendering");
+          const messages = await db
+            .select({ id: conversationMessages.id })
+            .from(conversationMessages)
+            .where(eq(conversationMessages.conversationId, job.conversationId));
+          return { job, messageCount: messages.length };
+        }),
+      );
+      const arrived: Array<{ jobId: string; revisionNumber: number }> = [];
+      let resolveBarrier!: () => void;
+      let rejectBarrier!: (error: Error) => void;
+      const allAtPublication = new Promise<void>((resolve, reject) => {
+        resolveBarrier = resolve;
+        rejectBarrier = reject;
+      });
+      void allAtPublication.catch(() => undefined);
+      const barrierTimeout = setTimeout(
+        () => rejectBarrier(new Error("Six render jobs did not reach publication")),
+        60_000,
+      );
+      let resolveHigherFinished!: () => void;
+      const higherFinished = new Promise<void>((resolve) => {
+        resolveHigherFinished = resolve;
+      });
+      let higherCount = 0;
+      const publicationOrder: number[] = [];
+      try {
+        await Promise.all(
+          concurrentJobIds.map((jobId) =>
+            processRenderJob(jobId, putObject, async (lease, candidate) => {
+              arrived.push({ jobId, revisionNumber: candidate.identity.revisionNumber });
+              if (arrived.length === 6) {
+                clearTimeout(barrierTimeout);
+                if (new Set(arrived.map((item) => item.revisionNumber)).size !== 6)
+                  rejectBarrier(new Error("Concurrent revisions reused a number"));
+                else resolveBarrier();
+              }
+              await allAtPublication;
+              const lowest = Math.min(...arrived.map((item) => item.revisionNumber));
+              if (candidate.identity.revisionNumber === lowest) await higherFinished;
+              try {
+                const committed = await commitCompletedRevision(lease, candidate);
+                publicationOrder.push(candidate.identity.revisionNumber);
+                return committed;
+              } finally {
+                if (candidate.identity.revisionNumber !== lowest && ++higherCount === 5) resolveHigherFinished();
+              }
+            }),
+          ),
+        );
+      } finally {
+        clearTimeout(barrierTimeout);
+      }
+      assert.equal(arrived.length, 6);
+      const numbers = arrived.map((item) => item.revisionNumber);
+      assert.equal(new Set(numbers).size, 6);
+      assert.ok(numbers.every((number) => number > highestBefore));
+      assert.equal(publicationOrder.length, 6);
+      assert.equal(publicationOrder.at(-1), Math.min(...numbers));
+      const [artifactAfterConcurrentEdits] = await db
+        .select()
+        .from(chartArtifacts)
+        .where(eq(chartArtifacts.id, revision.artifactId));
+      const published = await Promise.all(
+        prepared.map(async ({ job, messageCount }) => {
+          const [completed] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id));
+          const revisions = await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, job.id));
+          const evidence = await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, job.id));
+          const audit = await db
+            .select()
+            .from(auditEvents)
+            .where(eq(auditEvents.entityId, completed.candidateRevisionId!));
+          const messages = await db
+            .select({ id: conversationMessages.id })
+            .from(conversationMessages)
+            .where(eq(conversationMessages.conversationId, job.conversationId));
+          assert.equal(completed.status, "succeeded");
+          assert.equal(revisions.length, 1);
+          assert.equal(evidence.length, 1);
+          assert.equal(audit.length, 1);
+          assert.equal(messages.length, messageCount + 1);
+          assert.equal(revisions[0].id, completed.candidateRevisionId);
+          assert.equal(revisions[0].revision, completed.candidateRevisionNumber);
+          assert.equal(evidence[0].chartRevisionId, revisions[0].id);
+          assert.equal(revisions[0].snapshotId, visualRevision.snapshotId);
+          assert.deepEqual(revisions[0].analysisBriefSnapshot, visualRevision.analysisBriefSnapshot);
+          assert.deepEqual(revisions[0].metricDefinitionSnapshot, visualRevision.metricDefinitionSnapshot);
+          const outputs = revisions[0].outputObjects as Record<"vegaLite" | "svg" | "png" | "html", string>;
+          for (const key of [outputs.vegaLite, outputs.svg, outputs.png, outputs.html]) {
+            objectKeys.push(key);
+            assert.ok((await getObject(key)).length > 0);
+          }
+          return revisions[0];
+        }),
+      );
+      const highest = published.reduce((left, right) => (left.revision > right.revision ? left : right));
+      assert.equal(artifactAfterConcurrentEdits.headRevisionId, highest.id);
+      const allArtifactRevisions = await db
+        .select({ revision: chartRevisions.revision })
+        .from(chartRevisions)
+        .where(eq(chartRevisions.artifactId, revision.artifactId));
+      assert.equal(new Set(allArtifactRevisions.map((item) => item.revision)).size, allArtifactRevisions.length);
+      await Promise.all(concurrentJobIds.map((jobId) => processRenderJob(jobId)));
+      assert.equal(
+        (await db.select().from(chartRevisions).where(eq(chartRevisions.artifactId, revision.artifactId))).length,
+        allArtifactRevisions.length,
+      );
+      for (const { job, messageCount } of prepared) {
+        const [completed] = await db.select().from(generationJobs).where(eq(generationJobs.id, job.id));
+        assert.equal(
+          (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, job.id))).length,
+          1,
+        );
+        assert.equal(
+          (await db.select().from(auditEvents).where(eq(auditEvents.entityId, completed.candidateRevisionId!))).length,
+          1,
+        );
+        assert.equal(
+          (
+            await db
+              .select({ id: conversationMessages.id })
+              .from(conversationMessages)
+              .where(eq(conversationMessages.conversationId, job.conversationId))
+          ).length,
+          messageCount + 1,
+        );
+      }
+    } finally {
+      await concurrentApi.close();
+    }
+
     // An inconsistent historical Job must not mutate an already published Revision.
     const publishedHtmlKey = (renderedJob.outputs as { html: string }).html;
     const publishedHtmlBytes = await getObject(publishedHtmlKey);
