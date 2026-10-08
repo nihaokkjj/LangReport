@@ -7,6 +7,8 @@
 
 ## 最新续做状态（优先于下方历史段落）
 
+2026-10-08 T6 技术验收通过：编辑、复制、回滚通过持久 Generation Job 和带租约 fencing 的单事务发布；六个同 Artifact 的三个编辑与三个回滚 Job 经真实 API、两类 Worker、PostgreSQL/MinIO 并发反序发布，编号唯一，head 指向最高成功编号，每 Job 恰一 Revision/Evidence/审计/回复。复制/回滚在第三个对象 PUT 失败后无业务半成品，真实 API retry 唯一发布；同键并发三操作不留孤立 Conversation；PUT 已写入但回执丢失、既有 COMMIT 回执丢失、候选对账和提交前失租均有对应测试。最终完整隔离集成 API14/真实浏览器2/Worker2 自然退出 0，API Console 四屏宽16/16、相关类型、定向格式/lint、docs 通过。独立只读复核未发现确定性 P1/P2，未独立重跑；其建议的复制/回滚审计/回复断言已补并复核。完整变更仍为 IMPLEMENTING，下一任务为 T7 Evidence 固定绑定与审核就绪门；T8 的工作台交互接通仍待做。自然租约等待/自动轮询未实测。原有 `apps/web/next-env.d.ts` 差异不纳入提交。下方“不通过”均为历史时点。
+
 2026-10-08 T6 六完整并发编辑 Job 限定结果：同一 Artifact 的六个真实 API 编辑 Job 经两类 Worker 并行处理，发布前屏障让五个较高编号竞争提交、最低编号最后完成；真实隔离 PostgreSQL/MinIO 中全部成功，编号唯一且不重用，head 保持最高成功编号，每 Job 恰一 Revision/Evidence/审计/回复，四对象可读，重复处理不增 Revision。完整隔离集成 API14/浏览器2/Worker2 自然退出 0。回滚仍同步绕过 Job，TP12 编辑/回滚混合场景未覆盖，T6 不标通过。
 
 2026-10-08 T6 独立进程发布前崩溃限定结果：真实隔离 API→Generation Worker 编辑 Job 后，子进程 Render Worker 写完、读回四个 MinIO 候选并保存 `validated` 清单，在发布回调入口经 IPC 标记后以 86 直接退出。父进程确认无目标 Revision/Evidence/审计/回复、head 不变、四对象可读且账本保留；隔离库推进租约截止并执行生产恢复后，新 Worker 以更高 fencing 和新键唯一发布，重跑同 Job 幂等。完整隔离集成 API14/浏览器2/Worker2 自然退出 0；定向类型、lint、格式通过。仍缺 TP12 六完整并发编辑/回滚及复制/回滚 Job 化；MinIO 已接收字节而 PUT 回执丢失未模拟，T6 未验收。

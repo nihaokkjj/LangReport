@@ -5,9 +5,17 @@
 - 创建时间：2026-10-03
 - 更新时间：2026-10-08
 - 业务测试状态：`PARTIAL`；下方保留原文档阶段结果，不代表当前未修改代码。
-- 执行角色：owner 自测；独立角色完成最终冻结快照的限定只读代码复核，未独立重跑集成测试。
+- 执行角色：owner 自测；独立角色完成 T6 最终候选的限定只读代码复核，未独立重跑集成测试。
 
 ## A 批实施验证（新增）
+
+### 2026-10-08 T6 最终验收：混合并发、派生 Job 与 PUT 回执丢失
+
+API 的编辑、回滚和复制均创建持久 Generation Job；同一幂等键的并发请求在一个事务内竞争唯一 Job，失败事务不留下孤立 Conversation。回滚复用来源 Artifact 并预留新编号；复制预留新 Artifact/Revision。两种派生操作经 Generation Worker 冻结来源和发现，Render Worker 重新写入并验证四个独立候选对象，随后在受租约 fencing 保护的单个 PostgreSQL 事务中发布 Revision、Evidence、head、审计、回复和 Job 成功。API 合同与 API Console 已同步为新任务 202、复用 200。
+
+真实隔离 PostgreSQL/MinIO 测试将同一 Artifact 的六个 Job 混合为三个编辑、三个回滚，并使最低预留编号最后发布。逐 Job 核对唯一 Revision/Evidence/审计/回复、四个输出可读、来源快照不变、编号唯一且 head 指向最高成功编号。复制和回滚分别注入第三个对象 PUT 前失败，确认没有半成品、审计或成功回复，再经真实 API retry 使用新候选对象唯一发布；并发同键编辑、回滚、复制均只留一个 Job 与 Conversation，不同输入返回 409。另在对象已写入 MinIO 后抛出回执丢失错误，确认候选账本、业务回滚和真实 API 重试行为。
+
+补强审计/回复断言后的完整 `pnpm test:integration` 最终自然退出 0（API14/真实浏览器2/Worker2）；API Console 四种屏宽 16/16、相关类型、定向 ESLint/Prettier、`docs:check` 通过。[独立只读复核](./evidence/t6-final-independent.md)未发现确定性 P1/P2，指出的唯一性断言缺口经修复后复核通过；独立角色未重跑全套。T6 技术验收通过。较早段落的“回滚/复制仍未 Job 化”仅描述各自历史提交时点。
 
 ### 2026-10-08 T6 六个完整并发编辑 Job（TP12 限定结果）
 
