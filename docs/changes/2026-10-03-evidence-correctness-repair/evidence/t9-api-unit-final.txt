@@ -1,0 +1,143 @@
+$ tsx --test --test-concurrency=1 test/unit/auth.test.ts test/unit/http-contracts.test.ts test/unit/http-errors.test.ts test/unit/data-assets.test.ts test/unit/local-parse.test.ts test/unit/intake-cancellation.test.ts test/unit/openapi.test.ts
+TAP version 13
+# ◇ injected env (25) from ..\\..\\.env // tip: ⌘ enable debugging { debug: true }
+# ◇ injected env (0) from ..\\..\\.env // tip: ◈ secrets for agents [www.dotenvx.com]
+# Subtest: development requests require an authenticated context and reject x-user-id
+ok 1 - development requests require an authenticated context and reject x-user-id
+  ---
+  duration_ms: 2.5964
+  type: 'test'
+  ...
+# Subtest: production requests require an auth context or an explicitly trusted proxy
+ok 2 - production requests require an auth context or an explicitly trusted proxy
+  ---
+  duration_ms: 0.2603
+  type: 'test'
+  ...
+# Subtest: shared deployment passwords enforce their minimum length and are stored as scrypt hashes
+ok 3 - shared deployment passwords enforce their minimum length and are stored as scrypt hashes
+  ---
+  duration_ms: 123.3811
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: development login gateway issues an HttpOnly cookie without Secure and rejects identity headers
+ok 4 - development login gateway issues an HttpOnly cookie without Secure and rejects identity headers
+  ---
+  duration_ms: 5079.2413
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: production app accepts the deployment auth provider request context
+ok 5 - production app accepts the deployment auth provider request context
+  ---
+  duration_ms: 1037.8569
+  type: 'test'
+  ...
+# Subtest: production JWT provider accepts a signed bearer or session cookie and rejects invalid signatures or claims
+ok 6 - production JWT provider accepts a signed bearer or session cookie and rejects invalid signatures or claims
+  ---
+  duration_ms: 3.6919
+  type: 'test'
+  ...
+# Subtest: production JWT provider rejects a non-canonical signature encoding
+ok 7 - production JWT provider rejects a non-canonical signature encoding
+  ---
+  duration_ms: 0.5333
+  type: 'test'
+  ...
+# Subtest: production JWT provider requires an expiry no more than seven days after issuance
+ok 8 - production JWT provider requires an expiry no more than seven days after issuance
+  ---
+  duration_ms: 0.4558
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: production app wires the signed JWT provider when configured
+ok 9 - production app wires the signed JWT provider when configured
+  ---
+  duration_ms: 733.5169
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: API CORS explicitly supports the HttpOnly session cookie flow
+ok 10 - API CORS explicitly supports the HttpOnly session cookie flow
+  ---
+  duration_ms: 514.4302
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: production app rejects a spoofed identity when the provider has no user
+ok 11 - production app rejects a spoofed identity when the provider has no user
+  ---
+  duration_ms: 592.0343
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: login gateway signs a seven-day HS256 session and writes a secure HttpOnly cookie
+ok 12 - login gateway signs a seven-day HS256 session and writes a secure HttpOnly cookie
+  ---
+  duration_ms: 965.3233
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: login gateway returns generic errors without an application rate limit and validates TTL
+ok 13 - login gateway returns generic errors without an application rate limit and validates TTL
+  ---
+  duration_ms: 1026.0466
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: disabled accounts cannot sign in, while already-issued JWTs remain valid until their original expiry
+ok 14 - disabled accounts cannot sign in, while already-issued JWTs remain valid until their original expiry
+  ---
+  duration_ms: 815.5953
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: self-service password change verifies the current password and preserves existing session expiry
+ok 15 - self-service password change verifies the current password and preserves existing session expiry
+  ---
+  duration_ms: 1128.7546
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: login routes report unavailable configuration and session requires a valid token
+ok 16 - login routes report unavailable configuration and session requires a valid token
+  ---
+  duration_ms: 591.6264
+  type: 'test'
+  ...
+D:\front\newProject\LangReport\apps\api:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @langreport/api@ test: `tsx --test --test-concurrency=1 test/unit/auth.test.ts test/unit/http-contracts.test.ts test/unit/http-errors.test.ts test/unit/data-assets.test.ts test/unit/local-parse.test.ts test/unit/intake-cancellation.test.ts test/unit/openapi.test.ts`
+Exit status 4294967295

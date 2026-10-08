@@ -1,0 +1,35 @@
+[WebServer] (node:43036) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:10184) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:36724) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 8 tests using 1 worker
+
+(node:24424) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24424) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [chromium-desktop] › test\e2e\api-console.spec.ts:4:5 › API Console 说明固定历史证据与两个审核入口的就绪核验 (1.6s)
+  ok 2 [chromium-desktop] › test\e2e\consulting-report.spec.ts:518:5 › T9 历史 Approved 保留状态并显示未验证，禁止派生 (1.9s)
+(node:12532) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12532) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 3 [chromium-tablet] › test\e2e\api-console.spec.ts:4:5 › API Console 说明固定历史证据与两个审核入口的就绪核验 (1.5s)
+  ok 4 [chromium-tablet] › test\e2e\consulting-report.spec.ts:518:5 › T9 历史 Approved 保留状态并显示未验证，禁止派生 (1.6s)
+(node:35380) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:35380) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 5 [chromium-compact] › test\e2e\api-console.spec.ts:4:5 › API Console 说明固定历史证据与两个审核入口的就绪核验 (1.4s)
+  ok 6 [chromium-compact] › test\e2e\consulting-report.spec.ts:518:5 › T9 历史 Approved 保留状态并显示未验证，禁止派生 (1.6s)
+(node:7172) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:7172) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 7 [chromium-mobile] › test\e2e\api-console.spec.ts:4:5 › API Console 说明固定历史证据与两个审核入口的就绪核验 (1.3s)
+  ok 8 [chromium-mobile] › test\e2e\consulting-report.spec.ts:518:5 › T9 历史 Approved 保留状态并显示未验证，禁止派生 (1.6s)
+
+  8 passed (22.2s)

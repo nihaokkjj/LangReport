@@ -613,6 +613,7 @@ const revisionDto = dto(
     snapshotId: uuid(),
     revision: integer(),
     operationKey: nullable(string()),
+    integrityStatus: { type: "string", enum: ["legacy_unverified", "verified"] },
     status: { type: "string", enum: ["draft", "in_review", "approved", "changes_requested", "archived"] },
     parentRevisionId: nullable(uuid()),
     createdBy: string(),
@@ -1554,7 +1555,7 @@ export const routeContracts: RouteContract[] = [
         querystring: query({ revisionId: uuid() }),
       }),
       successDescription:
-        "默认仅返回各 Artifact 的 head/published 对应 Evidence；Viewer 仅可见 published Approved。可用 revisionId 查询固定历史版本证据，状态从目标 Revision 投影；无对应 Evidence 返回空数组，不借用其他版本内容。",
+        "默认仅返回各 Artifact 的 head/published 对应 Evidence；Viewer 仅可见 published Approved。可用 revisionId 查询固定历史版本证据，状态从目标 Revision 投影；无对应 Evidence 返回空数组，不借用其他版本内容。integrityStatus=legacy_unverified 保留原审核状态但不能新增批准或派生；verified 是当前发布路径的核验标记，不代替审核入口的即时存储核验。",
     },
   ),
   contract(
@@ -1924,8 +1925,9 @@ export const routeContracts: RouteContract[] = [
       request: pathRequest("/api/v1/chart-artifacts/:artifactId/revisions", {
         body: zodJson(chartRevisionCommandSchema),
       }),
+      extraResponses: { 503: errorResponseSchema },
       successDescription:
-        "编辑、复制和回滚统一返回持久 Generation Job：新任务 202，幂等复用 200；查询 Job 状态后使用固定 Revision ID。回滚创建同 Artifact 的新 Draft，复制创建新 Artifact；两者重新渲染四种输出并继承来源 Revision 的分析问题、指标口径、执行快照、公开项目记忆引用和已确认发现。纯视觉编辑也冻结原发现，修改筛选或聚合则重新计算。来源不完整返回 409 REVISION_PROVENANCE_INCOMPLETE。",
+        "编辑、复制和回滚统一返回持久 Generation Job：新任务 202，幂等复用 200；查询 Job 状态后使用固定 Revision ID。回滚创建同 Artifact 的新 Draft，复制创建新 Artifact；两者重新渲染四种输出并继承来源 Revision 的分析问题、指标口径、执行快照、公开项目记忆引用和已确认发现。纯视觉编辑也冻结原发现，修改筛选或聚合则重新计算。来源不完整返回 409 REVISION_PROVENANCE_INCOMPLETE；历史未验证版本返回 409 REVISION_LEGACY_UNVERIFIED。维护只读或旧写入版本返回 503 EVIDENCE_LIFECYCLE_READ_ONLY / EVIDENCE_WRITER_VERSION_MISMATCH。",
     },
   ),
   contract(
@@ -1939,7 +1941,7 @@ export const routeContracts: RouteContract[] = [
       request: pathRequest("/api/v1/chart-revisions/:revisionId/submit", { body: zodJson(reviewNoteSchema) }),
       extraResponses: { 503: errorResponseSchema },
       successDescription:
-        "提交固定 Revision：来源完整、Job succeeded、Plan/Render Validation passed，四输出读回核对长度与 SHA-256。409 REVISION_NOT_READY / REVISION_PROVENANCE_INCOMPLETE / REVISION_OUTPUT_UNAVAILABLE；存储暂不可核验返回 503 REVISION_OUTPUT_VERIFICATION_UNAVAILABLE，不写审核或成功审计。",
+        "提交固定 Revision：来源完整、Job succeeded、Plan/Render Validation passed，四输出读回核对长度与 SHA-256。409 REVISION_LEGACY_UNVERIFIED / REVISION_NOT_READY / REVISION_PROVENANCE_INCOMPLETE / REVISION_OUTPUT_UNAVAILABLE；存储暂不可核验返回 503 REVISION_OUTPUT_VERIFICATION_UNAVAILABLE，不写审核或成功审计。",
     },
   ),
   contract(
@@ -1953,7 +1955,7 @@ export const routeContracts: RouteContract[] = [
       request: pathRequest("/api/v1/chart-revisions/:revisionId/approve", { body: zodJson(reviewNoteSchema) }),
       extraResponses: { 503: errorResponseSchema },
       successDescription:
-        "批准固定 Revision：重复执行来源、成功 Job、Plan/Render Validation 和四输出长度/SHA-256 核验。409 REVISION_NOT_READY / REVISION_PROVENANCE_INCOMPLETE / REVISION_OUTPUT_UNAVAILABLE；存储暂不可核验返回 503 REVISION_OUTPUT_VERIFICATION_UNAVAILABLE。仅改变目标审核状态和 published 指针并追加审计，保留较新 head 与其他 Evidence 内容。",
+        "批准固定 Revision：重复执行来源、成功 Job、Plan/Render Validation 和四输出长度/SHA-256 核验。409 REVISION_LEGACY_UNVERIFIED / REVISION_NOT_READY / REVISION_PROVENANCE_INCOMPLETE / REVISION_OUTPUT_UNAVAILABLE；存储暂不可核验返回 503 REVISION_OUTPUT_VERIFICATION_UNAVAILABLE。仅改变目标审核状态和 published 指针并追加审计，保留较新 head 与其他 Evidence 内容。",
     },
   ),
   contract(

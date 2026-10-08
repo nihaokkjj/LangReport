@@ -101,11 +101,18 @@ export function publicProjectMemoryReferences(value: unknown) {
 
 /** Freeze only source facts and public references for a derived Job. */
 export function freezeDerivedProvenance(source: {
+  integrityStatus?: string;
   analysisBriefSnapshot: unknown;
   metricDefinitionSnapshot: unknown;
   memorySnapshot: unknown;
   executionAssembly: unknown;
 }) {
+  if (source.integrityStatus === "legacy_unverified")
+    throw new ChartServiceError(
+      "REVISION_LEGACY_UNVERIFIED",
+      "历史版本未通过完整性核验，请确认输入并创建新的 Generation Cycle",
+      409,
+    );
   const brief = record(source.analysisBriefSnapshot);
   const metric = record(source.metricDefinitionSnapshot);
   if (!brief || !nonempty(brief.businessQuestion) || !metric || !nonempty(metric.name) || !nonempty(metric.formula)) {

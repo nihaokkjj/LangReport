@@ -1,0 +1,239 @@
+[WebServer] (node:43760) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:64980) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:62620) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 4 tests using 1 worker
+
+(node:51476) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51476) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+warning geometry { x: [33m78.1875[39m, y: [33m385.09375[39m, width: [33m1283.625[39m, height: [33m50.5[39m }
+scroll containers [
+  {
+    className: [32m'evidence-canvas'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m565[39m,
+    scrollHeight: [33m734[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m'workbench-canvas has-evidence'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m633[39m,
+    scrollHeight: [33m816[39m,
+    overflow: [32m'hidden'[39m
+  },
+  {
+    className: [32m'workspace-main'[39m,
+    scrollTop: [33m97[39m,
+    clientHeight: [33m772[39m,
+    scrollHeight: [33m1097[39m,
+    overflow: [32m'auto'[39m
+  },
+  {
+    className: [32m'workspace-grid'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m772[39m,
+    scrollHeight: [33m772[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m'app-shell left-collapsed right-collapsed '[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m900[39m,
+    scrollHeight: [33m900[39m,
+    overflow: [32m'hidden'[39m
+  },
+  {
+    className: [32m''[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m900[39m,
+    scrollHeight: [33m900[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m''[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m900[39m,
+    scrollHeight: [33m900[39m,
+    overflow: [32m'visible'[39m
+  }
+]
+  ok 1 [chromium-desktop] › test\e2e\t9-capture.spec.ts:517:5 › T9 补录实际可见的历史提示 (2.1s)
+(node:65340) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:65340) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+warning geometry { x: [33m62.4375[39m, y: [33m384.8125[39m, width: [33m899.125[39m, height: [33m50.5[39m }
+scroll containers [
+  {
+    className: [32m'evidence-canvas'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m572[39m,
+    scrollHeight: [33m786[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m'workbench-canvas has-evidence'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m633[39m,
+    scrollHeight: [33m865[39m,
+    overflow: [32m'hidden'[39m
+  },
+  {
+    className: [32m'workspace-main'[39m,
+    scrollTop: [33m94[39m,
+    clientHeight: [33m772[39m,
+    scrollHeight: [33m1097[39m,
+    overflow: [32m'auto'[39m
+  },
+  {
+    className: [32m'workspace-grid'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m772[39m,
+    scrollHeight: [33m772[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m'app-shell left-collapsed right-collapsed '[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m900[39m,
+    scrollHeight: [33m900[39m,
+    overflow: [32m'hidden'[39m
+  },
+  {
+    className: [32m''[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m900[39m,
+    scrollHeight: [33m900[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m''[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m900[39m,
+    scrollHeight: [33m900[39m,
+    overflow: [32m'visible'[39m
+  }
+]
+  ok 2 [chromium-tablet] › test\e2e\t9-capture.spec.ts:517:5 › T9 补录实际可见的历史提示 (2.1s)
+(node:59840) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:59840) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+warning geometry { x: [33m31[39m, y: [33m413.703125[39m, width: [33m698[39m, height: [33m73[39m }
+scroll containers [
+  {
+    className: [32m'evidence-canvas'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m952[39m,
+    scrollHeight: [33m952[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m'workbench-canvas has-evidence'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m1032[39m,
+    scrollHeight: [33m1032[39m,
+    overflow: [32m'hidden'[39m
+  },
+  {
+    className: [32m'workspace-main'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m1702[39m,
+    scrollHeight: [33m1702[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m'workspace-grid'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m1702[39m,
+    scrollHeight: [33m1702[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m'app-shell left-collapsed right-collapsed '[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m1949[39m,
+    scrollHeight: [33m1949[39m,
+    overflow: [32m'auto'[39m
+  },
+  {
+    className: [32m''[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m1949[39m,
+    scrollHeight: [33m1949[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m''[39m,
+    scrollTop: [33m308[39m,
+    clientHeight: [33m900[39m,
+    scrollHeight: [33m1949[39m,
+    overflow: [32m'visible'[39m
+  }
+]
+  ok 3 [chromium-compact] › test\e2e\t9-capture.spec.ts:517:5 › T9 补录实际可见的历史提示 (1.9s)
+(node:46196) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46196) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+warning geometry { x: [33m31[39m, y: [33m374.234375[39m, width: [33m328[39m, height: [33m95.5[39m }
+scroll containers [
+  {
+    className: [32m'evidence-canvas'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m1086[39m,
+    scrollHeight: [33m1086[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m'workbench-canvas has-evidence'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m1166[39m,
+    scrollHeight: [33m1166[39m,
+    overflow: [32m'hidden'[39m
+  },
+  {
+    className: [32m'workspace-main'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m1830[39m,
+    scrollHeight: [33m1830[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m'workspace-grid'[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m1830[39m,
+    scrollHeight: [33m1830[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m'app-shell left-collapsed right-collapsed '[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m2076[39m,
+    scrollHeight: [33m2076[39m,
+    overflow: [32m'auto'[39m
+  },
+  {
+    className: [32m''[39m,
+    scrollTop: [33m0[39m,
+    clientHeight: [33m2076[39m,
+    scrollHeight: [33m2076[39m,
+    overflow: [32m'visible'[39m
+  },
+  {
+    className: [32m''[39m,
+    scrollTop: [33m341[39m,
+    clientHeight: [33m844[39m,
+    scrollHeight: [33m2076[39m,
+    overflow: [32m'visible'[39m
+  }
+]
+  ok 4 [chromium-mobile] › test\e2e\t9-capture.spec.ts:517:5 › T9 补录实际可见的历史提示 (2.0s)
+
+  4 passed (18.6s)

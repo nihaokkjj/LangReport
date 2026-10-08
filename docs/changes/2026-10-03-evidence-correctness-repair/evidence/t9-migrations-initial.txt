@@ -1,0 +1,21 @@
+Migration compatibility verification failed
+PostgresError: insert or update on table "evidence_blocks" violates foreign key constraint "evidence_blocks_generation_job_id_generation_jobs_id_fk"
+    at ErrorResponse (file:///D:/front/newProject/LangReport/node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/connection.js:815:30)
+    at handle (file:///D:/front/newProject/LangReport/node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/connection.js:489:6)
+    at Socket.data (file:///D:/front/newProject/LangReport/node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/connection.js:324:9)
+    at Socket.emit (node:events:519:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at TCP.onStreamRead (node:internal/stream_base_commons:189:23) {
+  severity_local: 'ERROR',
+  severity: 'ERROR',
+  code: '23503',
+  detail: 'Key (generation_job_id)=(00000000-0000-0000-0000-000000000006) is not present in table "generation_jobs".',
+  schema_name: 'migration_verify_761527e0559f4381a98c119956c20de8',
+  table_name: 'evidence_blocks',
+  constraint_name: 'evidence_blocks_generation_job_id_generation_jobs_id_fk',
+  file: 'ri_triggers.c',
+  line: '2608',
+  routine: 'ri_ReportViolation'
+}

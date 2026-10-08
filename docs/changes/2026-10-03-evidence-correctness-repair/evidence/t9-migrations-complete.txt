@@ -1,0 +1,8 @@
+TP23 historical migration/audit/read-only/version recovery assertions passed {
+  legacyRevisionSHA256: '705c597eedf62b3721ccf1b69113f9c33c5a8a0627092116fb571f394b13cfa6'
+}
+TP23 operator CLI audit passed
+TP23 operator CLI set-read-only passed
+TP23 operator CLI audit passed
+TP23 operator CLI resume-v2 passed
+Migration compatibility verification passed (0000_parched_salo.sql, 0001_nice_ultragirl.sql, 0002_organic_praxagora.sql, 0003_polite_maddog.sql, 0004_thin_warstar.sql, 0005_glossy_malcolm_colcord.sql, 0006_cooing_sage.sql, 0007_lush_starbolt.sql, 0009_blushing_power_man.sql, 0010_plugin_usage.sql, 0011_generation_cycle_audit.sql, 0012_canonical_text_context_projection.sql, 0013_generation_validation_layers.sql, 0014_generation_job_leases.sql, 0015_bailian_model_route_snapshot.sql, 0016_workspace_model_credentials.sql, 0017_message_trigger_generation.sql, 0018_execution_assembly.sql, 0019_nervous_pestilence.sql, 0020_project_onboarding.sql, 0021_data_asset_intake_lifecycle.sql, 0022_data_asset_snapshot_reingest.sql, 0023_data_snapshot_preview_source_metadata.sql, 0024_generation_readiness_gate.sql, 0025_generation_readiness_proposal.sql, 0026_generation_job_status_version.sql, 0027_generation_result_summary.sql, 0028_database_user_accounts.sql, 0029_memory_identity_private_scope.sql, 0030_memory_revocation_replay_state.sql, 0031_lark_table_intake.sql, 0032_revision_identity_reservation.sql, 0033_candidate_output_manifest.sql, 0034_render_candidate_attempts.sql, 0035_evidence_integrity_lifecycle.sql)

@@ -20,6 +20,7 @@ export type EvidenceCanvasProps = {
   title: string;
   status: RevisionExportStatus;
   statusLabel: string;
+  integrityStatus?: "legacy_unverified" | "verified";
   revisionId: string;
   revisionNumber: number;
   finding: string;
@@ -43,6 +44,7 @@ export function EvidenceCanvas({
   title,
   status,
   statusLabel,
+  integrityStatus,
   revisionId,
   revisionNumber,
   finding,
@@ -81,6 +83,11 @@ export function EvidenceCanvas({
           }
         />
       </div>
+      {integrityStatus === "legacy_unverified" && (
+        <Alert severity="warning" role="status">
+          历史版本未验证：原审核状态保留。请确认输入并创建新的 Generation Cycle；此版本不能重新审核或派生。
+        </Alert>
+      )}
       <div className="chart-stage">{chart}</div>
       <div className="finding">
         <span className="eyebrow">发现</span>
@@ -110,12 +117,20 @@ export function EvidenceCanvas({
           编辑图表 <span>↗</span>
         </Button>
         {onCopy && (
-          <Button variant="outlined" onClick={onCopy} disabled={isRevisionPending}>
+          <Button
+            variant="outlined"
+            onClick={onCopy}
+            disabled={isRevisionPending || integrityStatus === "legacy_unverified"}
+          >
             复制为新图表
           </Button>
         )}
         {onRollback && (
-          <Button variant="outlined" onClick={onRollback} disabled={isRevisionPending}>
+          <Button
+            variant="outlined"
+            onClick={onRollback}
+            disabled={isRevisionPending || integrityStatus === "legacy_unverified"}
+          >
             从此版本创建草稿
           </Button>
         )}

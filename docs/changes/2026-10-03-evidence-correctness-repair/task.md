@@ -15,6 +15,8 @@
 
 ## 执行前提
 
+2026-10-08 用户要求推送T8并继续下一项，origin/main已核对396fc2c。本轮T9按TP23：0035 additive迁移；旧Revision默认legacy_unverified、保留原状态/文本/输出，不按数据库元数据猜验通过；新原子发布显式verified并使用v2 Evidence绑定与局部唯一/一致性约束。只读审计分类重复/混合/缺来源/缺输出。维护只读与同版本写入标记提供回滚/前向恢复演练，隔离库证明旧连接不能混写；版本标记不是安全认证。历史状态与未验证标识并列展示，禁止未验证来源新批准/新派生；旧固定导出保持可读。仅执行隔离环境，不操作生产、不进入T10。
+
 2026-10-03 用户后续指令“jixu执行该任务”，先启动 A 批 T1–T4。实施前完整混合工作树已冻结，位置见 handoff。B/C 批尚未启动；下表未标完成的项目不代表已通过验收。
 
 2026-10-04用户在了解剩余批次后要求“继续完成未完成的任务”，继续执行既定B/C计划；先启动不依赖T2资源选择的T5。无新增产品范围，仍不提交、推送、部署或操作生产数据。当前数据/生成四项已有lint问题已清理，45项测试及源码/测试类型检查通过；不代表T11整体完成。
@@ -32,9 +34,9 @@
 | T4  | 修正排序、周期索引与本地解析        | T1        | data-engine、generation、contracts                        | 实施及限定复验通过                           | 排序/索引/解析修复、v1/v2 冻结、完整粒度规划、合成 TP20 对照已实施；独立快照纯函数复验通过，非全链路验收                                         |
 | T5  | 建立冻结派生输入                    | T1        | chart、API、Generation Worker                             | 实现与限定集成验证通过，整体验收待独立复核   | 标题与逻辑编辑经 API/两类 Worker 验证；同键冲突与缺来源拒绝通过；注入对象写入故障后经真实 API 重试成功，T6/T7 生命周期单列                       |
 | T6  | additive 模型与原子完成提交         | T5        | db、chart、storage、两类 Worker                           | 技术验收通过；详见 acceptance 与 test-report | TP09、TP12–TP14：持久派生 Job、六混合并发、原子提交、故障/回执丢失、候选对账与租约接管通过；自然等待/自动轮询未实测                              |
-| T7  | Evidence 固定绑定与审核就绪门       | T6        | chart、domain、API                                        | 技术验收通过；详见 acceptance 与 test-report      | TP10/TP11/TP15 通过；旧版本审核不混合内容，failed/缺输出不可批准，权限保持                                                                       |
-| T8  | copy/rollback 异步、合同与 Web 接通 | T3、T5–T7 | contracts/http、API、API Console、Web                     | 技术验收通过                                  | TP07/TP08/TP22 通过；客户端兼容窗口明确，成功版本身份完整；刷新恢复既有 Generation Job watcher                                                   |
-| T9  | 历史分类、迁移与回滚演练            | T6–T8     | db、隔离夹具、操作文档                                    | 未开始                                       | TP23 通过；混合/缺失历史不猜修；旧 Approved 输出哈希不变；旧 Worker 不混跑                                                                       |
+| T7  | Evidence 固定绑定与审核就绪门       | T6        | chart、domain、API                                        | 技术验收通过；详见 acceptance 与 test-report | TP10/TP11/TP15 通过；旧版本审核不混合内容，failed/缺输出不可批准，权限保持                                                                       |
+| T8  | copy/rollback 异步、合同与 Web 接通 | T3、T5–T7 | contracts/http、API、API Console、Web                     | 技术验收通过                                 | TP07/TP08/TP22 通过；客户端兼容窗口明确，成功版本身份完整；刷新恢复既有 Generation Job watcher                                                   |
+| T9  | 历史分类、迁移与回滚演练            | T6–T8     | db、隔离夹具、操作文档                                    | 技术验收通过                                 | TP23 通过；混合/缺失历史不猜修；旧 Approved 输出哈希不变；旧 Worker 不混跑                                                                       |
 | T10 | 画像/查找优化与资源预算             | T4        | data-engine、API 测量                                     | G6隔离实测通过但历史延迟异常待解释           | G6隔离解析五轮结果达目标，曾有授权读取p95增量1018.870ms失败样本未解释；[G6验证](../2026-10-06-local-parse-isolation/test-report.md)仍在VERIFYING |
 | T11 | 受影响链路职责整理与质量门禁        | T3–T10    | API/Web/chart、检查涉及文件                               | 未开始                                       | TP24 通过；测试保护下移动职责；格式/lint/hygiene 修正，不隐藏问题或销毁历史证据                                                                  |
 | T12 | 固定实施快照、独立验证与交接        | T11       | 全链路验证、docs                                          | 未开始                                       | TP25 通过；独立报告记录快照/失败/复验，用户最终接受后才标 ACCEPTED                                                                               |

@@ -19,6 +19,7 @@ const rows = [
 function createFixture(
   options: {
     seeded?: boolean;
+    legacyApproved?: boolean;
     intakeResult?: "succeeded" | "needs_clarification";
     chartRows?: typeof rows;
     generationFailure?: { code: string; message: string };
@@ -41,7 +42,7 @@ function createFixture(
   let brief: Record<string, unknown> | null = null;
   let editRequest: Record<string, unknown> | null = null;
   let reviewComments: Array<Record<string, unknown>> = [];
-  let revisionStatus: "draft" | "in_review" | "approved" = "draft";
+  let revisionStatus: "draft" | "in_review" | "approved" = options.legacyApproved ? "approved" : "draft";
   const schema = [
     { name: "月份", inferredType: "date", nullCount: 0, distinctCount: 3, sampleValues: ["2026-01"] },
     { name: "区域", inferredType: "string", nullCount: 0, distinctCount: 1, sampleValues: ["华东"] },
@@ -62,6 +63,7 @@ function createFixture(
     preview: rows,
   });
   const revision = () => ({
+    integrityStatus: options.legacyApproved ? ("legacy_unverified" as const) : ("verified" as const),
     id: revisionId,
     artifactId: "artifact-sales",
     revision: 1,
@@ -512,6 +514,31 @@ function createFixture(
 }
 
 test.describe.configure({ mode: "serial" });
+
+test("T9 历史 Approved 保留状态并显示未验证，禁止派生", async ({ page }) => {
+  const fixture = createFixture({ seeded: true, legacyApproved: true });
+  await page.route("**/api/**", fixture.route);
+  await page.goto("/");
+  if ((page.viewportSize()?.width ?? 0) <= 760 && (await page.locator(".app-shell.left-open").count())) {
+    await page.getByRole("button", { name: "关闭对话历史" }).last().click();
+  }
+  const canvas = page.getByLabel("证据画布");
+  await expect(canvas.getByText("已批准", { exact: true })).toBeVisible();
+  await expect(canvas.getByRole("status").filter({ hasText: "历史版本未验证" })).toBeVisible();
+  await expect(canvas.getByRole("button", { name: "复制为新图表" })).toBeDisabled();
+  await expect(canvas.getByRole("button", { name: "从此版本创建草稿" })).toBeDisabled();
+  await expect(canvas.getByRole("button", { name: /^编辑图表/ })).toBeDisabled();
+  await expect(canvas.getByRole("button", { name: "提交审核" })).toHaveCount(0);
+  await canvas.getByRole("status").filter({ hasText: "历史版本未验证" }).scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await page.screenshot({
+    path: resolve(
+      process.cwd(),
+      `../../docs/changes/2026-10-03-evidence-correctness-repair/evidence/t9-legacy-approved-${page.viewportSize()?.width}.png`,
+    ),
+    fullPage: false,
+  });
+});
 
 test("T8 复制与历史回滚等待 Job，刷新恢复终态并保留固定版本", async ({ page }) => {
   const fixture = createFixture({ seeded: true });

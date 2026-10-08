@@ -42,7 +42,7 @@ import {
   evidenceBlocks,
 } from "@langreport/db";
 import { getObject } from "@langreport/storage";
-import { sendHttpError } from "./http-errors.js";
+import { sendHttpError, sendLifecycleError } from "./http-errors.js";
 import { AuthenticationError, userIdFromRequest } from "./auth.js";
 import { assertProjectThemeReference, PluginServiceError } from "@langreport/plugins";
 
@@ -572,6 +572,8 @@ function fingerprintFor(value: unknown): string {
 }
 
 function sendChartError(reply: FastifyReply, error: unknown) {
+  const lifecycleError = sendLifecycleError(reply, error);
+  if (lifecycleError) return lifecycleError;
   if (error instanceof AuthenticationError) return sendHttpError(reply, error.statusCode, error.message, error.code);
   if (error instanceof PluginServiceError)
     return sendHttpError(reply, error.statusCode, error.message, error.code, error.details);

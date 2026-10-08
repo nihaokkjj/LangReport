@@ -476,6 +476,18 @@ export const renderCandidateAttempts = pgTable(
   ],
 );
 
+export const chartLifecycleControl = pgTable(
+  "chart_lifecycle_control",
+  {
+    id: text("id").primaryKey().default("singleton"),
+    mode: text("mode").notNull().default("writable"),
+  },
+  (table) => [
+    check("chart_lifecycle_control_id_check", sql`${table.id} = 'singleton'`),
+    check("chart_lifecycle_control_mode_check", sql`${table.mode} IN ('writable', 'read_only')`),
+  ],
+);
+
 export const chartArtifacts = pgTable(
   "chart_artifacts",
   {
@@ -514,6 +526,7 @@ export const chartRevisions = pgTable(
       .references(() => dataSnapshots.id, { onDelete: "restrict" }),
     revision: integer("revision").notNull(),
     operationKey: text("operation_key"),
+    integrityStatus: text("integrity_status").notNull().default("legacy_unverified"),
     status: chartRevisionStatus("status").notNull().default("draft"),
     parentRevisionId: uuid("parent_revision_id"),
     createdBy: text("created_by").notNull(),
@@ -534,6 +547,7 @@ export const chartRevisions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    check("chart_revisions_integrity_status_check", sql`${table.integrityStatus} IN ('legacy_unverified', 'verified')`),
     uniqueIndex("chart_revisions_artifact_revision_unique").on(table.artifactId, table.revision),
     uniqueIndex("chart_revisions_generation_job_unique").on(table.generationJobId),
     index("chart_revisions_snapshot_idx").on(table.snapshotId),
@@ -562,6 +576,7 @@ export const evidenceBlocks = pgTable(
     chartRevisionId: uuid("chart_revision_id")
       .notNull()
       .references(() => chartRevisions.id, { onDelete: "restrict" }),
+    bindingVersion: integer("binding_version").notNull().default(1),
     snapshotId: uuid("snapshot_id")
       .notNull()
       .references(() => dataSnapshots.id, { onDelete: "restrict" }),
@@ -578,6 +593,10 @@ export const evidenceBlocks = pgTable(
   },
   (table) => [
     uniqueIndex("evidence_blocks_generation_job_unique").on(table.generationJobId),
+    uniqueIndex("evidence_blocks_verified_revision_unique")
+      .on(table.chartRevisionId)
+      .where(sql`${table.bindingVersion} = 2`),
+    check("evidence_blocks_binding_version_check", sql`${table.bindingVersion} IN (1, 2)`),
     index("evidence_blocks_project_idx").on(table.projectId),
     index("evidence_blocks_conversation_idx").on(table.conversationId),
     index("evidence_blocks_revision_idx").on(table.chartRevisionId),

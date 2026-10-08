@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { createOpenApiDocument } from "@langreport/contracts/http";
 import { db } from "@langreport/db";
 import { registerRoutes } from "./routes.js";
-import { attachRequestId, sendHttpError } from "./http-errors.js";
+import { attachRequestId, sendHttpError, sendLifecycleError } from "./http-errors.js";
 import { attachRouteContracts, isInternalSurfaceAllowed } from "./http-contracts.js";
 import { swaggerUiHtml } from "./swagger.js";
 import {
@@ -139,6 +139,8 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   });
 
   app.setErrorHandler((error, request, reply) => {
+    const lifecycleError = sendLifecycleError(reply, error);
+    if (lifecycleError) return lifecycleError;
     app.log.error({ err: error, requestId: request.id }, "request failed");
     const statusCode =
       typeof error === "object" &&

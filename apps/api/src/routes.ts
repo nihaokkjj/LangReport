@@ -120,7 +120,7 @@ import {
   type DataAssetIntakeCommand,
 } from "./data-assets.js";
 import { registerChartRoutes } from "./chart-routes.js";
-import { sendHttpError } from "./http-errors.js";
+import { sendHttpError, sendLifecycleError } from "./http-errors.js";
 import { isDevBootstrapAllowed } from "./http-contracts.js";
 import { AuthenticationError, userIdFromRequest } from "./auth.js";
 import { registerAuthRoutes } from "./auth-routes.js";
@@ -2498,6 +2498,8 @@ function assistantReplyForMessage(content: string): string {
 }
 
 export function sendDataError(reply: FastifyReply, error: unknown) {
+  const lifecycleError = sendLifecycleError(reply, error);
+  if (lifecycleError) return lifecycleError;
   if (error instanceof AuthenticationError) return sendHttpError(reply, error.statusCode, error.message, error.code);
   if (error instanceof PluginServiceError)
     return sendHttpError(reply, error.statusCode, error.message, error.code, error.details);

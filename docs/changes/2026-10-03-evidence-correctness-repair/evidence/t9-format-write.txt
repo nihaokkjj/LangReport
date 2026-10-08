@@ -1,0 +1,21 @@
+apps/api/src/app.ts 312ms
+apps/api/test/unit/openapi.test.ts 42ms
+apps/generation-worker/test/integration/t7-review.ts 81ms (unchanged)
+apps/generation-worker/test/integration/worker.integration.test.ts 335ms (unchanged)
+apps/render-worker/src/publication.ts 28ms (unchanged)
+apps/web/app/(protected)/page.tsx 246ms
+apps/web/app/api-console/page.tsx 216ms
+apps/web/features/evidence/evidence-canvas.tsx 5ms
+apps/web/features/review/review-panel.tsx 7ms
+apps/web/test/e2e/api-console.spec.ts 22ms (unchanged)
+apps/web/test/e2e/consulting-report.spec.ts 124ms
+docs/changes/2026-10-03-evidence-correctness-repair/task.md 1236ms
+packages/chart/src/index.ts 68ms
+packages/contracts/src/http.ts 78ms (unchanged)
+packages/db/drizzle/meta/_journal.json 97ms
+packages/db/scripts/verify-migrations.mjs 27ms
+packages/db/src/client.ts 8ms
+packages/db/src/schema.ts 127ms
+packages/db/scripts/evidence-lifecycle.mjs 8ms (unchanged)
+packages/db/scripts/verify-evidence-lifecycle.mjs 11ms
+apps/generation-worker/test/integration/t9-lifecycle.ts 17ms

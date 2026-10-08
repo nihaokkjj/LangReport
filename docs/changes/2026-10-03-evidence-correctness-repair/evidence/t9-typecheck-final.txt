@@ -1,0 +1,69 @@
+$ pnpm -r typecheck && pnpm -r --if-present run test:typecheck
+Scope: 18 of 19 workspace projects
+apps/web typecheck$ tsc --noEmit -p tsconfig.json
+packages/contracts typecheck$ tsc --noEmit -p tsconfig.json
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
+packages/harness typecheck$ tsc --noEmit -p tsconfig.json
+packages/harness typecheck: Done
+packages/storage typecheck$ tsc --noEmit -p tsconfig.json
+packages/contracts typecheck: Done
+packages/db typecheck: Done
+packages/storage typecheck: Done
+apps/web typecheck: Done
+packages/data-engine typecheck$ tsc --noEmit -p tsconfig.json
+packages/domain typecheck$ tsc --noEmit -p tsconfig.json
+packages/flint-adapter typecheck$ tsc --noEmit -p tsconfig.json
+packages/model-gateway typecheck$ tsc --noEmit -p tsconfig.json
+packages/domain typecheck: Done
+packages/data-engine typecheck: Done
+packages/model-gateway typecheck: Done
+packages/flint-adapter typecheck: Done
+packages/lark-data typecheck$ tsc --noEmit -p tsconfig.json
+packages/plugin-sdk typecheck$ tsc --noEmit -p tsconfig.json
+packages/chart typecheck$ tsc --noEmit -p tsconfig.json
+packages/lark-data typecheck: Done
+packages/plugin-sdk typecheck: Done
+packages/chart typecheck: Done
+packages/generation typecheck$ tsc --noEmit -p tsconfig.json
+packages/plugins typecheck$ tsc --noEmit -p tsconfig.json
+packages/memory typecheck$ tsc --noEmit -p tsconfig.json
+packages/generation typecheck: Done
+packages/plugins typecheck: Done
+packages/memory typecheck: Done
+apps/generation-worker typecheck$ tsc --noEmit -p tsconfig.json
+apps/render-worker typecheck$ tsc --noEmit -p tsconfig.json
+apps/render-worker typecheck: Done
+apps/generation-worker typecheck: Done
+apps/api typecheck$ tsc --noEmit -p tsconfig.json
+apps/api typecheck: Done
+Scope: 18 of 19 workspace projects
+apps/web test:typecheck$ tsc --noEmit -p tsconfig.test.json
+packages/contracts test:typecheck$ tsc --noEmit -p tsconfig.test.json
+packages/harness test:typecheck$ tsc --noEmit -p tsconfig.test.json
+packages/harness test:typecheck: Done
+apps/web test:typecheck: Done
+packages/contracts test:typecheck: Done
+packages/model-gateway test:typecheck$ tsc --noEmit -p tsconfig.test.json
+packages/flint-adapter test:typecheck$ tsc --noEmit -p tsconfig.test.json
+packages/domain test:typecheck$ tsc --noEmit -p tsconfig.test.json
+packages/data-engine test:typecheck$ tsc --noEmit -p tsconfig.test.json
+packages/data-engine test:typecheck: Done
+packages/domain test:typecheck: Done
+packages/flint-adapter test:typecheck: Done
+packages/model-gateway test:typecheck: Done
+packages/chart test:typecheck$ tsc --noEmit -p tsconfig.test.json
+packages/lark-data test:typecheck$ tsc --noEmit -p tsconfig.json
+packages/plugin-sdk test:typecheck$ tsc --noEmit -p tsconfig.test.json
+packages/lark-data test:typecheck: Done
+packages/plugin-sdk test:typecheck: Done
+packages/chart test:typecheck: Done
+packages/generation test:typecheck$ tsc --noEmit -p tsconfig.test.json
+packages/memory test:typecheck$ tsc --noEmit -p tsconfig.test.json
+packages/plugins test:typecheck$ tsc --noEmit -p tsconfig.test.json
+packages/generation test:typecheck: Done
+packages/plugins test:typecheck: Done
+packages/memory test:typecheck: Done
+apps/generation-worker test:typecheck$ tsc --noEmit -p tsconfig.test.json
+apps/generation-worker test:typecheck: Done
+apps/api test:typecheck$ tsc --noEmit -p tsconfig.test.json
+apps/api test:typecheck: Done

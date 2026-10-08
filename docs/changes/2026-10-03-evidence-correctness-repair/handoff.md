@@ -7,10 +7,10 @@
 
 ## 最新续做状态（优先于下方历史段落）
 
+2026-10-08 用户要求推送并继续下一项，T8 396fc2c已推送并核对origin/main；T9现按TP23技术验收通过。0035 additive保守标记legacy_unverified、旧Approved与内容/对象不变，新发布verified/v2及局部唯一/固定来源约束、只读分类和维护恢复CLI落地。真实隔离迁移旧库与空库、API→两类Worker→MinIO四输出SHA-256保留、维护503与恢复通过；完整集成自然退出0（API14/浏览器2/Worker2）、四屏宽8/8与补录4/4、离线API56、类型/定向质量通过。独立836文件固定快照无新增确定性P1/P2，未独立重跑；补录手机/桌面图片直接复核可读。[T9完整报告](./t9-test-report.md)和[操作手册](./t9-operations.md)保留全部失败/修复与上线排空前提。下一项T10：读取G6解析隔离报告，解释历史轻API p95异常并按TP21复验，不重复宣布预算达标；之后T11全仓基线及T12完整闭环。T9仅本地提交，不继续自动推送/部署；保留next-env.d.ts和runtime-experiment。
 2026-10-08 T7已按用户指令推送origin/main并核对3c78c99；随后T8技术验收通过。工作台copy/rollback/历史目标、旧201与新202/200兼容、scoped Job ID刷新恢复、固定Evidence结果、项目/对话切换同步取消已接通。TP07/TP08真实API→两类Worker→PostgreSQL/MinIO通过：Approved源不变、派生新身份/新编号/parent、head与published及四导出/HTML元数据一致；HTML缺Artifact身份的实测问题已修复且旧字节不变。TP22四屏宽加核心导出/编辑/Console20/20，离线回归及相关类型/定向格式lint通过；最终完整串行隔离集成自然退出0（API14/真实预算失败浏览器2/Worker2）。[完整T8记录](./t8-test-report.md)保留所有失败证据和验证范围。首次独立复核P2是同Project切Conversation仍观察旧Job，已同步abort/清状态并补持有旧status回归；第二787文件快照复核无新增确定性阻断，未独立重跑。下一项T9历史分类/迁移/回滚演练，未执行。整体IMPLEMENTING，T11全仓遗留与T12真实端到端仍未关闭。T8仅本地提交，不再次推送/部署；原next-env.d.ts与runtime-experiment保留。
 
 2026-10-08 T7 技术验收通过，实现提交 `251cb4c`，TP10/TP11/TP15 的真实 API→隔离 PostgreSQL/MinIO 断言全部通过；最终完整集成自然退出0（API14/浏览器2/Worker2），离线集与API Console四屏宽20/20通过。审核按固定Revision核验完整来源、成功Job、两层校验与四输出长度/SHA-256；失败409/503不写业务状态。批准旧版本不回退head、不改其他Evidence，published变化独立审计。历史查询revisionId、Viewer过滤、并发批准、非法迁移、401/403/404与跨Project拒绝均通过。独立静态复核未见阻断，未独立重跑。既有routes lint、boundaries和hygiene保留，详见acceptance；不称全仓门禁通过。用户已授权本轮提交，不推送或部署。下一步T8，整体仍IMPLEMENTING；next-env.d.ts和runtime-experiment保留。
-
 
 2026-10-08 T6 技术验收通过：编辑、复制、回滚通过持久 Generation Job 和带租约 fencing 的单事务发布；六个同 Artifact 的三个编辑与三个回滚 Job 经真实 API、两类 Worker、PostgreSQL/MinIO 并发反序发布，编号唯一，head 指向最高成功编号，每 Job 恰一 Revision/Evidence/审计/回复。复制/回滚在第三个对象 PUT 失败后无业务半成品，真实 API retry 唯一发布；同键并发三操作不留孤立 Conversation；PUT 已写入但回执丢失、既有 COMMIT 回执丢失、候选对账和提交前失租均有对应测试。最终完整隔离集成 API14/真实浏览器2/Worker2 自然退出 0，API Console 四屏宽16/16、相关类型、定向格式/lint、docs 通过。独立只读复核未发现确定性 P1/P2，未独立重跑；其建议的复制/回滚审计/回复断言已补并复核。完整变更仍为 IMPLEMENTING，下一任务为 T7 Evidence 固定绑定与审核就绪门；T8 的工作台交互接通仍待做。自然租约等待/自动轮询未实测。原有 `apps/web/next-env.d.ts` 差异不纳入提交。下方“不通过”均为历史时点。
 

@@ -1,0 +1,28 @@
+$ pnpm -r typecheck && pnpm -r --if-present run test:typecheck
+Scope: 18 of 19 workspace projects
+apps/web typecheck$ tsc --noEmit -p tsconfig.json
+packages/contracts typecheck$ tsc --noEmit -p tsconfig.json
+packages/db typecheck$ tsc --noEmit -p tsconfig.json
+packages/harness typecheck$ tsc --noEmit -p tsconfig.json
+node:internal/child_process:420
+    throw new ErrnoException(err, 'spawn');
+    ^
+
+Error: spawn EPERM
+    at ChildProcess.spawn (node:internal/child_process:420:11)
+    at spawn (node:child_process:787:9)
+    at spawn (file:///C:/Users/sai_8/AppData/Local/node/corepack/v1/pnpm/11.19.0/dist/pnpm.mjs:5636:15)
+    at runCmd_ (file:///C:/Users/sai_8/AppData/Local/node/corepack/v1/pnpm/11.19.0/dist/pnpm.mjs:32031:16)
+    at runCmd (file:///C:/Users/sai_8/AppData/Local/node/corepack/v1/pnpm/11.19.0/dist/pnpm.mjs:31971:5)
+    at runPackageLifecycle (file:///C:/Users/sai_8/AppData/Local/node/corepack/v1/pnpm/11.19.0/dist/pnpm.mjs:31945:3)
+    at next2 (file:///C:/Users/sai_8/AppData/Local/node/corepack/v1/pnpm/11.19.0/dist/pnpm.mjs:31923:9)
+    at lifecycle_ (file:///C:/Users/sai_8/AppData/Local/node/corepack/v1/pnpm/11.19.0/dist/pnpm.mjs:31929:3)
+    at file:///C:/Users/sai_8/AppData/Local/node/corepack/v1/pnpm/11.19.0/dist/pnpm.mjs:31881:9
+    at file:///C:/Users/sai_8/AppData/Local/node/corepack/v1/pnpm/11.19.0/dist/pnpm.mjs:31940:12 {
+  errno: -4048,
+  code: 'EPERM',
+  syscall: 'spawn'
+}
+
+Node.js v22.22.2
+[ELIFECYCLE] Command failed with exit code 1.

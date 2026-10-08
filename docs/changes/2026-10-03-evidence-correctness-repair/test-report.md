@@ -1,5 +1,9 @@
 # 文档与实施检查记录
 
+## 2026-10-08 T9 TP23 技术验收
+
+T9实现/验证通过，详细命令、退出码、失败修复、日志和独立836文件快照见[T9专项报告](./t9-test-report.md)。旧库与空库additive迁移、历史保守分类/原内容保留、新v2约束与旧版本拒绝、CLI只读审计/维护恢复、实际API/MinIO四输出哈希与503通过；完整隔离集成API14/浏览器2/Worker2、四屏宽8/8与补录4/4、离线API56、类型及定向质量检查通过。独立角色无新增确定性P1/P2，未独立重跑。全仓既有基线仍归T11，生产未执行，整体IMPLEMENTING。T8已按用户要求推送396fc2c，T9仅本地提交。
+
 ## 2026-10-08 T8 最新限定验收
 
 [T8验收报告](./t8-test-report.md)为本轮权威结果：TP07/TP08真实API/两类Worker/PostgreSQL/MinIO通过；TP22四屏宽含核心导出/编辑/API Console20/20，最终串行集成自然退出0（API14/预算失败浏览器2/Worker2），离线回归、相关类型、定向格式/lint、docs/diff检查通过。首次独立P2与HTML缺Artifact ID实测缺陷均已修复，失败证据保留，第二固定快照复核无新增确定性P1/P2；独立角色未重跑。T7已推送3c78c99，T8仅本地提交。整体仍IMPLEMENTING，T9及后续未被本轮验收替代。下方历史段落保留其原时点。
@@ -15,11 +19,11 @@
 
 T7 按 TP10、TP11、TP15 技术验收通过，整体仍为 IMPLEMENTING。审核固定目标 Revision：Job→Artifact→Revision 锁序下核验成功 Job、完整 Brief/Metric/Snapshot、唯一 Evidence、Plan/Render Validation 和四对象清单，读回校验长度与 SHA-256；拒绝发生在状态、Review 与成功审计写入前。批准旧版本只更新 published 指针并追加独立审计，较新 head 和其他版本内容保持不变；Evidence 状态从目标 Revision 投影。默认列表选 head/published，Viewer 仅 published Approved，revisionId 历史查询不借用其他版本证据。
 
-| 场景 | 结果与证据 |
-| --- | --- |
-| TP10 | submit/approve 各九类故障共18次拒绝：Plan、Render、Job failed、缺 PNG/HTML、同长度错哈希、真实 loopback ECONNREFUSED、缺 Brief、错版本清单；409/503 分类正确，恢复故障后全部业务记录与之前相同。旧无成功 Job 版本也拒绝。 |
+| 场景 | 结果与证据                                                                                                                                                                                                                                         |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TP10 | submit/approve 各九类故障共18次拒绝：Plan、Render、Job failed、缺 PNG/HTML、同长度错哈希、真实 loopback ECONNREFUSED、缺 Brief、错版本清单；409/503 分类正确，恢复故障后全部业务记录与之前相同。旧无成功 Job 版本也拒绝。                          |
 | TP11 | 真实两类 Worker 产出的 R1/R2 finding 不同；提交/批准 R1 保持 R2、其余 Evidence 及较新 head 不变。两次并发批准恰一200/一409，Review仅提交/批准各一，published指针恰一独立审计。历史查询及冗余状态故意失配后的投影通过；无 Evidence 历史返回空数组。 |
-| TP15 | Editor 可提交不可批准；Reviewer 可批准；Viewer 不读/导出/复制 Draft、可读/导出 Approved、不可审核；非成员404、未认证401、跨Project来源拒绝、非法迁移及expectedStatus冲突通过。 |
+| TP15 | Editor 可提交不可批准；Reviewer 可批准；Viewer 不读/导出/复制 Draft、可读/导出 Approved、不可审核；非成员404、未认证401、跨Project来源拒绝、非法迁移及expectedStatus冲突通过。                                                                     |
 
 最终 `node scripts/test-integration.mjs` 自然退出0（API14、真实预算失败浏览器2、Worker2），原始记录：[最终集成](./evidence/t7-integration-final.txt)。[离线回归](./evidence/t7-offline.txt)自然退出0（含API55）；[API Console](./evidence/t7-console.txt)四屏宽20/20。Chart/API/Contracts/Web源码、API/Web/Generation Worker测试类型，定向Prettier/ESLint、docs检查与diff检查通过。routes.ts仍有三项HEAD既有lint（未使用导入/两个any），[boundaries](./evidence/t7-boundaries.txt)仍为既有Worker集成跨API导入未声明依赖；T7新辅助测试通过传入API factory避免新增跨包导入。[hygiene](./evidence/t7-hygiene.txt)仍因既有UI两份跟踪.log失败，不放宽检查器、不删除历史证据，不能称全仓质量门禁通过。
 

@@ -239,6 +239,13 @@
       "when": 1790985600000,
       "tag": "0034_render_candidate_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791417600000,
+      "tag": "0035_evidence_integrity_lifecycle",
+      "breakpoints": true
     }
   ]
 }

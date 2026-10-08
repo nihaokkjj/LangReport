@@ -37,7 +37,10 @@ const databaseUrl: string = configuredDatabaseUrl;
 const client = postgres(databaseUrl, {
   max: 5,
   prepare: false,
-  ...(integrationSchema ? { connection: { search_path: integrationSchema } } : {}),
+  connection: {
+    application_name: "langreport-lifecycle-v2",
+    ...(integrationSchema ? { search_path: integrationSchema } : {}),
+  },
 });
 
 export async function createDatabaseChannelListener(

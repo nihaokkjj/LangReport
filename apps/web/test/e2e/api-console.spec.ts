@@ -55,6 +55,8 @@ test("API Console 说明固定历史证据与两个审核入口的就绪核验",
   await page.getByRole("button", { name: /\/evidence-blocks/ }).click();
   await expect(page.getByText(/默认查询 head\/published 对应 Evidence/)).toBeVisible();
   await expect(page.getByText(/使用 revisionId 查询固定历史版本/)).toBeVisible();
+  await expect(page.getByText(/409 REVISION_LEGACY_UNVERIFIED/)).toBeVisible();
+  await expect(page.getByText(/EVIDENCE_LIFECYCLE_READ_ONLY/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
 

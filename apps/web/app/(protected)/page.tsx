@@ -151,6 +151,7 @@ type FlintSpec = {
 type ValidationIssue = { code: string; message: string; severity: "error" | "warning"; field?: string };
 type ValidationReport = { valid: boolean; issues: ValidationIssue[]; checks: Record<string, boolean> };
 type Revision = {
+  integrityStatus?: "legacy_unverified" | "verified";
   id: string;
   artifactId: string;
   revision: number;
@@ -1944,6 +1945,7 @@ export default function Home() {
             )}
             {!isLoadingProject && activeEvidence && (
               <EvidenceCanvas
+                integrityStatus={activeEvidence.revision.integrityStatus}
                 title={activeEvidence.block.title}
                 status={activeEvidence.revision.status}
                 statusLabel={revisionLabels[activeEvidence.revision.status]}
@@ -1961,7 +1963,11 @@ export default function Home() {
                     spec={activeEvidence.revision.flintSpec}
                   />
                 }
-                canEdit={activeEvidence.revision.status !== "approved" && activeEvidence.revision.status !== "archived"}
+                canEdit={
+                  activeEvidence.revision.integrityStatus !== "legacy_unverified" &&
+                  activeEvidence.revision.status !== "approved" &&
+                  activeEvidence.revision.status !== "archived"
+                }
                 onEdit={openEditor}
                 onCopy={() => void deriveRevision("copy")}
                 onRollback={() => void deriveRevision("rollback")}
@@ -1987,7 +1993,10 @@ export default function Home() {
                     " 已锁定：" +
                     (activeEvidence.revision.status === "approved" ? "是" : "否"),
                 }}
-                showSubmit={activeEvidence.revision.status === "draft"}
+                showSubmit={
+                  activeEvidence.revision.status === "draft" &&
+                  activeEvidence.revision.integrityStatus !== "legacy_unverified"
+                }
                 onSubmit={() => void transitionRevision("submit")}
               />
             )}

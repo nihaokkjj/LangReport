@@ -2078,7 +2078,10 @@ export default function ApiConsolePage() {
                 {selectedEntry?.operation.operationId === "listEvidenceBlocks" && (
                   <p className={styles.contractHint}>
                     默认查询 head/published 对应 Evidence；Viewer 仅可见 published Approved。 使用 revisionId
-                    查询固定历史版本，审核状态从该 Revision 投影；缺对应证据返回空数组。
+                    查询固定历史版本，审核状态从该 Revision 投影；缺对应证据返回空数组。 integrityStatus 为
+                    legacy_unverified 时保留原审核状态，但拒绝新增审核和派生（409 REVISION_LEGACY_UNVERIFIED）。
+                    维护只读或写入版本不匹配返回 503 EVIDENCE_LIFECYCLE_READ_ONLY /
+                    EVIDENCE_WRITER_VERSION_MISMATCH，恢复后再重试。
                   </p>
                 )}
                 {parameterLocations.map(

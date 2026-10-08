@@ -62,6 +62,7 @@ import {
 import type { ColumnProfile, DataRow } from "@langreport/data-engine";
 import { buildApp } from "../../../api/src/app.js";
 import { verifyT7Review } from "./t7-review.js";
+import { verifyT9Lifecycle } from "./t9-lifecycle.js";
 
 const { processGenerationJob } = await import("../../src/index.js");
 const { processRenderJob } = await import("../../../render-worker/src/index.js");
@@ -2033,6 +2034,7 @@ test("real generation and render workers persist plugin usage and historical sna
     );
 
     // TP07/TP08: derive from approved R1 while a newer draft remains head.
+    await verifyT9Lifecycle({ projectId: project.id, userId, revisionId: visualRevision.id }, buildApp);
     const [approvedSource] = await db.select().from(chartRevisions).where(eq(chartRevisions.id, visualRevision.id));
     assert.equal(approvedSource.status, "approved");
     const sourceRevisions = await db
@@ -2521,7 +2523,7 @@ async function createLostCommitConnection(): Promise<{
     prepare: false,
     ssl: false,
     connect_timeout: 3,
-    connection: { search_path: process.env.DATABASE_SCHEMA },
+    connection: { search_path: process.env.DATABASE_SCHEMA, application_name: "langreport-lifecycle-v2" },
   });
   return {
     database: drizzle({ client }) as typeof db,

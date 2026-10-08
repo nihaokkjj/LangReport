@@ -1,0 +1,148 @@
+[WebServer] (node:50036) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:58280) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:65056) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 8 tests using 1 worker
+
+(node:61944) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:61944) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [chromium-desktop] › test\e2e\api-console.spec.ts:4:5 › API Console 说明固定历史证据与两个审核入口的就绪核验 (2.0s)
+  ok 2 [chromium-desktop] › test\e2e\consulting-report.spec.ts:518:5 › T9 历史 Approved 保留状态并显示未验证，禁止派生 (1.9s)
+(node:58388) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:58388) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 3 [chromium-tablet] › test\e2e\api-console.spec.ts:4:5 › API Console 说明固定历史证据与两个审核入口的就绪核验 (1.5s)
+  ok 4 [chromium-tablet] › test\e2e\consulting-report.spec.ts:518:5 › T9 历史 Approved 保留状态并显示未验证，禁止派生 (1.7s)
+(node:63640) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:63640) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 5 [chromium-compact] › test\e2e\api-console.spec.ts:4:5 › API Console 说明固定历史证据与两个审核入口的就绪核验 (1.4s)
+  x  6 [chromium-compact] › test\e2e\consulting-report.spec.ts:518:5 › T9 历史 Approved 保留状态并显示未验证，禁止派生 (30.3s)
+(node:60192) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60192) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 7 [chromium-mobile] › test\e2e\api-console.spec.ts:4:5 › API Console 说明固定历史证据与两个审核入口的就绪核验 (1.3s)
+  x  8 [chromium-mobile] › test\e2e\consulting-report.spec.ts:518:5 › T9 历史 Approved 保留状态并显示未验证，禁止派生 (30.2s)
+
+
+  1) [chromium-compact] › test\e2e\consulting-report.spec.ts:518:5 › T9 历史 Approved 保留状态并显示未验证，禁止派生
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for getByRole('button', { name: '关闭对话历史' }).last()[22m
+    [2m    - locator resolved to <button tabindex="0" type="button" aria-label="关闭对话历史" class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeMedium drawer-close history-drawer-close mui-jkq6ru-MuiButtonBase-root-MuiIconButton-root">…</button>[22m
+    [2m  - attempting click action[22m
+    [2m    2 × waiting for element to be visible, enabled and stable[22m
+    [2m      - element is visible, enabled and stable[22m
+    [2m      - scrolling into view if needed[22m
+    [2m      - done scrolling[22m
+    [2m      - element is outside of the viewport[22m
+    [2m    - retrying click action[22m
+    [2m    - waiting 20ms[22m
+    [2m    2 × waiting for element to be visible, enabled and stable[22m
+    [2m      - element is visible, enabled and stable[22m
+    [2m      - scrolling into view if needed[22m
+    [2m      - done scrolling[22m
+    [2m      - element is outside of the viewport[22m
+    [2m    - retrying click action[22m
+    [2m      - waiting 100ms[22m
+    [2m    56 × waiting for element to be visible, enabled and stable[22m
+    [2m       - element is visible, enabled and stable[22m
+    [2m       - scrolling into view if needed[22m
+    [2m       - done scrolling[22m
+    [2m       - element is outside of the viewport[22m
+    [2m     - retrying click action[22m
+    [2m       - waiting 500ms[22m
+
+
+      521 |   await page.goto("/");
+      522 |   if ((page.viewportSize()?.width ?? 0) <= 760) {
+    > 523 |     await page.getByRole("button", { name: "关闭对话历史" }).last().click();
+          |                                                               ^
+      524 |   }
+      525 |   const canvas = page.getByLabel("证据画布");
+      526 |   await expect(canvas.getByText("已批准", { exact: true })).toBeVisible();
+        at D:\front\newProject\LangReport\apps\web\test\e2e\consulting-report.spec.ts:523:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\consulting-report-T9-历史-Approved-保留状态并显示未验证，禁止派生-chromium-compact\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\consulting-report-T9-历史-Approved-保留状态并显示未验证，禁止派生-chromium-compact\trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace test-results\consulting-report-T9-历史-Approved-保留状态并显示未验证，禁止派生-chromium-compact\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [chromium-mobile] › test\e2e\consulting-report.spec.ts:518:5 › T9 历史 Approved 保留状态并显示未验证，禁止派生 ─
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for getByRole('button', { name: '关闭对话历史' }).last()[22m
+    [2m    - locator resolved to <button tabindex="0" type="button" aria-label="关闭对话历史" class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeMedium drawer-close history-drawer-close mui-jkq6ru-MuiButtonBase-root-MuiIconButton-root">…</button>[22m
+    [2m  - attempting click action[22m
+    [2m    2 × waiting for element to be visible, enabled and stable[22m
+    [2m      - element is visible, enabled and stable[22m
+    [2m      - scrolling into view if needed[22m
+    [2m      - done scrolling[22m
+    [2m      - element is outside of the viewport[22m
+    [2m    - retrying click action[22m
+    [2m    - waiting 20ms[22m
+    [2m    2 × waiting for element to be visible, enabled and stable[22m
+    [2m      - element is visible, enabled and stable[22m
+    [2m      - scrolling into view if needed[22m
+    [2m      - done scrolling[22m
+    [2m      - element is outside of the viewport[22m
+    [2m    - retrying click action[22m
+    [2m      - waiting 100ms[22m
+    [2m    55 × waiting for element to be visible, enabled and stable[22m
+    [2m       - element is visible, enabled and stable[22m
+    [2m       - scrolling into view if needed[22m
+    [2m       - done scrolling[22m
+    [2m       - element is outside of the viewport[22m
+    [2m     - retrying click action[22m
+    [2m       - waiting 500ms[22m
+
+
+      521 |   await page.goto("/");
+      522 |   if ((page.viewportSize()?.width ?? 0) <= 760) {
+    > 523 |     await page.getByRole("button", { name: "关闭对话历史" }).last().click();
+          |                                                               ^
+      524 |   }
+      525 |   const canvas = page.getByLabel("证据画布");
+      526 |   await expect(canvas.getByText("已批准", { exact: true })).toBeVisible();
+        at D:\front\newProject\LangReport\apps\web\test\e2e\consulting-report.spec.ts:523:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\consulting-report-T9-历史-Approved-保留状态并显示未验证，禁止派生-chromium-mobile\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\consulting-report-T9-历史-Approved-保留状态并显示未验证，禁止派生-chromium-mobile\trace.zip
+    Usage:
+
+        pnpm exec playwright show-trace test-results\consulting-report-T9-历史-Approved-保留状态并显示未验证，禁止派生-chromium-mobile\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [chromium-compact] › test\e2e\consulting-report.spec.ts:518:5 › T9 历史 Approved 保留状态并显示未验证，禁止派生 ─
+    [chromium-mobile] › test\e2e\consulting-report.spec.ts:518:5 › T9 历史 Approved 保留状态并显示未验证，禁止派生 ──
+  6 passed (1.8m)
+undefined
+D:\front\newProject\LangReport\apps\web:
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command failed with exit code 1: playwright test -c playwright.config.ts test/e2e/consulting-report.spec.ts test/e2e/api-console.spec.ts --grep "T9|固定历史证据"

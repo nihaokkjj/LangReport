@@ -4,6 +4,9 @@ import { readdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { seedLegacyEvidence, verifyEvidenceLifecycle } from "./verify-evidence-lifecycle.mjs";
 
 const packageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const migrationDirectory = resolve(packageDirectory, "drizzle");
@@ -41,14 +44,21 @@ function schemaSql(statement, schemaName) {
 async function run() {
   const migrations = await readMigrations();
   const schemaName = `migration_verify_${randomUUID().replaceAll("-", "")}`;
-  const sql = postgres(databaseUrl, { max: 1, prepare: false, onnotice: () => {} });
+  const sql = postgres(databaseUrl, {
+    max: 1,
+    prepare: false,
+    onnotice: () => {},
+    connection: { application_name: "langreport-lifecycle-v2" },
+  });
 
   try {
     await sql.unsafe(`CREATE SCHEMA "${schemaName}"`);
     await sql.begin(async (transaction) => {
       await transaction.unsafe(`SET LOCAL search_path TO "${schemaName}", public`);
 
+      let legacyEvidence;
       for (const migration of migrations) {
+        if (migration.startsWith("0035_")) legacyEvidence = await seedLegacyEvidence(transaction);
         const source = await readFile(resolve(migrationDirectory, migration), "utf8");
         if (migration === "0029_memory_identity_private_scope.sql") {
           const preflight = source.split("--> statement-breakpoint", 1)[0];
@@ -213,6 +223,7 @@ async function run() {
         }
       }
 
+      await verifyEvidenceLifecycle(transaction, legacyEvidence);
       const memoryVersions = Array.from(
         await transaction.unsafe(`
           SELECT id, logical_memory_id, version, status, confirmed_at, effective_from
@@ -534,6 +545,23 @@ async function run() {
         "legacy member identity references must remain migratable text IDs",
       );
     });
+    const runCli = promisify(execFile);
+    for (const command of ["audit", "set-read-only", "audit", "resume-v2"]) {
+      const { stdout } = await runCli(
+        process.execPath,
+        [resolve(packageDirectory, "scripts/evidence-lifecycle.mjs"), command],
+        {
+          env: { ...process.env, DATABASE_URL: databaseUrl, DATABASE_SCHEMA: schemaName },
+        },
+      );
+      const report = JSON.parse(stdout);
+      if (command === "audit") {
+        assert.equal(report.objectBytesVerified, false);
+        assert.equal(report.rows.length, 3);
+        assert.equal(report.reasons.duplicate_evidence, 1);
+      } else assert.equal(report.mode, command === "set-read-only" ? "read_only" : "writable");
+      console.log(`TP23 operator CLI ${command} passed`);
+    }
     console.log(`Migration compatibility verification passed (${migrations.join(", ")})`);
   } finally {
     await sql.unsafe(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);

@@ -1,0 +1,46 @@
+TAP version 13
+# ◇ injected env (25) from ..\\..\\.env // tip: ⌁ auth for agents [www.vestauth.com]
+# ◇ injected env (0) from ..\\..\\.env // tip: ⌘ suppress logs { quiet: true }
+# Subtest: development bootstrap is disabled in production
+ok 1 - development bootstrap is disabled in production
+  ---
+  duration_ms: 0.6902
+  type: 'test'
+  ...
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/oneOf/0/properties/patch/properties/transformPlan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/anchor/additionalProperties" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# strict mode: use allowUnionTypes to allow union type keyword at "\#/properties/plan/properties/steps/items/oneOf/0/properties/value" (strictTypes)
+# Subtest: Fastify registers every route with its HTTP contract
+ok 2 - Fastify registers every route with its HTTP contract
+  ---
+  duration_ms: 896.6843
+  type: 'test'
+  ...
+# Subtest: multipart upload keeps its OpenAPI body but skips Fastify JSON body validation
+ok 3 - multipart upload keeps its OpenAPI body but skips Fastify JSON body validation
+  ---
+  duration_ms: 0.2144
+  type: 'test'
+  ...
+# Subtest: snapshot re-ingest contracts expose the target Asset path and multipart shape
+ok 4 - snapshot re-ingest contracts expose the target Asset path and multipart shape
+  ---
+  duration_ms: 0.6406
+  type: 'test'
+  ...
+# Subtest: database account contracts expose session identity and the current-password change route
+ok 5 - database account contracts expose session identity and the current-password change route
+  ---
+  duration_ms: 0.1173
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3296.6193

@@ -10,7 +10,12 @@ export type ReviewComment = {
   createdAt: string;
 };
 export type ReviewRevisionStatus = "draft" | "in_review" | "approved" | "changes_requested" | "archived";
-export type ReviewRevision = { revision: number; status: ReviewRevisionStatus; validation: { valid: boolean } };
+export type ReviewRevision = {
+  revision: number;
+  status: ReviewRevisionStatus;
+  validation: { valid: boolean };
+  integrityStatus?: "legacy_unverified" | "verified";
+};
 
 function formatDate(value?: string | null): string {
   if (!value) return "—";
@@ -60,7 +65,9 @@ export function ReviewPanel({
         <Alert severity={revision.validation.valid ? "success" : "error"}>
           自动校验{revision.validation.valid ? "已通过" : "存在问题"}
         </Alert>
-        <Alert severity="success">数据快照已固定</Alert>
+        <Alert severity={revision.integrityStatus === "legacy_unverified" ? "warning" : "success"}>
+          {revision.integrityStatus === "legacy_unverified" ? "历史版本未验证，请重新确认输入并生成" : "数据快照已固定"}
+        </Alert>
         <Alert severity="success">Approved 后只读</Alert>
       </div>
       <div className="review-comments-head">
@@ -99,10 +106,20 @@ export function ReviewPanel({
         <Button variant="outlined" type="button" onClick={onAddComment} disabled={!note.trim() || isSaving}>
           {isSaving ? "保存中" : "添加评论"}
         </Button>
-        <Button variant="outlined" type="button" onClick={onRequestChanges} disabled={!note.trim()}>
+        <Button
+          variant="outlined"
+          type="button"
+          onClick={onRequestChanges}
+          disabled={!note.trim() || revision.integrityStatus === "legacy_unverified"}
+        >
           提交修改请求
         </Button>
-        <Button variant="contained" type="button" onClick={onApprove}>
+        <Button
+          variant="contained"
+          type="button"
+          onClick={onApprove}
+          disabled={revision.integrityStatus === "legacy_unverified"}
+        >
           批准此版本
         </Button>
       </div>

@@ -1,0 +1,25 @@
+warning: in the working copy of 'apps/api/src/app.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/api/src/chart-routes.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/api/src/http-errors.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/api/src/routes.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/api/test/unit/http-errors.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/api/test/unit/openapi.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/generation-worker/test/integration/t7-review.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/generation-worker/test/integration/worker.integration.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/render-worker/src/publication.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/web/app/(protected)/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/web/app/api-console/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/web/features/evidence/evidence-canvas.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/web/features/review/review-panel.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/web/next-env.d.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/web/test/e2e/api-console.spec.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/web/test/e2e/consulting-report.spec.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/changes/2026-10-03-evidence-correctness-repair/task.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/chart/src/index.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/contracts/src/http.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/db/drizzle/meta/_journal.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/db/scripts/verify-migrations.mjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/db/src/client.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/db/src/schema.ts', LF will be replaced by CRLF the next time Git touches it
+Formatting 25 changed file(s).
+format:check passed.

@@ -75,9 +75,9 @@ Worker 获租约后，在短事务中按固定顺序锁 Job → Artifact；验�
 
 ### 渲染与存储
 
-  逐次候选对象账本已落地：Render Worker 在首个 S3 PUT 之前用有效 Job 租约持久化尝试 UUID、预留 Revision UUID、fencing token 和四个计划键；四对象读回后，账本 `validated` 与 Job 清单在一个短事务中保存。业务发布事务以 Job→尝试行锁核对账本身份和全部对象键，并将账本标为 `published`。失败重试保留旧尝试记录，新尝试使用独立键。
+逐次候选对象账本已落地：Render Worker 在首个 S3 PUT 之前用有效 Job 租约持久化尝试 UUID、预留 Revision UUID、fencing token 和四个计划键；四对象读回后，账本 `validated` 与 Job 清单在一个短事务中保存。业务发布事务以 Job→尝试行锁核对账本身份和全部对象键，并将账本标为 `published`。失败重试保留旧尝试记录，新尝试使用独立键。
 
-  Render Worker 每轮最多对账 10 个候选。默认保留期 24 小时；年龄及有效租约均由 PostgreSQL `clock_timestamp()` 判定。只有无有效租约、键符合本 Job 的 Workspace/Project/Asset/Revision/尝试身份且没有任何 Revision 引用时，才先标记 `deleting`，随后逐键删除。删除失败保留状态并至少延迟 1 分钟重试，不阻断其余候选或正常 Job；无效键隔离为 `quarantined`，已引用键保留为 `published`。已删除尝试每 24 小时重扫一次，以清理由失租 Worker 的迟到 PUT；写入后的 Worker 再验租约，失租时清理该次写入。对账不删除成功 Revision 引用的对象。
+Render Worker 每轮最多对账 10 个候选。默认保留期 24 小时；年龄及有效租约均由 PostgreSQL `clock_timestamp()` 判定。只有无有效租约、键符合本 Job 的 Workspace/Project/Asset/Revision/尝试身份且没有任何 Revision 引用时，才先标记 `deleting`，随后逐键删除。删除失败保留状态并至少延迟 1 分钟重试，不阻断其余候选或正常 Job；无效键隔离为 `quarantined`，已引用键保留为 `published`。已删除尝试每 24 小时重扫一次，以清理由失租 Worker 的迟到 PUT；写入后的 Worker 再验租约，失租时清理该次写入。对账不删除成功 Revision 引用的对象。
 
 数据库事务外渲染并写入候选对象，路径包含 Workspace/Project、目标 Revision、执行尝试及内容标识。不同租约尝试不覆盖同一路径。清单保存格式、key、内容哈希、长度、渲染器版本和验证结果。四种必要输出全部可读取且内容校验通过后，才进入完成提交。
 
@@ -173,6 +173,8 @@ JSON 自带类型保留；飞书 typed table 继续由其既有适配层解释�
 回滚不删除新列、新 Revision 或新对象；在恢复旧写路径会破坏一对一绑定时，采用维护只读+前向修复，不直接启动旧 Worker。旧导出继续按旧引用读，历史已批准文件的哈希必须保持。失效候选只在对账确认后清理。
 
 ## 状态与数据流
+
+2026-10-08 T9落地D8：0035仅增加integrity_status、binding_version、v2局部唯一/固定来源触发器、evidence_integrity_audit及生命周期维护单例。旧记录默认legacy_unverified，保守不自动提升；新原子发布写verified/v2，审核仍实时核验。旧Approved状态/正文/快照/输出保留，UI并列提示，旧来源新审核/派生拒绝。主DB连接application_name版本标记拒绝误启动旧写入程序，但不是认证边界，必须先阻断入口并排空旧API/Worker；维护只读仅覆盖图表生命周期，前向恢复不删列/版本/对象。实现细则和生产尚未执行的顺序见 [T9操作手册](./t9-operations.md)，TP23本地隔离演练和独立复核见 [T9报告](./t9-test-report.md)。
 
 ```mermaid
 flowchart TD

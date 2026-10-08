@@ -1,0 +1,37 @@
+TP23 historical migration/audit/read-only/version recovery assertions passed {
+  legacyRevisionSHA256: '7357390cf4da996c4e1c40c12c2487c269d40f3d7cf1d16a9f85f1323cf5edbd'
+}
+Migration compatibility verification failed
+AssertionError [ERR_ASSERTION]: legacy project-scoped Data Asset records must be cleaned before source becomes required
++ actual - expected
+
++ {
++   job_execution_assembly: null,
++   job_prompt: '历史问题',
++   model_route: {},
++   plugin_context: {},
++   plugin_snapshot: {},
++   plugin_usage: {},
++   revision_execution_assembly: null,
++   revision_outputs: {
++     svg: 'historical.svg'
++   },
++   theme_config: {
++     ink: '#111111'
++   },
++   theme_ref: null
++ }
+- undefined
+
+    at file:///D:/front/newProject/LangReport/packages/db/scripts/verify-migrations.mjs:332:14
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async scope (file:///D:/front/newProject/LangReport/node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/index.js:260:18)
+    at async Function.begin (file:///D:/front/newProject/LangReport/node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/index.js:243:14)
+    at async run (file:///D:/front/newProject/LangReport/packages/db/scripts/verify-migrations.mjs:49:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [Object],
+  expected: undefined,
+  operator: 'strictEqual',
+  diff: 'simple'
+}

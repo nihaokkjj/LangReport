@@ -24,7 +24,7 @@ type T7Payload = {
     revision: { id: string };
   }>;
 };
-type ApiFactory = (options: {
+export type ApiFactory = (options: {
   logger: boolean;
   authProvider: () => { id: string } | null;
   reviewOutputReader: (key: string) => Promise<Buffer>;
@@ -326,7 +326,7 @@ export async function verifyT7Review(
     assert.deepEqual(noHistory.json<T7Payload>().evidence, []);
     const missingJob = await post(missingEvidenceRevision.id, "submit");
     assert.equal(missingJob.statusCode, 409, missingJob.body);
-    assert.equal(missingJob.json<T7Payload>().code, "REVISION_NOT_READY");
+    assert.equal(missingJob.json<T7Payload>().code, "REVISION_LEGACY_UNVERIFIED");
     // Deliberately make redundant status stale: DTO status must still come from Revision.
     await db.update(evidenceBlocks).set({ status: "draft" }).where(eq(evidenceBlocks.id, b1.id));
     const projected = await app.inject({
