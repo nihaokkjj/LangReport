@@ -14,8 +14,6 @@ import {
   archiveArtifact,
   assertChartAction,
   compareChartRevisions,
-  copyRevisionToArtifact,
-  createDerivedRevision,
   createShare,
   getArtifact,
   getProjectTheme,
@@ -23,6 +21,7 @@ import {
   getShare,
   freezeDerivedProvenance,
   freezeDerivedFinding,
+  freezeVisualRevisionInput,
   listArtifacts,
   listComments,
   listReviews,
@@ -155,16 +154,20 @@ export async function registerChartRoutes(app: FastifyInstance): Promise<void> {
             pluginContext,
           });
           const idempotencyKey = command.idempotencyKey ?? fingerprint;
-          const [existing] = await db
-            .select()
-            .from(generationJobs)
-            .where(
-              and(
-                eq(generationJobs.projectId, source.artifact.projectId),
-                eq(generationJobs.idempotencyKey, idempotencyKey),
-              ),
-            )
-            .limit(1);
+          const readExisting = async () => {
+            const [existing] = await db
+              .select()
+              .from(generationJobs)
+              .where(
+                and(
+                  eq(generationJobs.projectId, source.artifact.projectId),
+                  eq(generationJobs.idempotencyKey, idempotencyKey),
+                ),
+              )
+              .limit(1);
+            return existing;
+          };
+          const existing = await readExisting();
           if (existing) {
             if (existing.inputFingerprint !== fingerprint)
               return sendHttpError(reply, 409, "幂等键已经用于另一组编辑输入", "IDEMPOTENCY_CONFLICT");
@@ -186,72 +189,187 @@ export async function registerChartRoutes(app: FastifyInstance): Promise<void> {
           const derivedAudit = visualOnly
             ? { derivedFinding: freezeDerivedFinding(source.revision.id, sourceEvidence) }
             : null;
-          const conversationId = await createEditConversation(
-            source.artifact.projectId,
-            source.revision.revision,
-            userId,
-          );
-          const [job] = await db
-            .insert(generationJobs)
-            .values({
-              projectId: source.artifact.projectId,
-              conversationId,
-              dataAssetId: snapshot.assetId,
-              snapshotId: source.revision.snapshotId,
-              prompt: `编辑图表版本 R${source.revision.revision}`,
-              idempotencyKey,
-              inputFingerprint: fingerprint,
-              renderer: "vega-lite",
-              rendererVersion: RENDERER_VERSION,
-              theme: command.patch.theme ?? sourceSpec.theme,
-              themeVersion: command.patch.themeVersion ?? sourceSpec.themeVersion,
-              themeSource: command.patch.theme || command.patch.themeVersion ? "request" : "revision",
-              themeConfig:
-                command.patch.theme || command.patch.themeVersion
-                  ? {}
-                  : ((source.revision.themeSnapshot as { config?: unknown } | null)?.config ?? {}),
-              operation: "edit",
-              artifactId: request.params.artifactId,
-              baseRevisionId: command.baseRevisionId,
-              editPatch: command.patch,
-              transformPlan: command.patch.transformPlan ?? source.revision.transformPlan,
-              fieldLineage: source.revision.fieldLineage,
-              pluginContext,
-              generationAudit: derivedAudit,
-              ...frozenProvenance,
-              createdBy: userId,
-            })
-            .returning();
+          const prompt = `编辑图表版本 R${source.revision.revision}`;
+          class JobEnqueueRace extends Error {}
+          let job: typeof generationJobs.$inferSelect;
+          try {
+            job = await db.transaction(async (tx) => {
+              const [conversation] = await tx
+                .insert(conversations)
+                .values({ projectId: source.artifact.projectId, title: prompt, createdBy: userId })
+                .returning({ id: conversations.id });
+              const [queued] = await tx
+                .insert(generationJobs)
+                .values({
+                  projectId: source.artifact.projectId,
+                  conversationId: conversation.id,
+                  dataAssetId: snapshot.assetId,
+                  snapshotId: source.revision.snapshotId,
+                  prompt,
+                  idempotencyKey,
+                  inputFingerprint: fingerprint,
+                  renderer: "vega-lite",
+                  rendererVersion: RENDERER_VERSION,
+                  theme: command.patch.theme ?? sourceSpec.theme,
+                  themeVersion: command.patch.themeVersion ?? sourceSpec.themeVersion,
+                  themeSource: command.patch.theme || command.patch.themeVersion ? "request" : "revision",
+                  themeConfig:
+                    command.patch.theme || command.patch.themeVersion
+                      ? {}
+                      : ((source.revision.themeSnapshot as { config?: unknown } | null)?.config ?? {}),
+                  operation: "edit",
+                  artifactId: request.params.artifactId,
+                  baseRevisionId: command.baseRevisionId,
+                  editPatch: command.patch,
+                  transformPlan: command.patch.transformPlan ?? source.revision.transformPlan,
+                  fieldLineage: source.revision.fieldLineage,
+                  pluginContext,
+                  generationAudit: derivedAudit,
+                  ...frozenProvenance,
+                  createdBy: userId,
+                })
+                .onConflictDoNothing({ target: [generationJobs.projectId, generationJobs.idempotencyKey] })
+                .returning();
+              if (!queued) throw new JobEnqueueRace();
+              await tx
+                .insert(conversationMessages)
+                .values({ conversationId: conversation.id, role: "user", content: prompt });
+              return queued;
+            });
+          } catch (error) {
+            if (!(error instanceof JobEnqueueRace)) throw error;
+            const raced = await readExisting();
+            if (!raced) throw error;
+            if (raced.inputFingerprint !== fingerprint)
+              return sendHttpError(reply, 409, "幂等键已经用于另一组编辑输入", "IDEMPOTENCY_CONFLICT");
+            return reply.send({ job: raced, reused: true });
+          }
           return reply.code(202).send({ job, reused: false });
         }
 
-        if (command.operation === "rollback") {
-          const source = await getRevision(command.targetRevisionId, userId);
-          if (source.artifact.id !== request.params.artifactId)
-            throw new ChartServiceError("REVISION_MISMATCH", "回滚目标不属于当前图表产物");
-          const revision = await createDerivedRevision({
-            projectId: source.artifact.projectId,
-            artifactId: source.artifact.id,
-            sourceRevisionId: source.revision.id,
-            createdBy: userId,
-            changeReason: "rollback",
-            idempotencyKey: command.idempotencyKey,
-          });
-          return reply.code(201).send({ revision });
-        }
-
-        const source = await getRevision(command.sourceRevisionId, userId);
+        const sourceRevisionId = command.operation === "rollback" ? command.targetRevisionId : command.sourceRevisionId;
+        const source = await getRevision(sourceRevisionId, userId);
         if (source.artifact.id !== request.params.artifactId)
-          throw new ChartServiceError("REVISION_MISMATCH", "复制来源不属于当前图表产物");
+          throw new ChartServiceError("REVISION_MISMATCH", "来源版本不属于当前图表产物");
+        await assertChartAction(source.artifact.projectId, userId, "create_revision");
         const sourceSpec = flintSpecSchema.parse(source.revision.flintSpec);
-        const result = await copyRevisionToArtifact({
-          projectId: source.artifact.projectId,
-          sourceRevisionId: source.revision.id,
-          createdBy: userId,
-          name: command.name ?? `${sourceSpec.chartSpec.title} 副本`,
-          idempotencyKey: command.idempotencyKey,
+        const title =
+          command.operation === "copy"
+            ? (command.name ?? `${sourceSpec.chartSpec.title} 副本`)
+            : sourceSpec.chartSpec.title;
+        const frozenProvenance = freezeDerivedProvenance(source.revision);
+        freezeVisualRevisionInput(source.revision, { title });
+        const [sourceEvidence] = await db
+          .select({ id: evidenceBlocks.id, finding: evidenceBlocks.finding })
+          .from(evidenceBlocks)
+          .where(
+            and(
+              eq(evidenceBlocks.chartRevisionId, source.revision.id),
+              eq(evidenceBlocks.projectId, source.artifact.projectId),
+            ),
+          )
+          .limit(1);
+        const derivedFinding = freezeDerivedFinding(source.revision.id, sourceEvidence);
+        const [snapshot] = await db
+          .select({ assetId: dataAssets.id })
+          .from(dataSnapshots)
+          .innerJoin(dataAssets, eq(dataAssets.id, dataSnapshots.assetId))
+          .where(eq(dataSnapshots.id, source.revision.snapshotId))
+          .limit(1);
+        if (!snapshot) throw new ChartServiceError("SNAPSHOT_NOT_FOUND", "图表版本的数据快照不存在", 404);
+        const [sourceJob] = source.revision.generationJobId
+          ? await db
+              .select({ pluginContext: generationJobs.pluginContext })
+              .from(generationJobs)
+              .where(eq(generationJobs.id, source.revision.generationJobId))
+              .limit(1)
+          : [];
+        const pluginContext = sourceJob?.pluginContext ?? {};
+        const fingerprint = fingerprintFor({
+          operation: command.operation,
+          artifactId: source.artifact.id,
+          sourceRevisionId,
+          title,
+          snapshotId: source.revision.snapshotId,
+          rendererVersion: RENDERER_VERSION,
+          pluginContext,
         });
-        return reply.code(result.reused ? 200 : 201).send(result);
+        const idempotencyKey = command.idempotencyKey ?? fingerprint;
+        const readExisting = async () => {
+          const [existing] = await db
+            .select()
+            .from(generationJobs)
+            .where(
+              and(
+                eq(generationJobs.projectId, source.artifact.projectId),
+                eq(generationJobs.idempotencyKey, idempotencyKey),
+              ),
+            )
+            .limit(1);
+          if (!existing) return null;
+          if (existing.inputFingerprint !== fingerprint)
+            throw new ChartServiceError("IDEMPOTENCY_CONFLICT", "幂等键已经用于另一组输入", 409);
+          return existing;
+        };
+        const existing = await readExisting();
+        if (existing) return reply.send({ job: existing, reused: true });
+        const prompt =
+          command.operation === "rollback"
+            ? `回滚到图表版本 R${source.revision.revision}`
+            : `复制图表版本 R${source.revision.revision}`;
+        class JobEnqueueRace extends Error {}
+        let job: typeof generationJobs.$inferSelect;
+        try {
+          job = await db.transaction(async (tx) => {
+            const [conversation] = await tx
+              .insert(conversations)
+              .values({ projectId: source.artifact.projectId, title: prompt, createdBy: userId })
+              .returning({ id: conversations.id });
+            const [queued] = await tx
+              .insert(generationJobs)
+              .values({
+                projectId: source.artifact.projectId,
+                conversationId: conversation.id,
+                dataAssetId: snapshot.assetId,
+                snapshotId: source.revision.snapshotId,
+                prompt,
+                idempotencyKey,
+                inputFingerprint: fingerprint,
+                renderer: "vega-lite",
+                rendererVersion: RENDERER_VERSION,
+                theme: sourceSpec.theme,
+                themeVersion: sourceSpec.themeVersion,
+                themeSource: "revision",
+                themeConfig: ((source.revision.themeSnapshot as { config?: unknown } | null)?.config ?? {}) as Record<
+                  string,
+                  unknown
+                >,
+                operation: command.operation,
+                artifactId: command.operation === "rollback" ? source.artifact.id : null,
+                baseRevisionId: source.revision.id,
+                editPatch: { title },
+                transformPlan: source.revision.transformPlan,
+                fieldLineage: source.revision.fieldLineage,
+                pluginContext,
+                generationAudit: { derivedFinding },
+                ...frozenProvenance,
+                createdBy: userId,
+              })
+              .onConflictDoNothing({ target: [generationJobs.projectId, generationJobs.idempotencyKey] })
+              .returning();
+            if (!queued) throw new JobEnqueueRace();
+            await tx
+              .insert(conversationMessages)
+              .values({ conversationId: conversation.id, role: "user", content: prompt });
+            return queued;
+          });
+        } catch (error) {
+          if (!(error instanceof JobEnqueueRace)) throw error;
+          const raced = await readExisting();
+          if (!raced) throw error;
+          return reply.send({ job: raced, reused: true });
+        }
+        return reply.code(202).send({ job, reused: false });
       } catch (error) {
         return sendChartError(reply, error);
       }
@@ -442,23 +560,6 @@ async function transitionRoute(
 async function projectIdForRevision(revisionId: string, userId: string): Promise<string> {
   const record = await getRevision(revisionId, userId);
   return record.artifact.projectId;
-}
-
-async function createEditConversation(projectId: string, revision: number, userId: string): Promise<string> {
-  const [conversation] = await db
-    .insert(conversations)
-    .values({
-      projectId,
-      title: `编辑图表版本 R${revision}`,
-      createdBy: userId,
-    })
-    .returning({ id: conversations.id });
-  await db.insert(conversationMessages).values({
-    conversationId: conversation.id,
-    role: "user",
-    content: `编辑图表版本 R${revision}`,
-  });
-  return conversation.id;
 }
 
 function fingerprintFor(value: unknown): string {

@@ -63,8 +63,8 @@ export async function reserveGenerationRevisionIdentity(lease: GenerationJobLeas
 
     let artifactId: string = randomUUID();
     let revisionNumber = 1;
-    if (job.operation === "edit") {
-      if (!job.artifactId || !job.baseRevisionId) throw new Error("Edit Generation Job has no source Revision");
+    if (job.operation === "edit" || job.operation === "rollback") {
+      if (!job.artifactId || !job.baseRevisionId) throw new Error("Derived Generation Job has no source Revision");
       const [artifact] = await tx
         .select()
         .from(chartArtifacts)
@@ -89,6 +89,8 @@ export async function reserveGenerationRevisionIdentity(lease: GenerationJobLeas
         .update(chartArtifacts)
         .set({ nextRevisionNumber: revisionNumber + 1 })
         .where(eq(chartArtifacts.id, artifact.id));
+    } else if (job.operation !== "generate" && job.operation !== "copy") {
+      throw new Error(`Unsupported Generation Job operation: ${job.operation}`);
     }
     const revisionId = randomUUID();
     const [reserved] = await tx

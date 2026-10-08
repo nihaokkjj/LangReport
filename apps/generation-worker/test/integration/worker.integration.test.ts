@@ -1131,7 +1131,7 @@ test("real generation and render workers persist plugin usage and historical sna
       await crashApi.close();
     }
 
-    // A real Worker failure before the first object write must retain the frozen finding through API retry.
+    // The object store may have accepted bytes even when its PUT acknowledgement is lost.
     const retryFinding = "故障前已经确认的来源发现";
     let failedCandidateKey: string | undefined;
     let failedReservedRevision: { artifactId: string; revisionId: string; revisionNumber: number } | undefined;
@@ -1171,14 +1171,14 @@ test("real generation and render workers persist plugin usage and historical sna
             .where(eq(renderCandidateAttempts.generationJobId, retryJobId));
           assert.equal(activeAttempt.status, "writing");
           assert.ok((await getObject(output.key)).length > 0);
-          return;
+          throw new Error("OBJECT_STORE_ACK_LOST");
         }
-        throw new Error("TRANSIENT_OBJECT_STORE_UNAVAILABLE");
+        await putObject(output);
       });
       const [failed] = await db.select().from(generationJobs).where(eq(generationJobs.id, retryJobId));
       assert.equal(failed.status, "failed");
       assert.equal(failed.errorCode, "RENDER_FAILED");
-      assert.match(failed.errorMessage ?? "", /TRANSIENT_OBJECT_STORE_UNAVAILABLE/);
+      assert.match(failed.errorMessage ?? "", /OBJECT_STORE_ACK_LOST/);
       const [failedAttempt] = await db
         .select()
         .from(renderCandidateAttempts)
@@ -1619,7 +1619,7 @@ test("real generation and render workers persist plugin usage and historical sna
       "仅看华东",
     );
 
-    // Six full edits share one Artifact and begin publication behind a barrier.
+    // Six full edit/rollback jobs share one Artifact and begin publication behind a barrier.
     // Publish five in contention, then let the lowest reserved number finish last.
     const concurrentApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
     try {
@@ -1633,18 +1633,29 @@ test("real generation and render workers persist plugin usage and historical sna
           concurrentApi.inject({
             method: "POST",
             url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
-            payload: {
-              operation: "edit",
-              baseRevisionId: visualRevision.id,
-              patch: { title: `并发编辑 ${index + 1}` },
-              idempotencyKey: `concurrent-edit-${suffix}-${index}`,
-            },
+            payload:
+              index % 2 === 0
+                ? {
+                    operation: "edit",
+                    baseRevisionId: visualRevision.id,
+                    patch: { title: `并发编辑 ${index + 1}` },
+                    idempotencyKey: `concurrent-mixed-${suffix}-${index}`,
+                  }
+                : {
+                    operation: "rollback",
+                    targetRevisionId: visualRevision.id,
+                    idempotencyKey: `concurrent-mixed-${suffix}-${index}`,
+                  },
           }),
         ),
       );
       for (const response of queued) assert.equal(response.statusCode, 202, response.body);
       const concurrentJobIds = queued.map((response) => response.json().job.id as string);
       assert.equal(new Set(concurrentJobIds).size, 6);
+      assert.deepEqual(
+        queued.map((response) => response.json().job.operation),
+        ["edit", "rollback", "edit", "rollback", "edit", "rollback"],
+      );
       await Promise.all(concurrentJobIds.map((jobId) => processGenerationJob(jobId)));
       const prepared = await Promise.all(
         concurrentJobIds.map(async (jobId) => {
@@ -1732,6 +1743,8 @@ test("real generation and render workers persist plugin usage and historical sna
           assert.equal(messages.length, messageCount + 1);
           assert.equal(revisions[0].id, completed.candidateRevisionId);
           assert.equal(revisions[0].revision, completed.candidateRevisionNumber);
+          assert.equal(revisions[0].changeReason, job.operation);
+          assert.equal(revisions[0].parentRevisionId, visualRevision.id);
           assert.equal(evidence[0].chartRevisionId, revisions[0].id);
           assert.equal(revisions[0].snapshotId, visualRevision.snapshotId);
           assert.deepEqual(revisions[0].analysisBriefSnapshot, visualRevision.analysisBriefSnapshot);
@@ -1778,6 +1791,233 @@ test("real generation and render workers persist plugin usage and historical sna
       }
     } finally {
       await concurrentApi.close();
+    }
+
+    // Copy and rollback must use the same durable candidate/publication path.
+    const derivedApi = await buildApp({ logger: false, authProvider: () => ({ id: userId }) });
+    try {
+      const concurrentEditKey = `same-edit-job-${suffix}`;
+      const concurrentEditPayload = {
+        operation: "edit",
+        baseRevisionId: visualRevision.id,
+        patch: { title: "同键并发编辑" },
+        idempotencyKey: concurrentEditKey,
+      };
+      const editConversationCount = (
+        await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.projectId, project.id))
+      ).length;
+      const editResponses = await Promise.all(
+        [0, 1].map(() =>
+          derivedApi.inject({
+            method: "POST",
+            url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+            payload: concurrentEditPayload,
+          }),
+        ),
+      );
+      assert.deepEqual(editResponses.map((response) => response.statusCode).sort(), [200, 202]);
+      const editJobId = editResponses[0].json().job.id as string;
+      assert.ok(editResponses.every((response) => response.json().job.id === editJobId));
+      assert.equal(
+        (await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.projectId, project.id)))
+          .length,
+        editConversationCount + 1,
+      );
+      const conflictingEdit = await derivedApi.inject({
+        method: "POST",
+        url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+        payload: { ...concurrentEditPayload, patch: { title: "不同编辑输入" } },
+      });
+      assert.equal(conflictingEdit.statusCode, 409, conflictingEdit.body);
+      assert.equal(conflictingEdit.json().code, "IDEMPOTENCY_CONFLICT");
+      await processGenerationJob(editJobId);
+      await processRenderJob(editJobId);
+
+      for (const operation of ["rollback", "copy"] as const) {
+        const idempotencyKey = `${operation}-job-${suffix}`;
+        const payload =
+          operation === "rollback"
+            ? { operation, targetRevisionId: visualRevision.id, idempotencyKey }
+            : { operation, sourceRevisionId: visualRevision.id, name: "冻结来源复制", idempotencyKey };
+        const artifactCountBefore = (
+          await db
+            .select({ id: chartArtifacts.id })
+            .from(chartArtifacts)
+            .where(eq(chartArtifacts.projectId, project.id))
+        ).length;
+        const conversationCountBefore = (
+          await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.projectId, project.id))
+        ).length;
+        const [headBefore] = await db.select().from(chartArtifacts).where(eq(chartArtifacts.id, revision.artifactId));
+        const firstResponses = await Promise.all(
+          [0, 1].map(() =>
+            derivedApi.inject({
+              method: "POST",
+              url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+              payload,
+            }),
+          ),
+        );
+        assert.deepEqual(firstResponses.map((response) => response.statusCode).sort(), [200, 202]);
+        const queued = firstResponses.find((response) => response.statusCode === 202)!;
+        const derivedJobId = queued.json().job.id as string;
+        assert.equal(queued.json().job.operation, operation);
+        assert.ok(firstResponses.every((response) => response.json().job.id === derivedJobId));
+        assert.equal(
+          (await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.projectId, project.id)))
+            .length,
+          conversationCountBefore + 1,
+        );
+        const replay = await derivedApi.inject({
+          method: "POST",
+          url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+          payload,
+        });
+        assert.equal(replay.statusCode, 200, replay.body);
+        assert.equal(replay.json().job.id, derivedJobId);
+        const conflictingPayload =
+          operation === "rollback" ? { ...payload, targetRevisionId: revision.id } : { ...payload, name: "另一份复制" };
+        const conflict = await derivedApi.inject({
+          method: "POST",
+          url: `/api/v1/chart-artifacts/${revision.artifactId}/revisions`,
+          payload: conflictingPayload,
+        });
+        assert.equal(conflict.statusCode, 409, conflict.body);
+        assert.equal(conflict.json().code, "IDEMPOTENCY_CONFLICT");
+        await processGenerationJob(derivedJobId);
+        const [prepared] = await db.select().from(generationJobs).where(eq(generationJobs.id, derivedJobId));
+        assert.equal(prepared.status, "rendering", prepared.errorMessage ?? "");
+        assert.equal(prepared.baseRevisionId, visualRevision.id);
+        assert.equal(validationRecordSchema.parse(prepared.planValidation).status, "passed");
+        const [sourceEvidence] = await db
+          .select()
+          .from(evidenceBlocks)
+          .where(eq(evidenceBlocks.chartRevisionId, visualRevision.id));
+        let putCalls = 0;
+        await processRenderJob(derivedJobId, async (output) => {
+          putCalls++;
+          if (putCalls === 3) throw new Error(`DERIVED_${operation.toUpperCase()}_PUT_FAILED`);
+          await putObject(output);
+          objectKeys.push(output.key);
+        });
+        assert.equal(putCalls, 3);
+        const [failed] = await db.select().from(generationJobs).where(eq(generationJobs.id, derivedJobId));
+        assert.equal(failed.status, "failed");
+        assert.match(failed.errorMessage ?? "", new RegExp(`DERIVED_${operation.toUpperCase()}_PUT_FAILED`));
+        assert.equal(
+          (await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, derivedJobId))).length,
+          0,
+        );
+        assert.equal(
+          (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, derivedJobId))).length,
+          0,
+        );
+        assert.equal(
+          (await db.select().from(auditEvents).where(eq(auditEvents.entityId, failed.candidateRevisionId!))).length,
+          0,
+        );
+        assert.equal(
+          (
+            await db
+              .select()
+              .from(conversationMessages)
+              .where(eq(conversationMessages.conversationId, prepared.conversationId))
+          ).length,
+          1,
+        );
+        const [headAfterFailure] = await db
+          .select()
+          .from(chartArtifacts)
+          .where(eq(chartArtifacts.id, revision.artifactId));
+        assert.equal(headAfterFailure.headRevisionId, headBefore.headRevisionId);
+        assert.equal(
+          (
+            await db
+              .select({ id: chartArtifacts.id })
+              .from(chartArtifacts)
+              .where(eq(chartArtifacts.projectId, project.id))
+          ).length,
+          artifactCountBefore,
+        );
+        const retry = await derivedApi.inject({ method: "POST", url: `/api/v1/generation-jobs/${derivedJobId}/retry` });
+        assert.equal(retry.statusCode, 202, retry.body);
+        await processGenerationJob(derivedJobId);
+        await processRenderJob(derivedJobId);
+        const [completed] = await db.select().from(generationJobs).where(eq(generationJobs.id, derivedJobId));
+        const [published] = await db
+          .select()
+          .from(chartRevisions)
+          .where(eq(chartRevisions.generationJobId, derivedJobId));
+        const [publishedEvidence] = await db
+          .select()
+          .from(evidenceBlocks)
+          .where(eq(evidenceBlocks.generationJobId, derivedJobId));
+        assert.equal(completed.status, "succeeded", completed.errorMessage ?? "");
+        assert.equal(published.id, failed.candidateRevisionId);
+        assert.equal(published.parentRevisionId, visualRevision.id);
+        assert.equal(published.changeReason, operation);
+        assert.equal(published.snapshotId, visualRevision.snapshotId);
+        assert.deepEqual(published.analysisBriefSnapshot, visualRevision.analysisBriefSnapshot);
+        assert.deepEqual(published.metricDefinitionSnapshot, visualRevision.metricDefinitionSnapshot);
+        assert.equal(publishedEvidence.chartRevisionId, published.id);
+        assert.equal(publishedEvidence.finding, sourceEvidence.finding);
+        assert.equal((await db.select().from(auditEvents).where(eq(auditEvents.entityId, published.id))).length, 1);
+        assert.equal(
+          (
+            await db
+              .select()
+              .from(conversationMessages)
+              .where(eq(conversationMessages.conversationId, prepared.conversationId))
+          ).length,
+          2,
+        );
+        const outputs = published.outputObjects as Record<"vegaLite" | "svg" | "png" | "html", string>;
+        const sourceOutputs = visualRevision.outputObjects as typeof outputs;
+        for (const format of ["vegaLite", "svg", "png", "html"] as const) {
+          objectKeys.push(outputs[format]);
+          assert.notEqual(outputs[format], sourceOutputs[format]);
+          assert.ok((await getObject(outputs[format])).length > 0);
+          assert.ok((await getObject(sourceOutputs[format])).length > 0);
+        }
+        assert.match((await getObject(outputs.html)).toString("utf8"), new RegExp(published.id));
+        if (operation === "rollback") {
+          assert.equal(published.artifactId, revision.artifactId);
+          const [previousHead] = await db
+            .select({ revision: chartRevisions.revision })
+            .from(chartRevisions)
+            .where(eq(chartRevisions.id, headBefore.headRevisionId!));
+          assert.ok(published.revision > previousHead.revision);
+          const [artifact] = await db.select().from(chartArtifacts).where(eq(chartArtifacts.id, revision.artifactId));
+          assert.equal(artifact.headRevisionId, published.id);
+        } else {
+          assert.notEqual(published.artifactId, revision.artifactId);
+          assert.equal(published.revision, 1);
+          const [artifact] = await db.select().from(chartArtifacts).where(eq(chartArtifacts.id, published.artifactId));
+          assert.equal(artifact.headRevisionId, published.id);
+          assert.equal(artifact.name, "冻结来源复制");
+        }
+        await processRenderJob(derivedJobId);
+        assert.equal(
+          (await db.select().from(chartRevisions).where(eq(chartRevisions.generationJobId, derivedJobId))).length,
+          1,
+        );
+        assert.equal(
+          (await db.select().from(evidenceBlocks).where(eq(evidenceBlocks.generationJobId, derivedJobId))).length,
+          1,
+        );
+        assert.equal((await db.select().from(auditEvents).where(eq(auditEvents.entityId, published.id))).length, 1);
+        assert.equal(
+          (
+            await db
+              .select()
+              .from(conversationMessages)
+              .where(eq(conversationMessages.conversationId, prepared.conversationId))
+          ).length,
+          2,
+        );
+      }
+    } finally {
+      await derivedApi.close();
     }
 
     // An inconsistent historical Job must not mutate an already published Revision.

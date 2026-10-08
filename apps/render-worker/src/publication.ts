@@ -134,8 +134,8 @@ export async function commitCompletedRevision(
 
     let artifact: typeof chartArtifacts.$inferSelect;
     let source: Revision | undefined;
-    if (job.operation === "edit") {
-      if (!job.artifactId || !job.baseRevisionId) throw new Error("编辑 Job 缺少来源 Chart Revision");
+    if (job.operation === "edit" || job.operation === "rollback") {
+      if (!job.artifactId || !job.baseRevisionId) throw new Error("派生 Job 缺少来源 Chart Revision");
       const [lockedArtifact] = await tx
         .select()
         .from(chartArtifacts)
@@ -152,8 +152,21 @@ export async function commitCompletedRevision(
         .limit(1);
       if (!source || candidate.identity.revisionNumber >= artifact.nextRevisionNumber)
         throw new Error("候选 Chart Revision 编号或来源无效");
-    } else if (job.operation === "generate") {
+    } else if (job.operation === "generate" || job.operation === "copy") {
       if (candidate.identity.revisionNumber !== 1) throw new Error("初始 Chart Revision 编号必须为 1");
+      if (job.operation === "copy") {
+        if (!job.baseRevisionId || job.artifactId)
+          throw new Error("复制 Job 缺少来源 Revision 或意外指定目标 Artifact");
+        [source] = await tx.select().from(chartRevisions).where(eq(chartRevisions.id, job.baseRevisionId)).limit(1);
+        if (!source || source.snapshotId !== job.snapshotId)
+          throw new Error("复制 Job 来源 Revision 或 Snapshot 不匹配");
+        const [sourceArtifact] = await tx
+          .select({ projectId: chartArtifacts.projectId })
+          .from(chartArtifacts)
+          .where(eq(chartArtifacts.id, source.artifactId))
+          .limit(1);
+        if (sourceArtifact?.projectId !== job.projectId) throw new Error("复制 Job 来源 Project 不匹配");
+      }
       [artifact] = await tx
         .insert(chartArtifacts)
         .values({
@@ -183,7 +196,7 @@ export async function commitCompletedRevision(
         status: "draft",
         parentRevisionId: source?.id ?? null,
         createdBy: job.createdBy,
-        changeReason: source ? "edit" : null,
+        changeReason: source ? job.operation : null,
         transformPlan: source ? (job.transformPlan ?? source.transformPlan) : (job.transformPlan ?? {}),
         fieldLineage: source ? (job.fieldLineage ?? source.fieldLineage) : (job.fieldLineage ?? []),
         flintSpec: candidate.spec,
@@ -245,7 +258,11 @@ export async function commitCompletedRevision(
       conversationId: job.conversationId,
       role: "assistant",
       content: source
-        ? `已创建新的 Draft Chart Revision R${revision.revision}。它保留原始 Data Snapshot 和历史版本，可从结果卡片继续编辑或提交审核。`
+        ? job.operation === "copy"
+          ? `已复制为新的 Draft Chart Artifact（Revision R${revision.revision}）。来源版本保持不变。`
+          : job.operation === "rollback"
+            ? `已从目标版本创建新的 Draft Chart Revision R${revision.revision}。历史版本保持不变。`
+            : `已创建新的 Draft Chart Revision R${revision.revision}。它保留原始 Data Snapshot 和历史版本，可从结果卡片继续编辑或提交审核。`
         : `已生成一个 Draft Evidence Block（Revision R${revision.revision}）。图表、发现、指标口径、数据来源和校验记录已绑定到同一个 Data Snapshot。`,
     });
     await tx.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, job.conversationId));

@@ -1019,7 +1019,7 @@ async function copyText(value: string): Promise<void> {
 }
 
 export default function ApiConsolePage() {
-  const [document, setDocument] = useState<OpenApiDocument | null>(null);
+  const [, setDocument] = useState<OpenApiDocument | null>(null);
   const [entries, setEntries] = useState<OperationEntry[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [parameterValues, setParameterValues] = useState<Record<string, string>>({});
@@ -1037,7 +1037,7 @@ export default function ApiConsolePage() {
   const [response, setResponse] = useState<ResponseState | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyHydrated, setHistoryHydrated] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [, setNotice] = useState<string | null>(null);
   const [scenario, setScenario] = useState<ScenarioState>(() => initialScenarioState());
 
   const selectedEntry = useMemo(
@@ -1126,8 +1126,6 @@ export default function ApiConsolePage() {
     setScenario({ ...initialScenarioState(), phase: "running" });
     setNotice(null);
     let projectId = "";
-    let conversationId = "";
-    let assetId = "";
     let successJobId = "";
     try {
       updateScenarioStep("health", "running", "请求 GET /health");
@@ -1165,7 +1163,7 @@ export default function ApiConsolePage() {
         ? conversationResult.payload.conversation
         : null;
       if (!conversation || typeof conversation.id !== "string") throw new Error("Conversation 创建失败");
-      conversationId = conversation.id;
+      const conversationId = conversation.id;
       const dataResult = await requestScenario(
         entries,
         "pasteDataAsset",
@@ -1181,7 +1179,7 @@ export default function ApiConsolePage() {
       const snapshot = asset && isRecord(asset.latestSnapshot) ? asset.latestSnapshot : null;
       if (!asset || typeof asset.id !== "string" || !snapshot || typeof snapshot.id !== "string")
         throw new Error("数据响应中缺少 Data Snapshot");
-      assetId = asset.id;
+      const assetId = asset.id;
       updateScenarioStep("data", "passed", `HTTP ${dataResult.status} · Snapshot ${snapshot.id}`);
 
       updateScenarioStep("metric", "running", "确认销售额与同比的指标口径");
@@ -2058,8 +2056,10 @@ export default function ApiConsolePage() {
                 )}
                 {selectedEntry?.operation.operationId === "createChartRevisionCommand" && (
                   <p className={styles.contractHint}>
-                    编辑、复制与回滚继承来源版本的分析问题、指标口径与执行快照；仅复制公开项目记忆引用。纯视觉编辑冻结原发现，逻辑编辑重新计算。来源缺失返回
-                    409 REVISION_PROVENANCE_INCOMPLETE，请重新确认输入后生成。
+                    编辑、复制与回滚统一返回 Generation Job：新任务 202，幂等复用 200。请查询 Job 状态，成功后使用固定的
+                    Revision ID。回滚创建新 Draft，复制创建新
+                    Artifact；两者重新渲染四种输出并继承来源版本的分析问题、指标口径、执行快照、公开项目记忆引用及发现。来源缺失返回
+                    409 REVISION_PROVENANCE_INCOMPLETE。
                   </p>
                 )}
                 {parameterLocations.map(

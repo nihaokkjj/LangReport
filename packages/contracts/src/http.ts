@@ -1908,10 +1908,9 @@ export const routeContracts: RouteContract[] = [
     "/api/v1/chart-artifacts/:artifactId/revisions",
     "createChartRevisionCommand",
     ["Chart Revisions"],
-    "创建编辑、回滚或复制 Revision",
+    "排队编辑、回滚或复制 Revision",
     {
-      200: objectResponse,
-      201: objectResponse,
+      200: dto({ job: generationJobDto, reused: boolean() }, ["job", "reused"]),
       202: dto({ job: generationJobDto, reused: boolean() }, ["job", "reused"]),
     },
     {
@@ -1919,7 +1918,7 @@ export const routeContracts: RouteContract[] = [
         body: zodJson(chartRevisionCommandSchema),
       }),
       successDescription:
-        "编辑、复制和回滚仅继承来源Revision的分析问题、指标口径、执行快照及公开项目记忆引用；不读取当前项目口径。纯视觉编辑在入队时冻结原发现，修改筛选或聚合则重新计算统计与发现。来源不完整返回409 REVISION_PROVENANCE_INCOMPLETE。",
+        "编辑、复制和回滚统一返回持久 Generation Job：新任务 202，幂等复用 200；查询 Job 状态后使用固定 Revision ID。回滚创建同 Artifact 的新 Draft，复制创建新 Artifact；两者重新渲染四种输出并继承来源 Revision 的分析问题、指标口径、执行快照、公开项目记忆引用和已确认发现。纯视觉编辑也冻结原发现，修改筛选或聚合则重新计算。来源不完整返回 409 REVISION_PROVENANCE_INCOMPLETE。",
     },
   ),
   contract(
@@ -2121,7 +2120,8 @@ function normalizeOpenApiSchema(value: unknown): unknown {
   if (Array.isArray(normalized.type)) {
     const hasNull = normalized.type.includes("null");
     const nonNullTypes = normalized.type.filter((type): type is string => type !== "null");
-    const { type: _type, ...withoutType } = normalized;
+    const withoutType = { ...normalized };
+    delete withoutType.type;
     if (nonNullTypes.length === 1)
       return { ...withoutType, type: nonNullTypes[0], ...(hasNull ? { nullable: true } : {}) };
     if (nonNullTypes.length > 1) {
@@ -2162,17 +2162,15 @@ function requestParameters(contract: RouteContract): Array<Record<string, unknow
         name,
         in: location,
         required: location === "path" || required.includes(name),
-        description: isRecord(property) && typeof property.description === "string" ? property.description : undefined,
+        ...(isRecord(property) && typeof property.description === "string"
+          ? { description: property.description }
+          : {}),
         schema: normalizeOpenApiSchema(property),
       });
     }
   }
 
-  return parameters.map((parameter) => {
-    if (parameter.description !== undefined) return parameter;
-    const { description: _description, ...withoutDescription } = parameter;
-    return withoutDescription;
-  });
+  return parameters;
 }
 
 function responseDescription(statusCode: number, schema: JsonSchema): string {

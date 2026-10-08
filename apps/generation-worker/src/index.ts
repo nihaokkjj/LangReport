@@ -6,6 +6,7 @@ import {
   assertGenerationJobLease,
   claimGenerationJobLease,
   db,
+  chartArtifacts,
   chartRevisions,
   conversationMessages,
   conversations,
@@ -111,6 +112,14 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
   try {
     if (job.job.operation === "edit") {
       await processEditJob(jobId, job, lease);
+      return;
+    }
+    if (job.job.operation === "rollback" || job.job.operation === "copy") {
+      await processDerivedJob(jobId, job, lease);
+      return;
+    }
+    if (job.job.operation !== "generate") {
+      await failJob(jobId, lease, "GENERATION_OPERATION_INVALID", "不支持的生成任务操作");
       return;
     }
     await setStatus(jobId, lease, "profiling", { errorCode: null, errorMessage: null });
@@ -220,6 +229,79 @@ async function processClaimedGenerationJob(jobId: string, lease: GenerationJobLe
       return;
     }
     throw error;
+  }
+}
+
+async function processDerivedJob(jobId: string, record: GenerationJobRecord, lease: GenerationJobLease): Promise<void> {
+  const job = record.job;
+  if (
+    !job.baseRevisionId ||
+    (job.operation === "rollback" && !job.artifactId) ||
+    (job.operation === "copy" && job.artifactId)
+  ) {
+    await failJob(jobId, lease, "DERIVED_INPUT_INVALID", "派生任务缺少有效的来源或目标 Chart Artifact");
+    return;
+  }
+  await setStatus(jobId, lease, "planning", { errorCode: null, errorMessage: null });
+  const [source] = await db
+    .select({ revision: chartRevisions, projectId: chartArtifacts.projectId })
+    .from(chartRevisions)
+    .innerJoin(chartArtifacts, eq(chartArtifacts.id, chartRevisions.artifactId))
+    .where(eq(chartRevisions.id, job.baseRevisionId))
+    .limit(1);
+  if (
+    !source ||
+    source.projectId !== job.projectId ||
+    source.revision.snapshotId !== job.snapshotId ||
+    (job.operation === "rollback" && source.revision.artifactId !== job.artifactId)
+  ) {
+    await failJob(jobId, lease, "DERIVED_SOURCE_NOT_FOUND", "派生任务的来源 Revision 与固定输入不匹配");
+    return;
+  }
+  try {
+    const frozenProvenance = freezeDerivedProvenance(source.revision);
+    const patch = chartEditPatchSchema.parse(job.editPatch);
+    const visual = freezeVisualRevisionInput(source.revision, patch);
+    if (!visual) throw new ChartServiceError("DERIVED_INPUT_INVALID", "派生任务不能修改变换计划或字段映射", 409);
+    const validation = validateGenerationRevision(visual.flintSpec);
+    const planValidation = planValidationFromReport(validation);
+    const renderValidation = pendingRenderValidation();
+    await setStatus(jobId, lease, "transforming", {
+      ...frozenProvenance,
+      transformPlan: visual.transformPlan,
+      fieldLineage: visual.fieldLineage,
+      resultSummary: visual.resultSummary,
+      previewData: {
+        columns: visual.resultSummary.columns,
+        rows: visual.flintSpec.data.values.slice(0, 500),
+        steps: [],
+      },
+    });
+    await setStatus(jobId, lease, "compiling", {
+      flintSpec: visual.flintSpec,
+      validation,
+      planValidation,
+      renderValidation,
+    });
+    if (!validation.valid) {
+      const budgetIssue = validation.issues.find((issue) => issue.code === "CHART_POINT_BUDGET_EXCEEDED");
+      await failJob(
+        jobId,
+        lease,
+        budgetIssue?.code ?? "VALIDATION_FAILED",
+        budgetIssue?.message ?? "派生版本的 Flint Spec 未通过必要校验",
+        validation,
+      );
+      return;
+    }
+    await setStatus(jobId, lease, "rendering", {}, true);
+  } catch (error) {
+    await failJob(
+      jobId,
+      lease,
+      error instanceof ChartServiceError ? error.code : "DERIVED_INPUT_INVALID",
+      error instanceof Error ? error.message : "派生版本准备失败",
+    );
   }
 }
 

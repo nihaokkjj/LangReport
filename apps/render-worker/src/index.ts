@@ -174,7 +174,7 @@ async function processRenderJobLocked(
       return;
     }
     const [sourceRevision] =
-      record.job.operation === "edit" && record.job.baseRevisionId
+      record.job.operation !== "generate" && record.job.baseRevisionId
         ? await db
             .select({ pluginSnapshot: chartRevisions.pluginSnapshot })
             .from(chartRevisions)
@@ -183,7 +183,7 @@ async function processRenderJobLocked(
         : [];
     const pluginUsage = pluginUsageSchema.safeParse(record.job.pluginUsage);
     const pluginSnapshot =
-      record.job.operation === "edit" && sourceRevision?.pluginSnapshot
+      record.job.operation !== "generate" && sourceRevision?.pluginSnapshot
         ? sourceRevision.pluginSnapshot
         : parsedPluginContext.success
           ? await buildPluginSnapshot({

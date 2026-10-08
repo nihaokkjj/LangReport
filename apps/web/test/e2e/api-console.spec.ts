@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { captureUiEvidence } from "./visual-evidence";
 
-test("API Console 说明视觉编辑冻结发现与逻辑编辑重算", async ({ page }) => {
+test("API Console 说明编辑、复制和回滚的异步 Job 合同", async ({ page }) => {
   await page.route("**/api-console/openapi.json", (route) =>
     route.fulfill({
       contentType: "application/json",
@@ -14,7 +14,7 @@ test("API Console 说明视觉编辑冻结发现与逻辑编辑重算", async ({
               operationId: "createChartRevisionCommand",
               tags: ["Chart Revisions"],
               summary: "编辑版本",
-              responses: { "202": { description: "已排队" } },
+              responses: { "200": { description: "幂等复用" }, "202": { description: "已排队" } },
             },
           },
         },
@@ -23,8 +23,10 @@ test("API Console 说明视觉编辑冻结发现与逻辑编辑重算", async ({
   );
   await page.goto("/api-console");
   await page.getByRole("button", { name: /\/revisions/ }).click();
-  await expect(page.getByText(/纯视觉编辑冻结原发现，逻辑编辑重新计算/)).toBeVisible();
-  await expect(page.getByText(/REVISION_PROVENANCE_INCOMPLETE，请重新确认输入后生成/)).toBeVisible();
+  await expect(page.getByText(/编辑、复制与回滚统一返回 Generation Job/)).toBeVisible();
+  await expect(page.getByText(/新任务 202，幂等复用 200/)).toBeVisible();
+  await expect(page.getByText(/复制创建新 Artifact/)).toBeVisible();
+  await expect(page.getByText(/REVISION_PROVENANCE_INCOMPLETE/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
 

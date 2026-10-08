@@ -169,7 +169,11 @@ export function findingForGenerationJob(
   summary: ResultSummary | null,
 ): string {
   const patch = record(job.editPatch);
-  if (job.operation !== "edit" || !patch || patch.transformPlan !== undefined || patch.encodings !== undefined)
+  if (
+    job.operation !== "rollback" &&
+    job.operation !== "copy" &&
+    (job.operation !== "edit" || !patch || patch.transformPlan !== undefined || patch.encodings !== undefined)
+  )
     return buildEvidenceFinding(spec, summary);
   const frozen = record(record(job.generationAudit)?.derivedFinding);
   if (
@@ -181,7 +185,7 @@ export function findingForGenerationJob(
   )
     throw new ChartServiceError(
       "REVISION_PROVENANCE_INCOMPLETE",
-      "视觉编辑缺少有效的冻结发现，不能重新猜测来源结论",
+      "派生版本缺少有效的冻结发现，不能重新猜测来源结论",
       409,
     );
   return frozen.finding;
